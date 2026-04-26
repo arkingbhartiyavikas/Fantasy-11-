@@ -1,0 +1,101 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    match /{document=**} { allow read, write: if false; }
+
+    function isSignedIn() { return request.auth != null; }
+    function isAdmin() { return isSignedIn() && request.auth.token.email.matches('(?i)^arkingbhartiyavikas@gmail\\.com$'); }
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+    function isValidId(id) { return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); }
+
+    function isValidUser() {
+      let data = incoming();
+      return data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
+             data.email is string && data.email.size() >= 0 && data.email.size() < 200 &&
+             data.isPremium is bool &&
+             data.editsCount is int && data.editsCount >= 0 &&
+             data.createdAt is timestamp;
+    }
+
+    match /users/{userId} {
+      allow get, list: if isAdmin() || (isSignedIn() && request.auth.uid == userId && isValidId(userId));
+      
+      allow create: if isSignedIn() && request.auth.uid == userId && isValidId(userId) && isValidUser() && 
+                    incoming().isPremium == false &&
+                    incoming().editsCount == 0;
+                    
+      allow update: if isAdmin() || (isSignedIn() && request.auth.uid == userId && isValidId(userId) && isValidUser() && (
+                      incoming().diff(existing()).affectedKeys().hasOnly(['editsCount']) ||
+                      incoming().diff(existing()).affectedKeys().hasOnly(['isPremium']) ||
+                      incoming().diff(existing()).affectedKeys().hasOnly(['isPremium', 'editsCount'])
+                    ));
+    }
+
+    function isValidPayment() {
+      let data = incoming();
+      return data.userId is string && data.userId == request.auth.uid &&
+             data.utr is string && data.utr.size() >= 0 && data.utr.size() <= 60 &&
+             data.screenshot is string && data.screenshot.size() <= 2000000 &&
+             data.planId is string && data.planId.size() > 0 && data.planId.size() <= 50 &&
+             data.status is string && data.status == 'pending' &&
+             data.createdAt is timestamp;
+    }
+
+    match /deposits/{docId} {
+      allow create: if isSignedIn() && request.auth.uid == incoming().userId;
+      allow get, list: if isAdmin() || (isSignedIn() && existing().userId == request.auth.uid) || (isSignedIn() && incoming().userId == request.auth.uid);
+      allow update, delete: if isAdmin();
+    }
+
+    match /withdrawals/{docId} {
+      allow create: if isSignedIn() && request.auth.uid == incoming().userId;
+      allow get, list: if isAdmin() || (isSignedIn() && existing().userId == request.auth.uid) || (isSignedIn() && incoming().userId == request.auth.uid);
+      allow update, delete: if isAdmin();
+    }
+
+    match /kyc/{docId} {
+      allow create: if isSignedIn() && request.auth.uid == incoming().userId;
+      allow get, list: if isAdmin() || (isSignedIn() && existing().userId == request.auth.uid);
+      allow update, delete: if isAdmin();
+    }
+
+    match /wallets/{userId} {
+      allow read: if isAdmin() || (isSignedIn() && request.auth.uid == userId);
+      allow write: if isAdmin();
+      allow create: if isSignedIn() && request.auth.uid == userId && incoming().deposit == 0 && incoming().winning == 0 && incoming().bonus == 0;
+    }
+
+    match /bankAccounts/{docId} {
+      allow create: if isSignedIn() && request.auth.uid == incoming().userId;
+      allow get, list: if isAdmin() || (isSignedIn() && existing().userId == request.auth.uid);
+      allow update, delete: if isSignedIn() && request.auth.uid == existing().userId;
+    }
+
+    match /gameData/{docId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /payments/{paymentId} {
+      allow create: if isSignedIn() && isValidPayment();
+      allow get, list: if isAdmin() || (isSignedIn() && existing().userId == request.auth.uid);
+      allow update, delete: if isAdmin();
+    }
+
+    function isValidUserEdit() {
+      let data = incoming();
+      return data.userId is string && data.userId == request.auth.uid &&
+             data.thumbnail is string && data.thumbnail.size() <= 1500000 &&
+             data.timestamp == request.time &&
+             data.filter is string && data.filter.size() <= 100;
+    }
+
+    match /user_edits/{editId} {
+      allow create: if isSignedIn() && isValidUserEdit();
+      allow get, list: if isAdmin() || (isSignedIn() && existing().userId == request.auth.uid);
+      allow update, delete: if isAdmin();
+    }
+  }
+}

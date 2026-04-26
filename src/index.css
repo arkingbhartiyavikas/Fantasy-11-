@@ -1,0 +1,50 @@
+@import "tailwindcss";
+
+@theme {
+  --color-app-bg: var(--app-bg);
+  --color-app-card: var(--app-card);
+  --color-app-card-inner: var(--app-card-inner);
+  --color-app-card-alt: var(--app-card-alt);
+  --color-app-card-hover: var(--app-card-hover);
+  --color-app-text: var(--app-text);
+  --color-app-text-muted: var(--app-text-muted);
+  --color-app-border: var(--app-border);
+  --color-app-border-hover: var(--app-border-hover);
+  --color-app-accent: var(--app-accent);
+}
+
+:root {
+  /* Default Dark Theme */
+  --app-bg: #0B1221;
+  --app-card: #1E293B;
+  --app-card-inner: #151E32;
+  --app-card-alt: #0f172a;
+  --app-card-hover: #1e293b;
+  --app-text: #ffffff;
+  --app-text-muted: #94a3b8;
+  --app-border: #1e293b;
+  --app-border-hover: #334155;
+  --app-accent: #2563eb;
+}
+
+.theme-light {
+  --app-bg: #f8fafc;
+  --app-card: #ffffff;
+  --app-card-inner: #f1f5f9;
+  --app-card-alt: #e2e8f0;
+  --app-card-hover: #e2e8f0;
+  --app-text: #0f172a;
+  --app-text-muted: #64748b;
+  --app-border: #e2e8f0;
+  --app-border-hover: #cbd5e1;
+}
+
+.color-red {
+  --app-accent: #dc2626;
+}
+.color-blue {
+  --app-accent: #2563eb;
+}
+.color-green {
+  --app-accent: #16a34a;
+}

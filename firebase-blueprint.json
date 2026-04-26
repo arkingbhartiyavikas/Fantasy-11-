@@ -1,0 +1,23 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile with premium status and edit counts.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "isPremium": { "type": "boolean" },
+        "editsCount": { "type": "number", "minimum": 0 },
+        "createdAt": { "type": "string", "format": "timestamp" }
+      },
+      "required": ["name", "email", "isPremium", "editsCount", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/User" },
+      "description": "Collection of user profiles."
+    }
+  }
+}
