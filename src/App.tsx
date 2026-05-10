@@ -1,8 +1,46 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Trophy, Clock, Users, ArrowLeft, Home, User, Wallet, Bell, PlayCircle, Shield, Plus, Minus, Info, Receipt, Settings, MessageSquare, Copy, PlusCircle, Edit2, ArrowDownToLine, ArrowDownLeft, ArrowRight, Check, X, ChevronUp, ChevronDown, Search } from 'lucide-react';
+import Cropper from 'react-easy-crop';
+import { Trophy, Clock, Users, ArrowLeft, Home, User, Wallet, Bell, PlayCircle, Shield, Plus, Minus, Info, Receipt, Settings, MessageSquare, Copy, PlusCircle, Edit2, ArrowDownToLine, ArrowDownLeft, ArrowRight, Check, X, ChevronUp, ChevronDown, Search, ChevronLeft, ChevronRight, Trash2, Download, BarChart2, Image as ImageIcon, ZoomIn } from 'lucide-react';
 import { auth, googleProvider, signInWithPopup, signOut as firebaseSignOut, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, db } from './lib/firebase';
 import { doc, onSnapshot, setDoc, collection, query, where, getDoc, getDocs, updateDoc, writeBatch } from 'firebase/firestore';
+import { AreaChart, Area, LineChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip as RechartsTooltip, ResponsiveContainer, CartesianGrid, Legend } from 'recharts';
+
+const createImage = (url: string): Promise<HTMLImageElement> =>
+  new Promise((resolve, reject) => {
+    const image = new Image()
+    image.addEventListener('load', () => resolve(image))
+    image.addEventListener('error', (error) => reject(error))
+    image.setAttribute('crossOrigin', 'anonymous')
+    image.src = url
+  })
+
+const getCroppedImg = async (imageSrc: string, pixelCrop: any): Promise<string> => {
+  const image = await createImage(imageSrc)
+  const canvas = document.createElement('canvas')
+  const ctx = canvas.getContext('2d')
+
+  if (!ctx) {
+      return '';
+  }
+
+  canvas.width = pixelCrop.width
+  canvas.height = pixelCrop.height
+
+  ctx.drawImage(
+    image,
+    pixelCrop.x,
+    pixelCrop.y,
+    pixelCrop.width,
+    pixelCrop.height,
+    0,
+    0,
+    pixelCrop.width,
+    pixelCrop.height
+  )
+
+  return canvas.toDataURL('image/jpeg', 0.8);
+}
 
 // --- Types ---
 type Role = 'WK' | 'BAT' | 'AR' | 'BOWL';
@@ -27,7 +65,7 @@ interface WithdrawRequest {
 
 interface Contest {
   id: string;
-  type: 'Mega' | 'H2H';
+  type: string;
   name: string;
   prizeText: string;
   entryFee: number;
@@ -41,8 +79,8 @@ interface Contest {
 interface Match {
   id: string;
   series: string;
-  team1: { name: string; shortFrame: string; color: string };
-  team2: { name: string; shortFrame: string; color: string };
+  team1: { name: string; shortFrame: string; color: string; flagUrl?: string; flagFit?: 'cover' | 'contain' };
+  team2: { name: string; shortFrame: string; color: string; flagUrl?: string; flagFit?: 'cover' | 'contain' };
   time: string;
   matchDateISO?: string;
   totalPrize: string;
@@ -69,6 +107,7 @@ interface Player {
   credits: number;
   points: number;
   selPercent: number;
+  isPlaying?: boolean;
 }
 
 // --- Mock Data ---
@@ -114,6 +153,97 @@ export const MOCK_PLAYERS: Player[] = [
   { id: 'p13', name: 'P Chawla', team: 'MUM', role: 'BOWL', credits: 8.0, points: 230, selPercent: 40 },
   { id: 'p14', name: 'D Chahar', team: 'CHE', role: 'BOWL', credits: 8.0, points: 190, selPercent: 35 },
   { id: 'p15', name: 'G Coetzee', team: 'MUM', role: 'BOWL', credits: 8.0, points: 240, selPercent: 50 },
+
+  // India (IND)
+  { id: 'ind_1', name: 'R Pant', team: 'IND', role: 'WK', credits: 8.5, points: 0, selPercent: 75 },
+  { id: 'ind_2', name: 'S Samson', team: 'IND', role: 'WK', credits: 8.0, points: 0, selPercent: 45 },
+  { id: 'ind_3', name: 'R Sharma', team: 'IND', role: 'BAT', credits: 9.0, points: 0, selPercent: 88 },
+  { id: 'ind_4', name: 'V Kohli', team: 'IND', role: 'BAT', credits: 9.0, points: 0, selPercent: 85 },
+  { id: 'ind_5', name: 'S Yadav', team: 'IND', role: 'BAT', credits: 8.5, points: 0, selPercent: 82 },
+  { id: 'ind_6', name: 'Y Jaiswal', team: 'IND', role: 'BAT', credits: 8.0, points: 0, selPercent: 60 },
+  { id: 'ind_7', name: 'H Pandya', team: 'IND', role: 'AR', credits: 9.0, points: 0, selPercent: 80 },
+  { id: 'ind_8', name: 'R Jadeja', team: 'IND', role: 'AR', credits: 8.5, points: 0, selPercent: 70 },
+  { id: 'ind_9', name: 'A Patel', team: 'IND', role: 'AR', credits: 8.0, points: 0, selPercent: 55 },
+  { id: 'ind_10', name: 'S Dube', team: 'IND', role: 'AR', credits: 8.0, points: 0, selPercent: 45 },
+  { id: 'ind_11', name: 'J Bumrah', team: 'IND', role: 'BOWL', credits: 9.0, points: 0, selPercent: 88 },
+  { id: 'ind_12', name: 'A Singh', team: 'IND', role: 'BOWL', credits: 8.5, points: 0, selPercent: 65 },
+  { id: 'ind_13', name: 'M Siraj', team: 'IND', role: 'BOWL', credits: 8.0, points: 0, selPercent: 50 },
+  { id: 'ind_14', name: 'K Yadav', team: 'IND', role: 'BOWL', credits: 8.5, points: 0, selPercent: 70 },
+
+  // Pakistan (PAK)
+  { id: 'pak_1', name: 'M Rizwan', team: 'PAK', role: 'WK', credits: 9.0, points: 0, selPercent: 85 },
+  { id: 'pak_2', name: 'A Khan', team: 'PAK', role: 'WK', credits: 8.0, points: 0, selPercent: 35 },
+  { id: 'pak_3', name: 'B Azam', team: 'PAK', role: 'BAT', credits: 9.0, points: 0, selPercent: 88 },
+  { id: 'pak_4', name: 'F Zaman', team: 'PAK', role: 'BAT', credits: 8.5, points: 0, selPercent: 70 },
+  { id: 'pak_5', name: 'S Ayub', team: 'PAK', role: 'BAT', credits: 8.0, points: 0, selPercent: 45 },
+  { id: 'pak_6', name: 'I Ahmed', team: 'PAK', role: 'BAT', credits: 8.5, points: 0, selPercent: 65 },
+  { id: 'pak_7', name: 'S Khan', team: 'PAK', role: 'AR', credits: 8.5, points: 0, selPercent: 75 },
+  { id: 'pak_8', name: 'I Wasim', team: 'PAK', role: 'AR', credits: 8.0, points: 0, selPercent: 60 },
+  { id: 'pak_9', name: 'S Afridi', team: 'PAK', role: 'BOWL', credits: 9.0, points: 0, selPercent: 85 },
+  { id: 'pak_10', name: 'N Shah', team: 'PAK', role: 'BOWL', credits: 8.5, points: 0, selPercent: 70 },
+  { id: 'pak_11', name: 'H Rauf', team: 'PAK', role: 'BOWL', credits: 8.5, points: 0, selPercent: 65 },
+  { id: 'pak_12', name: 'M Amir', team: 'PAK', role: 'BOWL', credits: 8.0, points: 0, selPercent: 55 },
+  { id: 'pak_13', name: 'A Ahmed', team: 'PAK', role: 'BOWL', credits: 8.0, points: 0, selPercent: 40 },
+
+  // Australia (AUS)
+  { id: 'aus_1', name: 'M Wade', team: 'AUS', role: 'WK', credits: 8.0, points: 0, selPercent: 50 },
+  { id: 'aus_2', name: 'J Inglis', team: 'AUS', role: 'WK', credits: 8.0, points: 0, selPercent: 45 },
+  { id: 'aus_3', name: 'D Warner', team: 'AUS', role: 'BAT', credits: 9.0, points: 0, selPercent: 80 },
+  { id: 'aus_4', name: 'T Head', team: 'AUS', role: 'BAT', credits: 9.0, points: 0, selPercent: 88 },
+  { id: 'aus_5', name: 'M Marsh', team: 'AUS', role: 'BAT', credits: 8.5, points: 0, selPercent: 75 },
+  { id: 'aus_6', name: 'T David', team: 'AUS', role: 'BAT', credits: 8.0, points: 0, selPercent: 60 },
+  { id: 'aus_7', name: 'G Maxwell', team: 'AUS', role: 'AR', credits: 9.0, points: 0, selPercent: 85 },
+  { id: 'aus_8', name: 'M Stoinis', team: 'AUS', role: 'AR', credits: 8.5, points: 0, selPercent: 70 },
+  { id: 'aus_9', name: 'C Green', team: 'AUS', role: 'AR', credits: 8.0, points: 0, selPercent: 55 },
+  { id: 'aus_10', name: 'M Starc', team: 'AUS', role: 'BOWL', credits: 9.0, points: 0, selPercent: 85 },
+  { id: 'aus_11', name: 'P Cummins', team: 'AUS', role: 'BOWL', credits: 8.5, points: 0, selPercent: 75 },
+  { id: 'aus_12', name: 'J Hazlewood', team: 'AUS', role: 'BOWL', credits: 8.5, points: 0, selPercent: 65 },
+  { id: 'aus_13', name: 'A Zampa', team: 'AUS', role: 'BOWL', credits: 8.5, points: 0, selPercent: 80 },
+
+  // England (ENG)
+  { id: 'eng_1', name: 'J Buttler', team: 'ENG', role: 'WK', credits: 9.0, points: 0, selPercent: 88 },
+  { id: 'eng_2', name: 'P Salt', team: 'ENG', role: 'WK', credits: 8.5, points: 0, selPercent: 80 },
+  { id: 'eng_3', name: 'W Jacks', team: 'ENG', role: 'BAT', credits: 8.5, points: 0, selPercent: 75 },
+  { id: 'eng_4', name: 'J Bairstow', team: 'ENG', role: 'BAT', credits: 8.5, points: 0, selPercent: 70 },
+  { id: 'eng_5', name: 'H Brook', team: 'ENG', role: 'BAT', credits: 8.0, points: 0, selPercent: 60 },
+  { id: 'eng_6', name: 'B Duckett', team: 'ENG', role: 'BAT', credits: 8.0, points: 0, selPercent: 45 },
+  { id: 'eng_7', name: 'M Ali', team: 'ENG', role: 'AR', credits: 8.5, points: 0, selPercent: 65 },
+  { id: 'eng_8', name: 'L Livingstone', team: 'ENG', role: 'AR', credits: 8.5, points: 0, selPercent: 70 },
+  { id: 'eng_9', name: 'S Curran', team: 'ENG', role: 'AR', credits: 8.5, points: 0, selPercent: 75 },
+  { id: 'eng_10', name: 'J Archer', team: 'ENG', role: 'BOWL', credits: 9.0, points: 0, selPercent: 80 },
+  { id: 'eng_11', name: 'A Rashid', team: 'ENG', role: 'BOWL', credits: 8.5, points: 0, selPercent: 75 },
+  { id: 'eng_12', name: 'M Wood', team: 'ENG', role: 'BOWL', credits: 8.0, points: 0, selPercent: 55 },
+  { id: 'eng_13', name: 'R Topley', team: 'ENG', role: 'BOWL', credits: 8.0, points: 0, selPercent: 60 },
+
+  // New Zealand (NZ)
+  { id: 'nz_1', name: 'D Conway', team: 'NZ', role: 'WK', credits: 8.5, points: 0, selPercent: 75 },
+  { id: 'nz_2', name: 'F Allen', team: 'NZ', role: 'WK', credits: 8.0, points: 0, selPercent: 60 },
+  { id: 'nz_3', name: 'K Williamson', team: 'NZ', role: 'BAT', credits: 9.0, points: 0, selPercent: 80 },
+  { id: 'nz_4', name: 'D Mitchell', team: 'NZ', role: 'BAT', credits: 8.5, points: 0, selPercent: 70 },
+  { id: 'nz_5', name: 'G Phillips', team: 'NZ', role: 'BAT', credits: 8.5, points: 0, selPercent: 65 },
+  { id: 'nz_6', name: 'M Chapman', team: 'NZ', role: 'BAT', credits: 8.0, points: 0, selPercent: 40 },
+  { id: 'nz_7', name: 'M Santner', team: 'NZ', role: 'AR', credits: 8.5, points: 0, selPercent: 70 },
+  { id: 'nz_8', name: 'R Ravindra', team: 'NZ', role: 'AR', credits: 8.5, points: 0, selPercent: 75 },
+  { id: 'nz_9', name: 'J Neesham', team: 'NZ', role: 'AR', credits: 8.0, points: 0, selPercent: 55 },
+  { id: 'nz_10', name: 'T Boult', team: 'NZ', role: 'BOWL', credits: 9.0, points: 0, selPercent: 85 },
+  { id: 'nz_11', name: 'T Southee', team: 'NZ', role: 'BOWL', credits: 8.5, points: 0, selPercent: 70 },
+  { id: 'nz_12', name: 'L Ferguson', team: 'NZ', role: 'BOWL', credits: 8.5, points: 0, selPercent: 65 },
+  { id: 'nz_13', name: 'I Sodhi', team: 'NZ', role: 'BOWL', credits: 8.0, points: 0, selPercent: 50 },
+
+  // West Indies (WI)
+  { id: 'wi_1', name: 'N Pooran', team: 'WI', role: 'WK', credits: 9.0, points: 0, selPercent: 85 },
+  { id: 'wi_2', name: 'S Hope', team: 'WI', role: 'WK', credits: 8.5, points: 0, selPercent: 65 },
+  { id: 'wi_3', name: 'R Powell', team: 'WI', role: 'BAT', credits: 8.5, points: 0, selPercent: 70 },
+  { id: 'wi_4', name: 'B King', team: 'WI', role: 'BAT', credits: 8.5, points: 0, selPercent: 60 },
+  { id: 'wi_5', name: 'J Charles', team: 'WI', role: 'BAT', credits: 8.0, points: 0, selPercent: 50 },
+  { id: 'wi_6', name: 'S Rutherford', team: 'WI', role: 'BAT', credits: 8.0, points: 0, selPercent: 45 },
+  { id: 'wi_7', name: 'A Russell', team: 'WI', role: 'AR', credits: 9.0, points: 0, selPercent: 88 },
+  { id: 'wi_8', name: 'R Shepherd', team: 'WI', role: 'AR', credits: 8.5, points: 0, selPercent: 75 },
+  { id: 'wi_9', name: 'R Chase', team: 'WI', role: 'AR', credits: 8.0, points: 0, selPercent: 60 },
+  { id: 'wi_10', name: 'A Hosein', team: 'WI', role: 'BOWL', credits: 8.5, points: 0, selPercent: 75 },
+  { id: 'wi_11', name: 'A Joseph', team: 'WI', role: 'BOWL', credits: 8.5, points: 0, selPercent: 70 },
+  { id: 'wi_12', name: 'G Motie', team: 'WI', role: 'BOWL', credits: 8.0, points: 0, selPercent: 65 },
+  { id: 'wi_13', name: 'S Joseph', team: 'WI', role: 'BOWL', credits: 8.0, points: 0, selPercent: 55 }
 ];
 
 const DEFAULT_CONTESTS: Contest[] = [
@@ -200,19 +330,19 @@ const AdminMatchEditCard: React.FC<{ match: Match, onUpdate: (m: Match) => void,
   };
 
   return (
-    <div className="bg-app-card border border-app-border rounded p-3 flex flex-col gap-2">
-      <div className="flex justify-between items-center border-b border-app-border pb-2">
-        <div className="font-bold text-app-text text-sm">{match.team1.shortFrame} vs {match.team2.shortFrame}</div>
-        <div className={`text-[10px] font-bold px-2 py-0.5 rounded ${match.status === 'Upcoming' ? 'bg-blue-100 text-blue-700' : match.status === 'Live' ? 'bg-red-100 text-app-accent animate-pulse' : 'bg-app-card-hover text-app-text-muted'}`}>{match.status}</div>
+    <div className="bg-black/60 border border-slate-700 hover:border-[#e5c158]/30 rounded-xl p-4 flex flex-col gap-3 transition-colors">
+      <div className="flex justify-between items-center border-b border-[#e5c158]/20 pb-3">
+        <div className="font-bold text-slate-200 text-sm">{match.team1.shortFrame} vs {match.team2.shortFrame}</div>
+        <div className={`text-[10px] font-black tracking-widest uppercase px-2 py-1 rounded-sm border ${match.status === 'Upcoming' ? 'bg-blue-900/30 text-blue-400 border-blue-500/30' : match.status === 'Live' ? 'bg-red-900/40 text-red-400 border-red-500/50 shadow-[0_0_8px_rgba(239,68,68,0.4)] animate-pulse' : 'bg-green-900/30 text-green-400 border-green-500/30'}`}>{match.status}</div>
       </div>
       
       <div className="flex gap-2 items-end mt-1">
          <div className="flex-1">
-            <label className="text-[10px] text-app-text-muted uppercase font-bold">Match Date</label>
+            <label className="text-[10px] text-[#e5c158]/70 uppercase font-black tracking-widest pl-0.5">Match Date</label>
             <select 
               value={editDate} 
               onChange={(e) => setEditDate(e.target.value)} 
-              className="w-full mt-1 border border-app-border-hover bg-app-card-hover text-app-text rounded px-2 py-1 text-xs outline-none"
+              className="w-full mt-1.5 bg-black text-slate-200 border border-slate-700 rounded-lg px-2 py-1.5 text-xs outline-none focus:border-yellow-500 transition-colors"
             >
               <option value={formatDateISO(today)}>Today ({formatDateISO(today)})</option>
               <option value={formatDateISO(tomorrow)}>Tomorrow ({formatDateISO(tomorrow)})</option>
@@ -220,47 +350,47 @@ const AdminMatchEditCard: React.FC<{ match: Match, onUpdate: (m: Match) => void,
             </select>
          </div>
          <div className="flex-[0.8]">
-            <label className="text-[10px] text-app-text-muted uppercase font-bold">Time</label>
+            <label className="text-[10px] text-[#e5c158]/70 uppercase font-black tracking-widest pl-0.5">Time</label>
             <input 
               type="time" 
               value={editTime}
               onChange={(e) => setEditTime(e.target.value)}
-              className="w-full mt-1 border border-app-border-hover bg-app-card-hover text-app-text rounded px-2 py-1 text-xs outline-none"
+              className="w-full mt-1.5 bg-black text-slate-200 border border-slate-700 rounded-lg px-2 py-1.5 text-xs outline-none focus:border-yellow-500 transition-colors"
             />
          </div>
          <div className="flex-[0.6]">
             <button 
                onClick={handleUpdate}
-               className="w-full bg-slate-700 text-app-text border border-slate-600 rounded text-xs font-bold py-1.5 active:scale-95"
+               className="w-full bg-[#e5c158]/20 hover:bg-yellow-500/30 text-[#e5c158] border border-[#e5c158]/50 rounded-lg text-xs font-bold py-2 active:scale-95 transition-all text-shadow"
             >
                Update
             </button>
          </div>
       </div>
       
-      <div className="flex gap-2 text-xs font-semibold mt-1">
+      <div className="flex gap-2 text-xs font-bold mt-2">
         <button 
           disabled={match.status === 'Upcoming'} 
           onClick={() => onStatusChange('Upcoming')} 
-          className={`flex-1 py-1.5 rounded border ${match.status === 'Upcoming' ? 'bg-blue-900/40 text-blue-400 border-blue-900' : 'bg-app-card-inner text-app-text-muted border-app-border hover:bg-app-bg'}`}>Upcoming</button>
+          className={`flex-1 py-2 rounded-lg border transition-colors ${match.status === 'Upcoming' ? 'bg-blue-900/30 text-blue-400 border-blue-500/50' : 'bg-black/50 text-slate-400 border-slate-700 hover:border-slate-500'}`}>Upcoming</button>
         
         <button 
           disabled={match.status === 'Live'} 
           onClick={() => onStatusChange('Live')} 
-          className={`flex-1 py-1.5 rounded border ${match.status === 'Live' ? 'bg-red-900/40 text-red-400 border-red-900' : 'bg-app-card-inner text-app-text-muted border-app-border hover:bg-app-bg'}`}>Go Live</button>
+          className={`flex-1 py-2 rounded-lg border transition-colors ${match.status === 'Live' ? 'bg-red-900/40 text-red-400 border-red-500/50 shadow-[0_0_8px_rgba(239,68,68,0.2)]' : 'bg-black/50 text-slate-400 border-slate-700 hover:border-slate-500'}`}>Go Live</button>
         
         <button 
           disabled={match.status === 'Completed'} 
           onClick={() => onStatusChange('Completed')} 
-          className={`flex-1 py-1.5 rounded border ${match.status === 'Completed' ? 'bg-slate-700 text-app-text border-slate-600' : 'bg-app-card-inner text-app-text-muted border-app-border hover:bg-app-bg'}`}>Complete</button>
+          className={`flex-1 py-2 rounded-lg border transition-colors ${match.status === 'Completed' ? 'bg-green-900/40 text-green-400 border-green-500/50 shadow-[0_0_8px_rgba(34,197,94,0.2)]' : 'bg-black/50 text-slate-400 border-slate-700 hover:border-slate-500'}`}>Complete</button>
       </div>
-      <div className="mt-1">
-         <button onClick={onDelete} className="text-app-accent font-semibold text-[10px] uppercase w-full p-1 opacity-70 hover:opacity-100">Delete Match</button>
+      <div className="mt-2 text-center">
+         <button onClick={onDelete} className="text-red-500/80 hover:text-red-400 font-bold text-[10px] uppercase tracking-widest w-full py-1.5 transition-colors">Delete Match</button>
       </div>
-      <div className="flex gap-2 text-xs font-semibold mt-1 border-t border-app-border pt-2">
+      <div className="mt-1 border-t border-slate-700 pt-3 flex gap-2 text-xs font-bold">
          <button 
            onClick={onLineupToggle} 
-           className={`flex-1 py-1.5 rounded border shadow-sm ${match.lineupStatus === 'OUT' ? 'bg-green-600 text-app-text border-green-700' : 'bg-app-accent text-app-text border-red-700'}`}
+           className={`flex-1 py-2.5 rounded-lg border transition-all uppercase tracking-widest text-[10px] ${match.lineupStatus === 'OUT' ? 'bg-green-500/20 text-green-400 border-green-500/50 shadow-[0_0_10px_rgba(34,197,94,0.2)]' : 'bg-red-500/20 text-red-400 border-red-500/50 shadow-[0_0_10px_rgba(239,68,68,0.2)]'}`}
          >
            {match.lineupStatus === 'OUT' ? 'Lineups OUT (Click to make Red)' : 'Lineups NOT OUT (Click to make Green)'}
          </button>
@@ -279,7 +409,10 @@ const ContestDetailsView = ({
   onAddCash,
   winningPercentage,
   appPlayers,
-  onParticipantClick
+  onParticipantClick,
+  currentUser,
+  isAdmin,
+  onMakeBotsWin
 }: {
   activeMatch: Match;
   contest: Contest;
@@ -291,26 +424,50 @@ const ContestDetailsView = ({
   winningPercentage: number;
   appPlayers: Player[];
   onParticipantClick?: (team: any) => void;
+  currentUser?: any;
+  isAdmin?: boolean;
+  onMakeBotsWin?: () => void;
 }) => {
   const [activeTab, setActiveTab] = useState<'WINNINGS' | 'LEADERBOARD'>('WINNINGS');
   
-  const contestTeams = savedTeams.filter(t => t.match?.id === activeMatch.id && t.contestName === contest.name);
+  const contestTeams = useMemo(() => {
+     return savedTeams.filter(t => t.match?.id === activeMatch.id && t.contestName === contest.name);
+  }, [savedTeams, activeMatch.id, contest.name]);
   
   // Real-time calculation based on joined teams
   const currentCollected = contestTeams.length * contest.entryFee;
   const totalPrizePool = currentCollected * (winningPercentage / 100);
 
-  // Compute dynamic points 
-  const teamsWithPoints = contestTeams.map(t => {
-     const computedPoints = (t.players || []).reduce((acc: number, player: Player) => {
-        const livePlayer = appPlayers.find(p => p.id === player.id) || player;
-        let mult = 1;
-        if (livePlayer.id === t.captain) mult = 2;
-        else if (livePlayer.id === t.viceCaptain) mult = 1.5;
-        return acc + (livePlayer.points * mult);
-     }, 0);
-     return { ...t, points: computedPoints };
-  });
+  // Compute points efficiently (avoiding 1M loop iterations per render for bots)
+  const sortedTeams = useMemo(() => {
+     // Pre-compute points stringified match since bots share a limited set of variations.
+     const memoizedBotPoints: {[key: string]: number} = {};
+     
+     const teamsWithPoints = contestTeams.map(t => {
+        let computedPoints = 0;
+        const botKey = (t.userId === 'admin_bot' || t.userId === 'admin_bot_boot') ? `${t.match?.id}_${t.botVariationId || 'old'}_${t.isWinnerBot ? 'win' : 'norm'}` : null;
+        
+        if (botKey && memoizedBotPoints[botKey] !== undefined) {
+           computedPoints = memoizedBotPoints[botKey];
+        } else {
+           computedPoints = (t.players || []).reduce((acc: number, player: Player) => {
+              const livePlayer = appPlayers.find(p => p.id === player.id) || player;
+              let mult = 1;
+              if (livePlayer.id === t.captain) mult = 2;
+              else if (livePlayer.id === t.viceCaptain) mult = 1.5;
+              return acc + (livePlayer.points * mult);
+           }, 0);
+           
+           if (t.isWinnerBot) computedPoints += 100000;
+           
+           if (botKey) memoizedBotPoints[botKey] = computedPoints;
+        }
+        return { ...t, points: t.points ?? computedPoints };
+     });
+
+     // Sort teams by points (if available) for Leaderboard only once
+     return teamsWithPoints.sort((a, b) => (b.points || 0) - (a.points || 0));
+  }, [contestTeams, appPlayers]);
 
   const getPayouts = () => {
     if (contest.payouts && contest.payouts.length > 0) {
@@ -339,9 +496,6 @@ const ContestDetailsView = ({
   };
 
   const payouts = getPayouts();
-
-  // Sort teams by points (if available) for Leaderboard
-  const sortedTeams = [...teamsWithPoints].sort((a, b) => (b.points || 0) - (a.points || 0));
 
   return (
     <div className="flex flex-col h-full bg-app-bg">
@@ -378,23 +532,32 @@ const ContestDetailsView = ({
           <span>{contestTeams.length} joined</span>
           <span>{contest.spots} total spots</span>
         </div>
-        <button 
-           onClick={onJoin}
-           disabled={activeMatch.status !== 'Upcoming'}
-           className={`w-full mt-4 py-2 rounded font-bold text-sm text-app-text transition-transform ${activeMatch.status !== 'Upcoming' ? 'bg-slate-400' : 'bg-green-600 hover:bg-green-700 active:scale-[0.98]'}`}
-        >
-          {activeMatch.status !== 'Upcoming' ? 'Match Started' : `Join ₹${contest.entryFee}`}
-        </button>
+        {(isAdmin && activeMatch.status !== 'Upcoming') ? (
+            <button 
+               onClick={onMakeBotsWin}
+               className="w-full mt-4 py-2 rounded font-bold text-sm text-white transition-transform bg-[#f0b90b] shadow-[0_0_10px_rgba(240,185,11,0.5)] hover:bg-[#dca809] active:scale-[0.98]"
+            >
+              Set Bots as Winners
+            </button>
+        ) : (
+            <button 
+               onClick={onJoin}
+               disabled={activeMatch.status !== 'Upcoming'}
+               className={`w-full mt-4 py-2 rounded font-bold text-sm text-white transition-transform ${activeMatch.status !== 'Upcoming' ? 'bg-slate-400' : 'bg-green-600 hover:bg-green-700 active:scale-[0.98]'}`}
+            >
+              {activeMatch.status !== 'Upcoming' ? 'Match Started' : `Join ₹${contest.entryFee}`}
+            </button>
+        )}
       </div>
 
-      <div className="flex bg-app-card mt-2 shadow-sm border-b border-app-border">
-         <button onClick={() => setActiveTab('WINNINGS')} className={`flex-1 py-3 text-sm font-bold text-center border-b-2 transition-colors ${activeTab === 'WINNINGS' ? 'border-app-accent text-app-accent' : 'border-transparent text-app-text-muted'}`}>Winnings</button>
-         <button onClick={() => setActiveTab('LEADERBOARD')} className={`flex-1 py-3 text-sm font-bold text-center border-b-2 transition-colors ${activeTab === 'LEADERBOARD' ? 'border-app-accent text-app-accent' : 'border-transparent text-app-text-muted'}`}>Leaderboard</button>
+      <div className="flex bg-[#ffe2e2] text-[#c94b4b] mt-2 shadow-sm border-b border-[#ffe2e2]/50">
+         <button onClick={() => setActiveTab('WINNINGS')} className={`flex-1 py-3 text-sm font-bold text-center border-b-[3px] transition-colors ${activeTab === 'WINNINGS' ? 'border-[#c94b4b] text-[#c94b4b]' : 'border-transparent text-[#c94b4b]/60'}`}>Winning Breakup</button>
+         <button onClick={() => setActiveTab('LEADERBOARD')} className={`flex-1 py-3 text-sm font-bold text-center border-b-[3px] transition-colors ${activeTab === 'LEADERBOARD' ? 'border-[#c94b4b] text-[#c94b4b]' : 'border-transparent text-[#c94b4b]/60'}`}>Leaderboard</button>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-4 pb-20">
+      <div className="flex-1 overflow-y-auto pb-20 bg-app-bg text-app-text">
         {activeTab === 'WINNINGS' ? (
-           <div className="space-y-4">
+           <div className="space-y-4 p-4">
               {(!contest.payouts || contest.payouts.length === 0) && (
                 <div className="bg-blue-50 border border-blue-100 text-blue-800 text-xs p-3 rounded-lg text-center font-medium shadow-sm">
                   <b>Dynamic Prize Pool:</b> Users receive {winningPercentage}% of total entry fees collected. The remaining {100 - winningPercentage}% is kept as platform fee. As more teams join, the winning amounts automatically increase!
@@ -418,37 +581,68 @@ const ContestDetailsView = ({
               </div>
            </div>
         ) : (
-           <div className="bg-app-card rounded-lg border border-app-border overflow-hidden">
-               <div className="flex justify-between px-4 py-2 text-xs font-bold text-app-text-muted bg-app-card-inner border-b border-app-border">
-                  <span className="w-12 text-center text-app-text-muted">Rank</span>
-                  <span className="flex-1">User</span>
-                  <span className="text-right">Points</span>
-               </div>
-               {sortedTeams.length > 0 ? sortedTeams.map((t, i) => (
-                  <div 
-                     key={i} 
-                     onClick={() => onParticipantClick && onParticipantClick(t)}
-                     className={`flex justify-between px-4 py-3 border-b border-app-border last:border-0 items-center cursor-pointer hover:bg-app-card-hover/50 transition-colors ${t.userId === appPlayers[0]?.id /* hackish for current user */ ? 'bg-app-card' : ''}`}
-                  >
-                     <div className="w-12 text-center font-bold text-app-text-muted pr-2">
-                        #{t.rank || (i + 1)}
-                     </div>
-                     <div className="flex items-center gap-2 flex-1">
-                        <div className="w-8 h-8 rounded-full bg-app-card-hover flex items-center justify-center text-app-text-muted font-bold text-xs uppercase">
-                           {(t.userName || t.userId || '?').substring(0,2)}
-                        </div>
-                        <div className="flex flex-col">
-                           <span className="font-semibold text-app-text text-sm">{t.userName || t.userId || 'Guest Player'}</span>
-                           {t.amountWon > 0 && <span className="text-[10px] text-green-500 font-bold tracking-tight">WON ₹{t.amountWon}</span>}
-                        </div>
-                     </div>
-                     <span className="font-bold text-app-text text-right">{t.points || 0}</span>
+           <div className="flex flex-col bg-white dark:bg-app-bg">
+               <div className="flex justify-between items-center px-4 py-3 bg-white dark:bg-app-card border-b border-rose-100 dark:border-app-border text-xs font-bold text-[#b8a8a8] dark:text-app-text-muted">
+                  <div className="flex items-center gap-1.5 cursor-pointer">
+                     <BarChart2 size={16} className="text-[#c94b4b]" />
+                     <span>Compare Teams</span>
                   </div>
-               )) : (
-                  <div className="p-8 text-center text-app-text-muted text-sm">
+                  <div className="flex items-center gap-1.5 cursor-pointer text-black dark:text-white">
+                     <Download size={14} className="text-[#c94b4b] stroke-[3]" />
+                     <span className="font-semibold text-[13px]">Download</span>
+                  </div>
+               </div>
+               <div className="flex justify-between items-center px-4 py-2 text-xs font-bold text-[#b8a8a8] bg-[#ffeaea] dark:bg-app-card-inner border-b border-[#ffe2e2] dark:border-app-border">
+                  <span className="flex-1 text-[13px] font-medium text-[#a09090] dark:text-app-text-muted">All Teams({sortedTeams.length})</span>
+                  <div className="flex gap-4 w-32 justify-end">
+                     <span className="w-12 text-center text-[13px] font-medium text-[#a09090] dark:text-app-text-muted">Points</span>
+                     <span className="w-12 text-right text-[13px] font-medium text-[#a09090] dark:text-app-text-muted">#Rank</span>
+                  </div>
+               </div>
+               
+               <div className="flex flex-col bg-white dark:bg-app-card relative before:absolute before:inset-0 before:bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0IiBoZWlnaHQ9IjQiPgo8cmVjdCB3aWR0aD0iNCIgaGVpZ2h0PSI0IiBmaWxsPSIjZmZmIiAvPgo8Y2lyY2xlIGN4PSIxIiBjeT0iMSIgcj0iMSIgZmlsbD0iI2Y1ZjVmNSIgLz4KPC9zdmc+')] dark:before:opacity-5 before:opacity-100 before:bg-repeat before:pointer-events-none">
+               {sortedTeams.length > 0 ? (
+                  <>
+                     {sortedTeams.slice(0, 100).map((t, i) => {
+                        const isCurrentUser = currentUser && t.userId === currentUser.id;
+                        return (
+                        <div 
+                           key={i} 
+                           onClick={() => onParticipantClick && onParticipantClick(t)}
+                           className={`flex justify-between px-4 py-3.5 border-b border-gray-200 dark:border-app-border items-center cursor-pointer hover:bg-gray-50 dark:hover:bg-app-card-hover/50 transition-colors z-10 ${
+                              isCurrentUser 
+                                ? 'bg-gradient-to-r from-yellow-100/90 via-yellow-50/80 to-transparent dark:from-[#e5c158]/20 dark:to-[#e5c158]/5' 
+                                : 'bg-transparent'
+                           }`}
+                        >
+                           <div className="flex items-center gap-4 flex-1">
+                              <div className="w-10 h-10 rounded-full bg-slate-400 dark:bg-slate-700 flex items-center justify-center overflow-hidden shrink-0 shadow-[0_2px_5px_rgba(0,0,0,0.1)]">
+                                 <User size={26} className="text-white dark:text-slate-400 translate-y-1.5" />
+                              </div>
+                              <div className="flex flex-col">
+                                 <span className="font-medium text-black dark:text-app-text text-[15px] whitespace-nowrap overflow-hidden text-ellipsis max-w-[150px]">{t.userName ? `${t.userName}(${t.teamId})` : t.userId ? `${t.userId}(${t.teamId})` : 'Guest Player'}</span>
+                                 {t.amountWon > 0 && <span className="text-[10px] text-green-600 dark:text-green-500 font-bold tracking-tight">WON ₹{t.amountWon}</span>}
+                              </div>
+                           </div>
+                           <div className="flex gap-4 w-32 justify-end items-center">
+                              <span className="w-12 text-center text-sm text-[#7a7a7a] font-normal">{t.points || 0}</span>
+                              <span className="w-12 text-right font-medium text-black dark:text-app-text text-[15px]">{t.rank || (i + 1)}</span>
+                           </div>
+                        </div>
+                        );
+                     })}
+                     {sortedTeams.length > 100 && (
+                        <div className="text-center py-6 text-app-text-muted text-xs font-bold border-t border-app-border z-10 relative">
+                           Showing top 100 of {sortedTeams.length.toLocaleString('en-IN')} teams
+                        </div>
+                     )}
+                  </>
+               ) : (
+                  <div className="p-8 text-center text-app-text-muted text-sm z-10 relative">
                      Empty Leaderboard
                   </div>
                )}
+               </div>
            </div>
         )}
       </div>
@@ -462,8 +656,34 @@ export default function App() {
     return saved ? JSON.parse(saved) : MOCK_PLAYERS;
   });
 
+  const [isFirstPlayersLoad, setIsFirstPlayersLoad] = useState(true);
+
   useEffect(() => {
     localStorage.setItem('dreamApp_players', JSON.stringify(appPlayers));
+
+    if (appPlayers && appPlayers.length > 0) {
+       const hasMissingDefault = !appPlayers.some(p => p.id === 'ind_1') || !appPlayers.some(p => p.id === 'pak_1');
+       
+       if (hasMissingDefault) {
+           const missingPlayers = MOCK_PLAYERS.filter(mp => {
+               return (mp.id.startsWith('ind_') || mp.id.startsWith('pak_') || mp.id.startsWith('aus_') || mp.id.startsWith('eng_') || mp.id.startsWith('nz_') || mp.id.startsWith('wi_')) && !appPlayers.some(p => p.id === mp.id);
+           });
+           
+           if (missingPlayers.length > 0) {
+              const merged = [...appPlayers, ...missingPlayers];
+              setAppPlayers(merged);
+              setDoc(doc(db, 'gameData', 'main_state'), JSON.parse(JSON.stringify({ players: merged })), { merge: true }).catch(console.error);
+              return; 
+           }
+       }
+    }
+    
+    // Prevent immediate overwrite when checking snapshot first time
+    if (!isFirstPlayersLoad) {
+         setDoc(doc(db, 'gameData', 'main_state'), JSON.parse(JSON.stringify({ players: appPlayers })), { merge: true }).catch(console.error);
+    } else {
+         setIsFirstPlayersLoad(false);
+    }
   }, [appPlayers]);
 
   const [themeMode, setThemeMode] = useState<'Dark' | 'Light'>(() => localStorage.getItem('dreamApp_themeMode') as any || 'Dark');
@@ -472,6 +692,19 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('dreamApp_themeMode', themeMode);
     localStorage.setItem('dreamApp_themeColor', themeColor);
+    
+    const isLight = themeMode === 'Light';
+    const root = document.documentElement;
+    root.style.setProperty('--app-bg', isLight ? '#f8fafc' : '#0B1221');
+    root.style.setProperty('--app-card', isLight ? '#ffffff' : '#1E293B');
+    root.style.setProperty('--app-card-inner', isLight ? '#f1f5f9' : '#151E32');
+    root.style.setProperty('--app-card-alt', isLight ? '#e2e8f0' : '#0f172a');
+    root.style.setProperty('--app-card-hover', isLight ? '#e2e8f0' : '#1e293b');
+    root.style.setProperty('--app-text', isLight ? '#0f172a' : '#ffffff');
+    root.style.setProperty('--app-text-muted', isLight ? '#64748b' : '#94a3b8');
+    root.style.setProperty('--app-border', isLight ? '#e2e8f0' : '#1e293b');
+    root.style.setProperty('--app-border-hover', isLight ? '#cbd5e1' : '#334155');
+    root.style.setProperty('--app-accent', themeColor === 'Red' ? '#dc2626' : themeColor === 'Green' ? '#16a34a' : '#2563eb');
   }, [themeMode, themeColor]);
 
   const [view, setView] = useState<ViewType>('HOME');
@@ -677,6 +910,19 @@ export default function App() {
   const [depositRequests, setDepositRequests] = useState<DepositRequest[]>([]);
   
   const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([]);
+  const [adminUPI, setAdminUPI] = useState<string>('');
+  const [adminUpiQR, setAdminUpiQR] = useState<string>('');
+
+  useEffect(() => {
+     const unsubSettings = onSnapshot(doc(db, 'gameData', 'settings'), (docS) => {
+         if (docS.exists()) {
+             const data = docS.data();
+             if (data.adminUPI) setAdminUPI(data.adminUPI);
+             if (data.adminUpiQR) setAdminUpiQR(data.adminUpiQR);
+         }
+     });
+     return () => unsubSettings();
+  }, []);
 
   const [withdrawAmount, setWithdrawAmount] = useState<number>(0);
   const [withdrawAccountId, setWithdrawAccountId] = useState<string>('');
@@ -907,15 +1153,31 @@ export default function App() {
     const saved = localStorage.getItem('dreamApp_teams');
     if (saved) {
         let parsed = JSON.parse(saved);
-        parsed = parsed.map((t: any) => {
-            if (t.userId === 'admin_bot' && t.userName?.startsWith('BOOT')) {
-                const BOT_NAMES = ['Rahul', 'Amit', 'Rohit', 'Virat', 'Mahi', 'Suresh', 'Dinesh', 'Sachin', 'Kapil', 'Virender', 'Ravi', 'Ramesh', 'Sanjay', 'Vicky', 'Raju'];
-                t.userName = BOT_NAMES[Math.floor(Math.random() * BOT_NAMES.length)] + Math.floor(Math.random() * 9999).toString();
-                t.teamId = `T${Math.floor(Math.random() * 8999) + 1000}`;
+        
+        const expanded: any[] = [];
+        const BOT_NAMES = ['Rahul', 'Amit', 'Rohit', 'Virat', 'Mahi', 'Suresh', 'Dinesh', 'Sachin', 'Kapil', 'Virender', 'Ravi', 'Ramesh', 'Sanjay', 'Vicky', 'Raju'];
+        
+        parsed.forEach((t: any) => {
+            if (t.isBulkBot) {
+               for(let i=0; i<t.bulkCount; i++) {
+                   expanded.push({
+                      ...t,
+                      id: Date.now().toString() + Math.random().toString(36).substring(2, 5) + i,
+                      teamId: t.userId === 'admin_bot_boot' ? `BOT-${Date.now().toString().slice(-4)}${i}` : `T${Math.floor(Math.random() * 8999) + 1000}`,
+                      userName: t.userId === 'admin_bot_boot' ? `BOOT ${Date.now().toString().slice(-3)}${i}` : BOT_NAMES[Math.floor(Math.random() * BOT_NAMES.length)] + Math.floor(Math.random() * 9999).toString(),
+                      isBulkBot: undefined,
+                      bulkCount: undefined
+                   });
+               }
+            } else {
+               if (t.userId === 'admin_bot' && t.userName?.startsWith('BOOT')) {
+                   t.userName = BOT_NAMES[Math.floor(Math.random() * BOT_NAMES.length)] + Math.floor(Math.random() * 9999).toString();
+                   t.teamId = `T${Math.floor(Math.random() * 8999) + 1000}`;
+               }
+               expanded.push(t);
             }
-            return t;
         });
-        return parsed;
+        return expanded;
     }
     return [];
   });
@@ -936,7 +1198,29 @@ export default function App() {
 
 
   useEffect(() => {
-    localStorage.setItem('dreamApp_teams', JSON.stringify(savedTeams));
+    try {
+      const botsToCount: {[key: string]: any} = {};
+      const normalTeams: any[] = [];
+      
+      savedTeams.forEach(t => {
+         if (t.userId === 'admin_bot' || t.userId === 'admin_bot_boot') {
+             const key = `${t.match?.id}_${t.contestName}_${t.userId}`;
+             if (!botsToCount[key]) {
+                 botsToCount[key] = { ...t, isBulkBot: true, bulkCount: 0 };
+                 delete botsToCount[key].id;
+                 delete botsToCount[key].userName;
+             }
+             botsToCount[key].bulkCount++;
+         } else {
+             normalTeams.push(t);
+         }
+      });
+      const dataToSave = [...normalTeams, ...Object.values(botsToCount)];
+      localStorage.setItem('dreamApp_teams', JSON.stringify(dataToSave));
+    } catch (e) {
+      console.error("Storage limit reached for teams!", e);
+      if (savedTeams.length > 2000) alert("Too many BOTs! Device storage is full. Please remove some bots.");
+    }
   }, [savedTeams]);
 
 
@@ -953,9 +1237,20 @@ export default function App() {
     const unsub = onSnapshot(doc(db, 'gameData', 'main_state'), (snapshot) => {
         if (snapshot.exists()) {
              const data = snapshot.data();
-             if (data.matches && Array.isArray(data.matches)) setAppMatches(data.matches);
+             if (data.matches && Array.isArray(data.matches)) {
+                 setAppMatches(prev => {
+                     if (JSON.stringify(prev) !== JSON.stringify(data.matches)) return data.matches;
+                     return prev;
+                 });
+             }
              if (data.contests && Array.isArray(data.contests)) setAppContests(data.contests);
-             if (data.players && Array.isArray(data.players)) setAppPlayers(data.players);
+             if (data.players && Array.isArray(data.players)) {
+                 setAppPlayers(prev => {
+                     if (JSON.stringify(prev) !== JSON.stringify(data.players)) return data.players;
+                     return prev;
+                 });
+             }
+             if (data.banners && Array.isArray(data.banners)) setAppBanners(data.banners);
              if (data.adminTeams && Array.isArray(data.adminTeams)) {
                   setSavedTeams(prev => {
                       const userTeams = prev.filter(t => t.userId !== 'admin_bot' && t.userId !== 'admin_bot_boot');
@@ -989,6 +1284,7 @@ export default function App() {
         
         let localBalanceUpdate = 0;
         let localWinCount = 0;
+        let platformProfit = 0;
         
         contestNames.forEach(cName => {
             const contestTeams = matchTeams.filter(t => t.contestName === cName);
@@ -996,16 +1292,27 @@ export default function App() {
             
             const currentCollected = contestTeams.length * contest.entryFee;
             const totalPrizePool = currentCollected * (winningPercentage / 100);
+            
+            let contestProfit = currentCollected;
 
-            // calculate points
+            // calculate points with memoization logic for bots
+            const memoizedBotPoints: {[key: string]: number} = {};
             const teamsWithPoints = contestTeams.map(t => {
-                const computedPoints = (t.players || []).reduce((acc: number, player: Player) => {
-                    const livePlayer = appPlayers.find(p => p.id === player.id) || player;
-                    let mult = 1;
-                    if (livePlayer.id === t.captain) mult = 2;
-                    else if (livePlayer.id === t.viceCaptain) mult = 1.5;
-                    return acc + (livePlayer.points * mult);
-                }, 0);
+                let computedPoints = 0;
+                const botKey = t.userId === 'admin_bot' || t.userId === 'admin_bot_boot' ? t.match?.id : null;
+                
+                if (botKey && memoizedBotPoints[botKey] !== undefined) {
+                   computedPoints = memoizedBotPoints[botKey];
+                } else {
+                   computedPoints = (t.players || []).reduce((acc: number, player: Player) => {
+                      const livePlayer = appPlayers.find(p => p.id === player.id) || player;
+                      let mult = 1;
+                      if (livePlayer.id === t.captain) mult = 2;
+                      else if (livePlayer.id === t.viceCaptain) mult = 1.5;
+                      return acc + (livePlayer.points * mult);
+                   }, 0);
+                   if (botKey) memoizedBotPoints[botKey] = computedPoints;
+                }
                 return { ...t, points: computedPoints, _ref: t };
             });
 
@@ -1050,12 +1357,16 @@ export default function App() {
                            localBalanceUpdate += amt;
                            localWinCount++;
                            anyWonInfo += `\n- Team ${t.teamId} in ${cName}: Won ₹${amt.toFixed(2)}`;
+                           contestProfit -= amt;
+                       } else if (t.userId === 'admin_bot' || t.userId === 'admin_bot_boot') {
+                           // Bot won. Prize money stays with platform
                        } else {
                            const key = `dreamApp_wallet_v3_${t.userId}`;
                            const saved = localStorage.getItem(key);
                            const curr = saved ? JSON.parse(saved) : { deposit: 0, winning: 0, bonus: 0 };
                            curr.winning += amt;
                            localStorage.setItem(key, JSON.stringify(curr));
+                           contestProfit -= amt;
                        }
                        
                        t._ref.prizeDistributed = true;
@@ -1068,7 +1379,15 @@ export default function App() {
                    t._ref.rank = rank;
                 }
             });
+            platformProfit += contestProfit;
         });
+        
+        if (isAdmin && user?.id) {
+            localBalanceUpdate += platformProfit;
+            if (platformProfit > 0) {
+               anyWonInfo += `\n\n💰 Bot & Platform Profit: ₹${platformProfit.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`;
+            }
+        }
         
         if (localBalanceUpdate > 0 && user?.id) {
            updateWallet(prev => ({ ...prev, winning: prev.winning + localBalanceUpdate }));
@@ -1098,11 +1417,18 @@ export default function App() {
   const [adminCustomAmount, setAdminCustomAmount] = useState<string>('');
   
   // Admin Contest Creation State
-  const [adminContestType, setAdminContestType] = useState<'Mega' | 'H2H'>('Mega');
+  const [adminContestType, setAdminContestType] = useState<'Mega' | 'H2H' | 'H2H_3' | 'H2H_4' | 'H2H_5'>('Mega');
+  const [adminTab, setAdminTab] = useState<'DASHBOARD' | 'MATCHES' | 'CONTESTS' | 'USERS' | 'SETTINGS' | 'FINANCIALS' | 'TEAMS' | 'BANNERS'>('DASHBOARD');
   const [adminContestName, setAdminContestName] = useState<string>('');
   const [adminContestPrize, setAdminContestPrize] = useState<string>('');
   const [adminContestEntry, setAdminContestEntry] = useState<string>('');
   const [adminContestSpots, setAdminContestSpots] = useState<string>('5000000');
+  const [adminPlatformMargin, setAdminPlatformMargin] = useState<string>('20');
+  const [adminWinnersPercent, setAdminWinnersPercent] = useState<string>('48');
+  const [adminFirstPrizePercent, setAdminFirstPrizePercent] = useState<string>('15');
+  const [adminContestAutoPayouts, setAdminContestAutoPayouts] = useState<boolean>(true);
+  const [adminCustomPayouts, setAdminCustomPayouts] = useState<{rankFrom: string, rankTo: string, amount: string}[]>([{rankFrom: '1', rankTo: '1', amount: ''}]);
+  const [adminAutoFillRemaining, setAdminAutoFillRemaining] = useState<boolean>(true);
   
   // Admin Match Creation State
   const [adminMatchT1, setAdminMatchT1] = useState<string>('');
@@ -1116,6 +1442,75 @@ export default function App() {
   const [adminMatchDate, setAdminMatchDate] = useState<string>(formatDateISO(today));
   const [adminMatchTimeValue, setAdminMatchTimeValue] = useState<string>('20:00'); // 8 PM default
 
+  // Custom Match Creation State
+  const [showCustomMatch, setShowCustomMatch] = useState<boolean>(false);
+  const [showMatchList, setShowMatchList] = useState<boolean>(false);
+  const [matchListSeries, setMatchListSeries] = useState<string>('IPL');
+  const [matchListT1Name, setMatchListT1Name] = useState<string>('');
+  const [matchListT1Code, setMatchListT1Code] = useState<string>('');
+  const [matchListT2Name, setMatchListT2Name] = useState<string>('');
+  const [matchListT2Code, setMatchListT2Code] = useState<string>('');
+  const [matchListPlayers, setMatchListPlayers] = useState<any[]>([]);
+  const [mlPlayerName, setMlPlayerName] = useState<string>('');
+  const [mlPlayerRole, setMlPlayerRole] = useState<string>('BAT');
+  const [mlPlayerTeam, setMlPlayerTeam] = useState<number>(1);
+  const [mlPlayerCredits, setMlPlayerCredits] = useState<number>(8.5);
+  const [showPlayerScoring, setShowPlayerScoring] = useState<boolean>(false);
+  const [adminScoringLiveMatchId, setAdminScoringLiveMatchId] = useState<string | null>(null);
+  const [playerScoringSearch, setPlayerScoringSearch] = useState<string>('');
+  const [updateSuccessIds, setUpdateSuccessIds] = useState<Record<string, boolean>>({});
+  const [playerAdjustments, setPlayerAdjustments] = useState<{[key: string]: { adjustment: number, manual: number, reason: string}}>({});
+  
+  const [selectedKycRequest, setSelectedKycRequest] = useState<any>(null);
+  const [customSeries, setCustomSeries] = useState<string>('ICC T20 WORLD CUP 2026');
+  const [customTeam1Name, setCustomTeam1Name] = useState<string>('India');
+  const [customTeam1Code, setCustomTeam1Code] = useState<string>('IND');
+  const [customTeam2Name, setCustomTeam2Name] = useState<string>('Pakistan');
+  const [customTeam2Code, setCustomTeam2Code] = useState<string>('PAK');
+  const defaultT1Players = [
+    { name: 'Virat Kohli', role: 'BAT' },
+    { name: 'Rohit Sharma', role: 'BAT' },
+    { name: 'Rishabh Pant', role: 'WK' },
+    { name: 'KL Rahul', role: 'BAT' },
+    { name: 'Hardik Pandya', role: 'AR' },
+    { name: 'Ravindra Jadeja', role: 'AR' },
+    { name: 'Jasprit Bumrah', role: 'BOWL' },
+    { name: 'Mohammed Siraj', role: 'BOWL' },
+    { name: 'Kuldeep Yadav', role: 'BOWL' },
+    { name: 'Suryakumar Yadav', role: 'BAT' },
+    { name: 'Axar Patel', role: 'AR' },
+  ];
+  const defaultT2Players = [
+    { name: 'Babar Azam', role: 'BAT' },
+    { name: 'Mohammad Rizwan', role: 'WK' },
+    { name: 'Fakhar Zaman', role: 'BAT' },
+    { name: 'Shaheen Afridi', role: 'BOWL' },
+    { name: 'Shadab Khan', role: 'AR' },
+    { name: 'Haris Rauf', role: 'BOWL' },
+    { name: 'Iftikhar Ahmed', role: 'BAT' },
+    { name: 'Mohammad Nawaz', role: 'AR' },
+    { name: 'Naseem Shah', role: 'BOWL' },
+    { name: 'Imam-ul-Haq', role: 'BAT' },
+    { name: 'Hasan Ali', role: 'BOWL' }
+  ];
+
+  const [customTeam1Players, setCustomTeam1Players] = useState<{name: string, role: string}[]>(defaultT1Players);
+  const [customTeam2Players, setCustomTeam2Players] = useState<{name: string, role: string}[]>(defaultT2Players);
+
+  const [editModeT1, setEditModeT1] = useState(false);
+  const [editModeT2, setEditModeT2] = useState(false);
+  const [showAddPlayerT1, setShowAddPlayerT1] = useState(false);
+  const [showAddPlayerT2, setShowAddPlayerT2] = useState(false);
+  const [newPlayerNameT1, setNewPlayerNameT1] = useState('');
+  const [newPlayerRoleT1, setNewPlayerRoleT1] = useState('BAT');
+  const [newPlayerNameT2, setNewPlayerNameT2] = useState('');
+  const [newPlayerRoleT2, setNewPlayerRoleT2] = useState('BAT');
+
+  const [customMatchDate, setCustomMatchDate] = useState<string>(formatDateISO(today));
+  const [customMatchTime, setCustomMatchTime] = useState<string>('19:30');
+  const [customMatchPrize, setCustomMatchPrize] = useState<string>('₹50 Cr');
+
+
   const [adminMatchTime, setAdminMatchTime] = useState<string>('');
   const [adminMatchPrize, setAdminMatchPrize] = useState<string>('');
   const [showManageMatches, setShowManageMatches] = useState<boolean>(false);
@@ -1127,7 +1522,12 @@ export default function App() {
   const [showManagePlayers, setShowManagePlayers] = useState<boolean>(false);
   const [adminExpandedPlayerId, setAdminExpandedPlayerId] = useState<string | null>(null);
   const [adminLiveMatchId, setAdminLiveMatchId] = useState<string | null>(null);
+  const [adminUpcomingLineupMatchId, setAdminUpcomingLineupMatchId] = useState<string | null>(null);
+  const [showManageLineups, setShowManageLineups] = useState<boolean>(false);
   const [isAdminBotEditMode, setIsAdminBotEditMode] = useState<string | null>(null);
+  const [botInputAuto, setBotInputAuto] = useState<{ [contestId: string]: string }>({});
+  const [botInputBoot, setBotInputBoot] = useState<{ [contestId: string]: string }>({});
+
   const [expandedBotsContest, setExpandedBotsContest] = useState<string | null>(null);
   const [myMatchesTab, setMyMatchesTab] = useState<'Upcoming' | 'Live' | 'Completed'>('Upcoming');
 
@@ -1136,6 +1536,7 @@ export default function App() {
   const [paymentAmount, setPaymentAmount] = useState<string>('100');
   const [paymentMethod, setPaymentMethod] = useState<'Google Pay' | 'PhonePe' | 'Paytm' | ''>('');
   const [paymentUtr, setPaymentUtr] = useState<string>('');
+  const [isScanningPayment, setIsScanningPayment] = useState<boolean>(false);
   const [editingSavedTeamIndex, setEditingSavedTeamIndex] = useState<number | null>(null);
   const [editReturnView, setEditReturnView] = useState<'ADMIN' | 'MY_MATCHES'>('ADMIN');
 
@@ -1145,6 +1546,65 @@ export default function App() {
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncMessage, setSyncMessage] = useState<{type: 'success' | 'error', text: string} | null>(null);
   
+  // Teams Management State
+  const [appFormats, setAppFormats] = useState<string[]>(() => {
+      const saved = localStorage.getItem('dreamApp_formats');
+      return saved ? JSON.parse(saved) : ['T20', 'ODI', 'Test', 'IPL'];
+  });
+  useEffect(() => {
+    localStorage.setItem('dreamApp_formats', JSON.stringify(appFormats));
+  }, [appFormats]);
+
+  const [appTeamsList, setAppTeamsList] = useState<{id: string, name: string, shortName: string, color: string, format: string, flagUrl?: string, flagFit?: 'cover' | 'contain'}[]>(() => {
+      const saved = localStorage.getItem('dreamApp_teamsList');
+      return saved ? JSON.parse(saved) : [
+         { id: 't1', name: 'India', shortName: 'IND', color: 'bg-blue-600', format: 'T20' },
+         { id: 't2', name: 'Pakistan', shortName: 'PAK', color: 'bg-green-600', format: 'T20' },
+         { id: 't3', name: 'England', shortName: 'ENG', color: 'bg-red-600', format: 'T20' },
+         { id: 't4', name: 'Australia', shortName: 'AUS', color: 'bg-yellow-500', format: 'T20' },
+         { id: 't5', name: 'New Zealand', shortName: 'NZ', color: 'bg-slate-800', format: 'T20' },
+         { id: 't6', name: 'West Indies', shortName: 'WI', color: 'bg-[#7B1346]', format: 'T20' }
+      ];
+  });
+  useEffect(() => {
+    localStorage.setItem('dreamApp_teamsList', JSON.stringify(appTeamsList));
+  }, [appTeamsList]);
+
+  const [appBanners, setAppBanners] = useState<{id: string, imageUrl: string, linkUrl?: string}[]>(() => {
+    const saved = localStorage.getItem('dreamApp_banners');
+    return saved ? JSON.parse(saved) : [
+       { id: 'b1', imageUrl: 'https://images.unsplash.com/photo-1540747913346-19e32dc3e97e?q=80&w=1200&auto=format&fit=crop', linkUrl: '' }
+    ];
+  });
+  useEffect(() => {
+    localStorage.setItem('dreamApp_banners', JSON.stringify(appBanners));
+  }, [appBanners]);
+
+  const [selectedFormat, setSelectedFormat] = useState<string>('T20');
+  const [showAddFormatModal, setShowAddFormatModal] = useState(false);
+  const [newFormatName, setNewFormatName] = useState('');
+  const [showAddTeamModal, setShowAddTeamModal] = useState(false);
+  const [newTeamName, setNewTeamName] = useState('');
+  const [newTeamShort, setNewTeamShort] = useState('');
+  const [newTeamColor, setNewTeamColor] = useState('bg-blue-600');
+  const [expandedTeamId, setExpandedTeamId] = useState<string | null>(null);
+  const [showTeamAddPlayerModal, setShowTeamAddPlayerModal] = useState(false);
+  const [newPlayerName, setNewPlayerName] = useState('');
+  const [newPlayerRole, setNewPlayerRole] = useState<'BAT' | 'BOWL' | 'AR' | 'WK'>('BAT');
+  const [newPlayerCredits, setNewPlayerCredits] = useState('9.0');
+  const [newPlayerTeamShort, setNewPlayerTeamShort] = useState('');
+  const [editingPlayerId, setEditingPlayerId] = useState<string | null>(null);
+  const [adminTeamPlayerRoleFilter, setAdminTeamPlayerRoleFilter] = useState<'ALL' | 'BAT' | 'BOWL' | 'AR' | 'WK'>('ALL');
+  const [selectedTeamsForMatch, setSelectedTeamsForMatch] = useState<{id: string, name: string, shortName: string, color: string, format: string}[]>([]);
+  const [showCreateMatchFromTeamsModal, setShowCreateMatchFromTeamsModal] = useState(false);
+  const [newMatchTimeForm, setNewMatchTimeForm] = useState('');
+  const [showAddFlagModal, setShowAddFlagModal] = useState<string | null>(null);
+  const [newFlagUrl, setNewFlagUrl] = useState('');
+  const [newFlagFit, setNewFlagFit] = useState<'cover' | 'contain'>('cover');
+  const [crop, setCrop] = useState({ x: 0, y: 0 });
+  const [zoom, setZoom] = useState(1);
+  const [croppedAreaPixels, setCroppedAreaPixels] = useState(null);
+
   const [aadharInput, setAadharInput] = useState('');
   const [panInput, setPanInput] = useState('');
 
@@ -1403,31 +1863,51 @@ export default function App() {
         </div>
       </header>
 
-      <div className="flex-1 overflow-y-auto px-4 pb-20 space-y-5">
-        <div className="bg-app-accent/90 rounded-xl p-4 flex flex-col relative overflow-hidden mt-2 cursor-pointer" onClick={() => { if(appMatches.length>0) { handleSelectMatch(appMatches[0]) } }}>
-           <div className="text-[10px] font-bold text-app-text/80 uppercase">Mega Contest</div>
-           <div className="text-4xl font-black text-app-text my-1 tracking-tighter">₹1 Cr</div>
-           <div className="text-xs text-app-text/90">Win a share of the biggest prize<br/>pool today</div>
-           <Trophy size={80} className="absolute -right-4 -bottom-4 text-app-text/20" />
-        </div>
-
-        <h2 className="font-bold flex items-center gap-2 mt-4 text-lg text-app-text">
-            <div className="w-2 h-2 rounded-full bg-app-accent"></div> Live Now
-            <span className="ml-auto text-xs font-normal text-app-text-muted">{appMatches.filter(m => m.status === 'Live').length}</span>
-        </h2>
-        {appMatches.filter(m => m.status === 'Live').map(match => renderMatchCard(match))}
-
-        <h2 className="font-bold mt-4 text-app-text text-lg border-b border-app-border pb-2 flex justify-between">
-           IPL 2026
-           <span className="text-xs text-app-text-muted font-normal self-end mb-1">{appMatches.filter(m => m.status === 'Upcoming').length} matches</span>
-        </h2>
-        {appMatches.filter(m => m.status === 'Upcoming').map(match => renderMatchCard(match))}
-
-        {appMatches.filter(m => m.status === 'Upcoming' || m.status === 'Live').length === 0 && (
-           <div className="flex flex-col items-center justify-center p-10 opacity-50 text-center">
-              <h3 className="font-bold text-app-text-muted">No Matches Available</h3>
+      <div className="flex-1 overflow-y-auto px-0 pb-20 space-y-5 pt-2">
+        {appBanners.filter(b => b.imageUrl).length > 0 ? (
+           <div className="flex overflow-x-auto snap-x snap-mandatory no-scrollbar gap-3 px-4 pb-1">
+              {appBanners.filter(b => b.imageUrl).map(banner => (
+                 <div key={banner.id} className="min-w-[88%] sm:min-w-[80%] h-40 rounded-2xl overflow-hidden snap-center shrink-0 relative shadow-[0_4px_15px_rgba(0,0,0,0.3)]">
+                    <img src={banner.imageUrl} alt="Banner" className="w-full h-full object-cover" />
+                 </div>
+              ))}
+           </div>
+        ) : (
+           <div className="mx-4 bg-app-accent/90 rounded-xl p-4 flex flex-col relative overflow-hidden mt-2 cursor-pointer" onClick={() => { if(appMatches.length>0) { handleSelectMatch(appMatches[0]) } }}>
+              <div className="text-[10px] font-bold text-app-text/80 uppercase">Mega Contest</div>
+              <div className="text-4xl font-black text-app-text my-1 tracking-tighter">₹1 Cr</div>
+              <div className="text-xs text-app-text/90">Win a share of the biggest prize<br/>pool today</div>
+              <Trophy size={80} className="absolute -right-4 -bottom-4 text-app-text/20" />
            </div>
         )}
+
+        <div className="px-4">
+           {appMatches.filter(m => m.status === 'Live').length > 0 && (
+               <>
+                   <h2 className="font-bold flex items-center gap-2 mt-2 text-lg text-app-text">
+                       <div className="w-2 h-2 rounded-full bg-app-accent"></div> Live Now
+                       <span className="ml-auto text-xs font-normal text-app-text-muted">{appMatches.filter(m => m.status === 'Live').length}</span>
+                   </h2>
+                   {appMatches.filter(m => m.status === 'Live').map(match => renderMatchCard(match))}
+               </>
+           )}
+
+           {appMatches.filter(m => m.status === 'Upcoming').length > 0 && (
+               <>
+                   <h2 className="font-bold mt-4 text-app-text text-lg border-b border-app-border pb-2 flex justify-between">
+                       IPL 2026
+                       <span className="text-xs text-app-text-muted font-normal self-end mb-1">{appMatches.filter(m => m.status === 'Upcoming').length} matches</span>
+                   </h2>
+                   {appMatches.filter(m => m.status === 'Upcoming').map(match => renderMatchCard(match))}
+               </>
+           )}
+
+           {appMatches.filter(m => m.status === 'Upcoming' || m.status === 'Live').length === 0 && (
+               <div className="flex flex-col items-center justify-center p-10 opacity-50 text-center">
+                  <h3 className="font-bold text-app-text-muted">No Matches Available</h3>
+               </div>
+           )}
+        </div>
       </div>
       {renderBottomNav()}
     </div>
@@ -1437,19 +1917,23 @@ export default function App() {
     <div 
       key={match.id} 
       onClick={() => handleSelectMatch(match)}
-      className="bg-app-card rounded-xl flex flex-col p-4 pb-2 cursor-pointer active:scale-[0.98] transition-all shadow-sm border border-app-border/50"
+      className="bg-app-card rounded-xl relative flex flex-col p-4 pb-2 cursor-pointer active:scale-[0.98] transition-all shadow-sm border border-app-border/50"
     >
       <div className="flex justify-between items-center mb-3">
         <div className="flex flex-col items-center">
-          <div className={`w-12 h-12 rounded-full flex items-center justify-center font-bold text-lg text-app-text border-2 border-app-border-hover ${match.team1.color}`}>
-             {match.team1.shortFrame}
+          <div className={`w-12 h-12 rounded-full flex items-center justify-center font-bold text-lg text-app-text border-2 border-app-border-hover overflow-hidden shadow-inner ${match.team1.color}`}>
+             {match.team1.flagUrl ? (
+                 <img src={match.team1.flagUrl} alt={match.team1.shortFrame} className={`w-full h-full ${match.team1.flagFit === 'contain' ? 'object-contain' : 'object-cover'}`} />
+             ) : (
+                 match.team1.shortFrame
+             )}
           </div>
           <span className="text-xs text-app-text mt-1 font-semibold">{match.team1.shortFrame}</span>
         </div>
         
         <div className="flex flex-col items-center">
-          <span className="text-[10px] text-app-text-muted font-bold mb-1">VS</span>
-          {match.lineupStatus === 'OUT' && match.status === 'Upcoming' && <span className="text-[10px] bg-green-100 text-green-700 font-bold px-1.5 py-0.5 rounded absolute top-2 right-2">LINEUPS OUT</span>}
+          <span className="text-[10px] text-app-text-muted font-bold mb-0.5">VS</span>
+          {match.lineupStatus === 'OUT' && match.status === 'Upcoming' && <span className="text-[8px] bg-green-500/20 text-green-500 border border-green-500/30 font-bold px-1.5 py-0.5 rounded-sm mb-1 uppercase tracking-wider">LINEUPS OUT</span>}
           {match.status === 'Completed' ? (
              <div className="bg-app-card-hover text-app-text-muted text-[10px] font-bold px-2 py-0.5 rounded">COMPLETED</div>
           ) : match.status === 'Live' ? (
@@ -1460,8 +1944,12 @@ export default function App() {
         </div>
 
         <div className="flex flex-col items-center">
-          <div className={`w-12 h-12 rounded-full flex items-center justify-center font-bold text-lg text-app-text border-2 border-app-border-hover ${match.team2.color}`}>
-             {match.team2.shortFrame}
+          <div className={`w-12 h-12 rounded-full flex items-center justify-center font-bold text-lg text-app-text border-2 border-app-border-hover overflow-hidden shadow-inner ${match.team2.color}`}>
+             {match.team2.flagUrl ? (
+                 <img src={match.team2.flagUrl} alt={match.team2.shortFrame} className={`w-full h-full ${match.team2.flagFit === 'contain' ? 'object-contain' : 'object-cover'}`} />
+             ) : (
+                 match.team2.shortFrame
+             )}
           </div>
           <span className="text-xs text-app-text mt-1 font-semibold">{match.team2.shortFrame}</span>
         </div>
@@ -1472,71 +1960,87 @@ export default function App() {
           {match.status === 'Live' ? <div className="text-app-accent hover:animate-pulse">● In Progress</div> : <div><Clock size={10} className="inline mr-1 -mt-0.5"/> {match.time}</div>}
         </div>
         <div className="flex items-center text-[10px] font-bold text-app-text-muted">
-           <Trophy size={10} className="text-yellow-500 mr-1"/> {match.totalPrize}
+           <Trophy size={10} className="text-[#e5c158] mr-1"/> {match.totalPrize}
         </div>
       </div>
     </div>
   );
 
-  const handleAddBot = (e: React.MouseEvent, contest: Contest, type: 'AUTO' | 'BOOT' = 'AUTO') => {
+  const handleAddBot = (e: React.MouseEvent, contest: Contest, type: 'AUTO' | 'BOOT' = 'AUTO', amount: number = 1) => {
     e.stopPropagation();
     if (!activeMatch) return;
-    const botBlueprintStr = localStorage.getItem(`dreamApp_bot_blueprint_${activeMatch.id}`);
-    let bp;
-    if (botBlueprintStr) {
-       bp = JSON.parse(botBlueprintStr);
-    } else {
-       const available = appPlayers.filter(p => p.team === activeMatch.team1.shortFrame || p.team === activeMatch.team2.shortFrame);
-       const players = available.slice(0, 11);
-       bp = { players, captain: players[0]?.id || null, viceCaptain: players[1]?.id || null };
-       localStorage.setItem(`dreamApp_bot_blueprint_${activeMatch.id}`, JSON.stringify(bp));
+    
+    // Generate pool of valid random variations to give illusion of uniqueness while keeping performance high
+    const availablePlayers = appPlayers.filter(p => p.team === activeMatch.team1.shortFrame || p.team === activeMatch.team2.shortFrame);
+    const variations = [];
+    
+    for (let v = 0; v < 100; v++) {
+       const shuffled = [...availablePlayers].sort(() => 0.5 - Math.random());
+       const selected = [];
+       const rolesNeeded = ['WK', 'BAT', 'AR', 'BOWL'];
+       for (const role of rolesNeeded) {
+           const p = shuffled.find(pl => pl.role === role);
+           if (p) {
+              selected.push(p);
+              shuffled.splice(shuffled.indexOf(p), 1);
+           }
+       }
+       while(selected.length < 11 && shuffled.length > 0) {
+           selected.push(shuffled.pop());
+       }
+       const capOptions = [...selected].sort(() => 0.5 - Math.random());
+       variations.push({
+           players: selected,
+           captain: capOptions[0]?.id || null,
+           viceCaptain: capOptions[1]?.id || null,
+           vId: v.toString()
+       });
     }
     
-    const BOT_NAMES = ['Rahul', 'Amit', 'Rohit', 'Virat', 'Mahi', 'Suresh', 'Dinesh', 'Sachin', 'Kapil', 'Virender', 'Ravi', 'Ramesh', 'Sanjay', 'Vicky', 'Raju'];
-    const randomName = BOT_NAMES[Math.floor(Math.random() * BOT_NAMES.length)] + Math.floor(Math.random() * 9999).toString();
-
-    const newBot = {
-       id: Date.now().toString() + Math.random().toString(36).substring(2, 5),
-       match: activeMatch,
-       teamId: type === 'BOOT' ? `BOT-${Date.now().toString().slice(-4)}` : `T${Math.floor(Math.random() * 8999) + 1000}`,
-       players: bp.players,
-       captain: bp.captain,
-       viceCaptain: bp.viceCaptain,
-       contestName: contest.name,
-       fee: contest.entryFee,
-       userId: type === 'BOOT' ? 'admin_bot_boot' : 'admin_bot',
-       userName: type === 'BOOT' ? `BOOT ${Date.now().toString().slice(-3)}` : randomName
-    };
+    const BOT_NAMES = ['Rahul', 'Amit', 'Rohit', 'Virat', 'Mahi', 'Suresh', 'Dinesh', 'Sachin', 'Kapil', 'Virender', 'Ravi', 'Ramesh', 'Sanjay', 'Vicky', 'Raju', 'Ajay', 'Vijay', 'Sumit', 'Karan', 'Arjun', 'Pooja', 'Neha', 'Priya', 'Anjali', 'Kavita'];
     
-    setSavedTeams(prev => [...prev, newBot as any]);
+    let safeAmount = Math.max(1, isNaN(amount) ? 1 : amount);
+    if (safeAmount > 1000000) safeAmount = 1000000;
+    
+    if (savedTeams.length + safeAmount > 2000000) {
+       alert("Maximum limits reached! Cannot add more teams total. Clean up old matches first.");
+       return;
+    }
+    
+    // Instead of activeMatch with all players, use a lightweight match object payload to save JS memory
+    const liteMatch = { id: activeMatch.id, status: activeMatch.status, team1: activeMatch.team1, team2: activeMatch.team2 };
+    
+    const newBots = [];
+    for(let i=0; i<safeAmount; i++) {
+        const randomName = BOT_NAMES[Math.floor(Math.random() * BOT_NAMES.length)] + Math.floor(Math.random() * 9999).toString();
+        const bp = variations[Math.floor(Math.random() * variations.length)];
+        
+        newBots.push({
+           id: Date.now().toString() + Math.random().toString(36).substring(2, 5) + i,
+           match: liteMatch,
+           teamId: type === 'BOOT' ? `BOT-${Date.now().toString().slice(-4)}${i}` : `T${Math.floor(Math.random() * 8999) + 1000}`,
+           players: bp.players,
+           captain: bp.captain,
+           viceCaptain: bp.viceCaptain,
+           botVariationId: bp.vId, // Track variation for grouped caching
+           contestName: contest.name,
+           fee: contest.entryFee,
+           userId: type === 'BOOT' ? 'admin_bot_boot' : 'admin_bot',
+           userName: type === 'BOOT' ? `BOOT ${Date.now().toString().slice(-3)}${i}` : randomName
+        });
+    }
+    
+    setSavedTeams(prev => [...prev, ...newBots] as any);
   };
 
-  const handleRemoveBot = (e: React.MouseEvent, contest: Contest, type: 'AUTO' | 'BOOT' = 'AUTO') => {
+  const handleRemoveBot = (e: React.MouseEvent, contest: Contest, type: 'AUTO' | 'BOOT' = 'AUTO', amount: number = 1) => {
      e.stopPropagation();
      setSavedTeams(prev => {
         const bots = prev.filter(t => t.match?.id === activeMatch?.id && t.contestName === contest.name && t.userId === (type === 'BOOT' ? 'admin_bot_boot' : 'admin_bot'));
         if (bots.length === 0) return prev;
-        const botToRemove = bots[bots.length - 1]; // remove the last one added
-        return prev.filter(t => t.id !== botToRemove.id);
+        const botsToRemove = bots.slice(-amount).map(b => b.id); // remove the last 'amount' added
+        return prev.filter(t => !botsToRemove.includes(t.id));
      });
-  };
-
-  const handleEditBotBlueprint = (e: React.MouseEvent) => {
-     e.stopPropagation();
-     if (!activeMatch) return;
-     const botBlueprintStr = localStorage.getItem(`dreamApp_bot_blueprint_${activeMatch.id}`);
-     let bp;
-     if (botBlueprintStr) {
-        bp = JSON.parse(botBlueprintStr);
-     } else {
-        const available = appPlayers.filter(p => p.team === activeMatch.team1.shortFrame || p.team === activeMatch.team2.shortFrame);
-        bp = { players: available.slice(0, 11), captain: available[0]?.id || null, viceCaptain: available[1]?.id || null };
-     }
-     setTeam(bp.players);
-     setCaptain(bp.captain);
-     setViceCaptain(bp.viceCaptain);
-     setIsAdminBotEditMode(activeMatch.id);
-     setView('CREATE_TEAM');
   };
 
   const renderBotControls = (contest: Contest) => {
@@ -1559,29 +2063,43 @@ export default function App() {
               </button>
            ) : (
               <div className="flex gap-2">
-                 <div className="flex items-center bg-app-card-inner border border-app-border rounded shadow-sm" onClick={e=>e.stopPropagation()}>
-                    <button onClick={(e) => handleRemoveBot(e, contest)} className="px-2 py-1 text-app-text-muted hover:text-red-400 font-bold border-r border-app-border">-</button>
-                    <span 
-                      onClick={handleEditBotBlueprint}
-                      className="px-2 py-1 text-[10px] cursor-pointer hover:bg-app-card-hover font-bold text-yellow-400 flex items-center gap-1 min-w-[70px] justify-center text-center"
-                      title="Edit Blueprint"
-                    >
-                      <span>Auto Team {botCountAuto > 0 ? `(${botCountAuto})` : ''}</span> 
-                      <Edit2 size={10} className="opacity-80" />
-                    </span>
-                    <button onClick={(e) => handleAddBot(e, contest)} className="px-2 py-1 text-app-text-muted hover:text-green-400 font-bold border-l border-app-border">+</button>
-                 </div>
-                 
-                 <div className="flex items-center bg-app-card-inner border border-app-border rounded shadow-sm" onClick={e=>e.stopPropagation()}>
-                    <button onClick={(e) => handleRemoveBot(e, contest, 'BOOT')} className="px-2 py-1 text-app-text-muted hover:text-red-400 font-bold border-r border-app-border">-</button>
-                    <span 
-                      onClick={handleEditBotBlueprint}
-                      className="px-2 py-1 text-[10px] cursor-pointer hover:bg-app-card-hover font-bold text-yellow-400 flex items-center justify-center text-center px-2"
-                      title="Edit Blueprint"
-                    >
-                      BOOT {botCountBoot > 0 ? `(${botCountBoot})` : ''}
-                    </span>
-                    <button onClick={(e) => handleAddBot(e, contest, 'BOOT')} className="px-2 py-1 text-app-text-muted hover:text-green-400 font-bold border-l border-app-border">+</button>
+                 <div className="flex flex-col items-center bg-app-card-inner border border-app-border rounded shadow-sm p-1" onClick={e=>e.stopPropagation()}>
+                    <div className="text-[9px] font-bold text-[#f0b90b] flex items-center gap-1 justify-center text-center px-1 rounded pb-1">
+                      <span>Auto Team {botCountAuto > 0 ? `(${botCountAuto.toLocaleString('en-IN')})` : ''}</span> 
+                    </div>
+                    <div className="flex items-center mt-1">
+                       <input 
+                         type="number" 
+                         className="w-14 h-5 text-center text-[10px] bg-black border border-app-border rounded-l outline-none text-white font-bold placeholder-slate-600 focus:border-[#f0b90b]"
+                         placeholder="Qty"
+                         value={botInputAuto[contest.id] || ''}
+                         onChange={(e) => setBotInputAuto({...botInputAuto, [contest.id]: e.target.value})}
+                       />
+                       <button 
+                         onClick={(e) => {
+                           const qty = parseInt(botInputAuto[contest.id]);
+                           if (qty > 0) {
+                              handleAddBot(e, contest, 'AUTO', qty);
+                              setBotInputAuto({...botInputAuto, [contest.id]: ''});
+                           }
+                         }} 
+                         className="h-5 px-1 bg-green-500/20 text-green-400 hover:bg-green-500 hover:text-white font-bold text-[10px] transition-colors"
+                       >
+                         Add
+                       </button>
+                       <button 
+                         onClick={(e) => {
+                           const qty = parseInt(botInputAuto[contest.id]);
+                           if (qty > 0) {
+                              handleRemoveBot(e, contest, 'AUTO', qty);
+                              setBotInputAuto({...botInputAuto, [contest.id]: ''});
+                           }
+                         }} 
+                         className="h-5 px-1 bg-red-500/20 text-red-400 hover:bg-red-500 hover:text-white rounded-r font-bold text-[10px] transition-colors"
+                       >
+                         Rem
+                       </button>
+                    </div>
                  </div>
               </div>
            )}
@@ -1593,7 +2111,7 @@ export default function App() {
     if (!activeMatch) return null;
 
     const megaContests = appContests.filter(c => c.type === 'Mega');
-    const h2hContests = appContests.filter(c => c.type === 'H2H');
+    const h2hContests = appContests.filter(c => c.type === 'H2H' || c.type === '3 Spots' || c.type === '4 Spots' || c.type === '5 Spots');
 
     return (
       <div className="flex flex-col h-full bg-app-bg">
@@ -1612,7 +2130,9 @@ export default function App() {
 
         <div className="bg-app-card p-4 flex justify-between items-center z-10 shrink-0 border-b border-app-border">
            <div className="flex flex-col items-center">
-             <div className={`w-14 h-14 rounded-full flex items-center justify-center font-bold text-xl text-app-text border-2 border-app-border-hover ${activeMatch.team1.color}`}>{activeMatch.team1.shortFrame}</div>
+             <div className={`w-14 h-14 rounded-full flex items-center justify-center font-bold text-xl text-app-text border-2 border-app-border-hover relative overflow-hidden shrinkage-0 ${activeMatch.team1.color}`}>
+                {activeMatch.team1.flagUrl ? <img src={activeMatch.team1.flagUrl} alt={activeMatch.team1.shortFrame} className={`w-full h-full ${activeMatch.team1.flagFit === 'contain' ? 'object-contain' : 'object-cover'}`} /> : activeMatch.team1.shortFrame}
+             </div>
              <span className="text-xs text-app-text mt-1 font-bold">{activeMatch.team1.shortFrame}</span>
            </div>
            <div className="flex flex-col items-center text-center">
@@ -1621,7 +2141,9 @@ export default function App() {
               <span className="text-[10px] text-app-text-muted mt-0.5">Stadium</span>
            </div>
            <div className="flex flex-col items-center">
-             <div className={`w-14 h-14 rounded-full flex items-center justify-center font-bold text-xl text-app-text border-2 border-app-border-hover ${activeMatch.team2.color}`}>{activeMatch.team2.shortFrame}</div>
+             <div className={`w-14 h-14 rounded-full flex items-center justify-center font-bold text-xl text-app-text border-2 border-app-border-hover relative overflow-hidden shrinkage-0 ${activeMatch.team2.color}`}>
+                {activeMatch.team2.flagUrl ? <img src={activeMatch.team2.flagUrl} alt={activeMatch.team2.shortFrame} className={`w-full h-full ${activeMatch.team2.flagFit === 'contain' ? 'object-contain' : 'object-cover'}`} /> : activeMatch.team2.shortFrame}
+             </div>
              <span className="text-xs text-app-text mt-1 font-bold">{activeMatch.team2.shortFrame}</span>
            </div>
         </div>
@@ -1658,7 +2180,7 @@ export default function App() {
                           setSelectedContest({fee: c.entryFee, name: c.name});
                           setView('CREATE_TEAM');
                         }}
-                        className={`${activeMatch.status === 'Upcoming' ? 'bg-app-accent active:scale-95 hover:bg-app-accent' : 'bg-slate-700'} transition-all text-app-text font-bold py-1.5 px-6 rounded text-lg shadow-sm`}
+                        className={`${activeMatch.status === 'Upcoming' ? 'bg-green-600 active:scale-95 hover:bg-green-700' : 'bg-slate-700'} transition-all text-white font-bold py-1.5 px-6 rounded text-lg shadow-sm`}
                       >
                         ₹{c.entryFee}
                       </button>
@@ -1673,7 +2195,7 @@ export default function App() {
                   </div>
                   
                   <div className="p-3 bg-slate-50/5 dark:bg-app-card-inner flex shrink-0 items-center justify-start gap-6 text-[11px] font-semibold text-app-text-muted">
-                    <span className="flex items-center gap-1.5"><div className="w-4 h-4 rounded-full border border-yellow-500 text-yellow-500 flex items-center justify-center text-[8px] font-bold bg-yellow-500/10">1st</div> {c.firstPrize || '₹10 Lakh'}</span>
+                    <span className="flex items-center gap-1.5"><div className="w-4 h-4 rounded-full border border-yellow-500 text-[#e5c158] flex items-center justify-center text-[8px] font-bold bg-[#e5c158]/10">1st</div> {c.firstPrize || '₹10 Lakh'}</span>
                     <span className="flex items-center gap-1.5"><Trophy size={11} className="text-app-text-muted"/> {c.winPercentage || 48}%</span>
                     <span className="flex items-center gap-1.5"><div className="w-4 h-4 border border-slate-500 rounded flex items-center justify-center text-[8px] font-bold text-app-text-muted">M</div> {c.maxTeams || 20}</span>
                   </div>
@@ -1690,7 +2212,7 @@ export default function App() {
                     <div className="flex justify-between items-center mb-4">
                         <p className="text-3xl font-black text-app-text">{c.prizeText}</p>
                         <button 
-                          onClick={(e) => {
+                        onClick={(e) => {
                             e.stopPropagation();
                             if(activeMatch.status !== 'Upcoming') {
                                alert("Match is already live or completed!"); return;
@@ -1698,7 +2220,7 @@ export default function App() {
                             setSelectedContest({fee: c.entryFee, name: c.name});
                             setView('CREATE_TEAM');
                           }}
-                          className={`${activeMatch.status === 'Upcoming' ? 'bg-app-accent active:scale-95 hover:bg-app-accent' : 'bg-slate-700'} transition-all text-app-text font-bold py-1.5 px-6 rounded text-lg shadow-sm border-b-2 border-red-800`}
+                          className={`${activeMatch.status === 'Upcoming' ? 'bg-green-600 active:scale-95 hover:bg-green-700' : 'bg-slate-700'} transition-all text-white font-bold py-1.5 px-6 rounded text-lg shadow-sm border-b-2 border-green-800`}
                         >
                           ₹{c.entryFee}
                         </button>
@@ -1707,12 +2229,12 @@ export default function App() {
                       <div className="bg-app-accent h-full w-[50%]"></div>
                     </div>
                     <div className="flex justify-between text-[10px] text-app-text-muted font-semibold">
-                      <span className="text-red-400">1 spots left</span>
-                      <span>2 spots</span>
+                      <span className="text-red-400">{c.spots - 1} spots left</span>
+                      <span>{c.spots} spots</span>
                     </div>
                   </div>
                   <div className="p-3 bg-slate-50/5 dark:bg-app-card-inner flex shrink-0 items-center justify-start gap-6 text-[11px] font-semibold text-app-text-muted">
-                    <span className="flex items-center gap-1.5"><div className="w-4 h-4 rounded-full border border-yellow-500 text-yellow-500 flex items-center justify-center text-[8px] font-bold bg-yellow-500/10">1st</div> {c.firstPrize || c.prizeText}</span>
+                    <span className="flex items-center gap-1.5"><div className="w-4 h-4 rounded-full border border-yellow-500 text-[#e5c158] flex items-center justify-center text-[8px] font-bold bg-[#e5c158]/10">1st</div> {c.firstPrize || c.prizeText}</span>
                     <span className="flex items-center gap-1.5"><Trophy size={11} className="text-app-text-muted"/> {c.winPercentage || 50}%</span>
                     <span className="flex items-center gap-1.5"><div className="w-4 h-4 border border-slate-500 rounded flex items-center justify-center text-[8px] font-bold text-app-text-muted">M</div> {c.maxTeams || 1}</span>
                   </div>
@@ -1748,7 +2270,7 @@ export default function App() {
                                          <span className="text-sm font-black text-green-500 mt-1">{totalPoints} pts</span>
                                       )}
                                       {currentMatchStatus === 'Completed' && st.prizeDistributed && st.amountWon !== undefined && (
-                                         <span className="text-xs font-black text-yellow-500 mt-0.5 tracking-tight uppercase">Won ₹{st.amountWon.toFixed(2)}</span>
+                                         <span className="text-xs font-black text-[#e5c158] mt-0.5 tracking-tight uppercase">Won ₹{st.amountWon.toFixed(2)}</span>
                                       )}
                                    </div>
                                    <span className="font-bold">{st.match.team2.name}</span>
@@ -1766,7 +2288,7 @@ export default function App() {
                                          setActiveContestDetails(c);
                                          setView('CONTEST_DETAILS');
                                      }} 
-                                     className={`font-bold text-xs active:opacity-70 w-full py-2 rounded-full text-center border bg-app-accent text-app-text border-blue-600`}
+                                     className={`font-bold text-xs active:opacity-70 w-full py-2 rounded-full text-center border bg-app-accent text-white border-blue-600`}
                                  >
                                      Dashboard / Leaderboard ({st.teamId})
                                  </button>
@@ -1794,7 +2316,7 @@ export default function App() {
             <div className="font-bold text-sm flex gap-2">
               <span>{activeMatch.time}</span>
               <span className="opacity-50">|</span>
-              <span className="text-yellow-400">CREATE TEAM 1</span>
+              <span className="text-[#f0b90b]">CREATE TEAM 1</span>
             </div>
             <button className="p-1 active:bg-app-card/10 rounded-full"><Info size={20} /></button>
           </div>
@@ -1807,14 +2329,14 @@ export default function App() {
               </div>
               <div className="flex gap-4">
                 <div className="text-center flex flex-col items-center">
-                   <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs shadow-md border border-white/20 ${activeMatch.team1.color}`}>
-                     {activeMatch.team1.shortFrame}
+                   <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs shadow-md border border-white/20 relative overflow-hidden shrinkage-0 ${activeMatch.team1.color}`}>
+                     {activeMatch.team1.flagUrl ? <img src={activeMatch.team1.flagUrl} alt={activeMatch.team1.shortFrame} className={`w-full h-full ${activeMatch.team1.flagFit === 'contain' ? 'object-contain' : 'object-cover'}`} /> : activeMatch.team1.shortFrame}
                    </div>
                    <span className="text-[10px] font-bold mt-1 text-app-text-muted">{team1Count}</span>
                 </div>
                 <div className="text-center flex flex-col items-center">
-                   <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs shadow-md border border-white/20 ${activeMatch.team2.color}`}>
-                     {activeMatch.team2.shortFrame}
+                   <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs shadow-md border border-white/20 relative overflow-hidden shrinkage-0 ${activeMatch.team2.color}`}>
+                     {activeMatch.team2.flagUrl ? <img src={activeMatch.team2.flagUrl} alt={activeMatch.team2.shortFrame} className={`w-full h-full ${activeMatch.team2.flagFit === 'contain' ? 'object-contain' : 'object-cover'}`} /> : activeMatch.team2.shortFrame}
                    </div>
                    <span className="text-[10px] font-bold mt-1 text-app-text-muted">{team2Count}</span>
                 </div>
@@ -1874,7 +2396,11 @@ export default function App() {
                     
                     <div className="flex-1 pl-4 pr-2">
                        <h4 className="font-bold text-sm text-app-text">{player.name}</h4>
-                       <p className="text-[10px] text-app-text-muted mt-0.5">{player.points} pts</p>
+                       <div className="flex items-center gap-2 mt-0.5">
+                           <p className="text-[10px] text-app-text-muted font-bold">{player.points} pts</p>
+                           {player.isPlaying === true && <span className="flex items-center gap-1.5 text-[10px] text-green-600 font-bold bg-green-50 px-1.5 py-0.5 rounded-sm ml-1"><Check size={10} strokeWidth={4} /> Playing</span>}
+                           {player.isPlaying === false && <span className="flex items-center gap-1.5 text-[10px] text-red-500 font-bold bg-red-50 px-1.5 py-0.5 rounded-sm ml-1"><div className="w-1.5 h-1.5 bg-red-500 rounded-full"></div> Not Playing</span>}
+                       </div>
                     </div>
 
                     <div className="w-16 flex items-center justify-between text-sm">
@@ -1927,59 +2453,94 @@ export default function App() {
     }, 0);
 
     return (
-    <div className="flex flex-col h-full bg-green-700 relative overflow-hidden">
-      <div className="absolute inset-0 z-0 opacity-20" style={{ backgroundImage: 'repeating-linear-gradient(0deg, transparent, transparent 50px, rgba(255,255,255,0.1) 50px, rgba(255,255,255,0.1) 100px)' }}></div>
-      <header className="flex justify-between items-center p-4 text-app-text z-10 relative">
-         <button onClick={() => setView(previewSource === 'MY_MATCHES' ? 'MY_MATCHES' : previewSource === 'CONTEST_DETAILS' ? 'CONTEST_DETAILS' : 'CREATE_TEAM')} className="p-1 -ml-1 active:bg-app-card/10 rounded-full"><ArrowLeft size={24} /></button>
-         <div className="flex flex-col items-center">
-            {previewTeamInfo ? (
-                <>
-                  <h2 className="font-bold">{previewTeamInfo.name}</h2>
-                  {isLiveOrCompleted && <span className="text-xs bg-app-card/20 px-2 py-0.5 rounded mt-1 font-bold">Total Pts: {previewTeamInfo.points ?? totalPoints}</span>}
-                </>
-            ) : (
-                <>
-                  <h2 className="font-bold">Team Preview</h2>
-                  {isLiveOrCompleted && <span className="text-xs bg-app-card/20 px-2 py-0.5 rounded mt-1 font-bold">Total Pts: {totalPoints}</span>}
-                </>
-            )}
-         </div>
-         <div className="w-8 flex justify-end">
-            {(!isLiveOrCompleted && previewSource === 'MY_MATCHES') && (
-               <button onClick={() => setView('CREATE_TEAM')} className="p-1 active:bg-app-card/10 rounded-full bg-app-card/20 hover:bg-app-card/30 transition-colors">
-                  <Edit2 size={16} className="text-app-text" />
-               </button>
-            )}
-         </div>
+    <div className="flex flex-col h-full bg-[#3f9e4d] relative overflow-hidden font-sans">
+      
+      {/* Top Black Header */}
+      <header className="flex items-center px-4 py-3 bg-[#13151c] text-white z-20 relative border-b border-[#701516]/50">
+         <button onClick={() => setView(previewSource === 'MY_MATCHES' ? 'MY_MATCHES' : previewSource === 'CONTEST_DETAILS' ? 'CONTEST_DETAILS' : 'CREATE_TEAM')} className="w-6 h-6 flex items-center justify-center bg-white text-black rounded-full mr-3 shrink-0">
+            <X size={16} className="font-bold border-2 border-transparent" strokeWidth={3} />
+         </button>
+         <h2 className="font-medium flex-1 text-lg leading-none truncate">{previewTeamInfo ? previewTeamInfo.name : 'Team Preview'}</h2>
+         {(!isLiveOrCompleted && previewSource === 'MY_MATCHES') && (
+            <button onClick={() => setView('CREATE_TEAM')} className="p-1.5 active:bg-white/10 rounded-full bg-white/5 hover:bg-white/10 transition-colors shrink-0">
+               <Edit2 size={16} className="text-white" />
+            </button>
+         )}
       </header>
 
+      {/* Dark Red Sub Header */}
+      <div className="bg-[#701516] px-4 py-3 flex justify-between items-center text-white z-20 relative">
+         <div className="flex flex-col items-start w-1/3">
+            <span className="text-[10px] text-white/80 uppercase tracking-wide">Players</span>
+            <span className="text-sm font-semibold tracking-wide">{team.length} / 11</span>
+         </div>
+         <div className="flex items-center justify-center gap-3 w-1/3">
+            <div className="px-2.5 py-0.5 border border-white/40 rounded-3xl text-[10px] font-bold bg-transparent text-white truncate max-w-[40px]">{activeMatch?.team1.shortFrame}</div>
+            <span className="text-sm font-bold whitespace-nowrap">{team1Count} : {team2Count}</span>
+            <div className="px-2.5 py-0.5 border border-white/40 rounded-3xl text-[10px] font-bold bg-[#13151c] text-white truncate max-w-[40px]">{activeMatch?.team2.shortFrame}</div>
+         </div>
+         <div className="flex flex-col items-end w-1/3">
+            {isLiveOrCompleted ? (
+               <>
+                  <span className="text-[10px] text-white/80 uppercase tracking-wide">Total Points</span>
+                  <span className="text-sm font-bold">{previewTeamInfo?.points ?? totalPoints}</span>
+               </>
+            ) : (
+               <>
+                  <span className="text-[10px] text-white/80 uppercase tracking-wide">Credits Left</span>
+                  <span className="text-sm font-bold">{creditsLeft}</span>
+               </>
+            )}
+         </div>
+      </div>
+
+      {/* Grass Background & Pitch Lines */}
+      <div className="absolute inset-x-0 bottom-0 top-[100px] z-0 overflow-hidden bg-[#2d8a39]" style={{ backgroundImage: 'repeating-linear-gradient(90deg, rgba(255,255,255,0.03) 0px, rgba(255,255,255,0.03) 20px, transparent 20px, transparent 40px)' }}>
+          <div className="absolute inset-0" style={{ backgroundImage: 'repeating-linear-gradient(0deg, rgba(0,0,0,0.03) 0px, rgba(0,0,0,0.03) 20px, transparent 20px, transparent 40px)' }}></div>
+          {/* Oval pitch line */}
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[140%] sm:w-[120%] h-[92%] border-[1.5px] border-white/20 rounded-[50%]"></div>
+          {/* Inner circle / pitch area */}
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[80px] h-[100px] border-[1.5px] border-white/20 rounded-md">
+             <div className="absolute top-0 left-0 w-full h-[30px] border-b-[1.5px] border-white/20"></div>
+             <div className="absolute bottom-0 left-0 w-full h-[30px] border-t-[1.5px] border-white/20"></div>
+          </div>
+          {/* DABA FANTASY WATERMARK */}
+          <div className="absolute top-[65%] left-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center gap-1.5 text-white/30 font-black text-xl tracking-widest pointer-events-none w-max">
+             <Shield size={24} className="opacity-80" />
+             DABA FANTASY
+          </div>
+      </div>
+
+      {/* Players Area */}
       <div className="flex-1 relative z-10 flex flex-col justify-around py-4">
          {(['WK', 'BAT', 'AR', 'BOWL'] as Role[]).map(role => {
              const playersInRole = team.filter(p => p.role === role);
              if (playersInRole.length === 0) return null;
              return (
                  <div key={role} className="flex flex-col items-center w-full">
-                     <span className="text-app-text/60 text-[10px] font-bold mb-2">{role}</span>
-                     <div className="flex justify-center gap-2 sm:gap-4 w-full px-2">
+                     <div className="bg-[#5d1012]/0 text-white/90 text-[10px] px-2 py-0.5 rounded-full mb-3 tracking-wider font-semibold border-none bg-black/10">
+                        {role === 'WK' ? 'WICKET KEEPER' : role === 'BAT' ? 'BATSMAN' : role === 'AR' ? 'ALL ROUNDERS' : 'BOWLERS'}
+                     </div>
+                     <div className="flex justify-center gap-2 sm:gap-6 w-full px-2">
                          {playersInRole.map(p => {
                              const latestP = appPlayers.find(ap => ap.id === p.id) || p;
                              const isC = p.id === captain;
                              const isVC = p.id === viceCaptain;
                              return (
-                             <div key={p.id} className="flex flex-col items-center w-16">
-                                 <div className="relative">
-                                   <div className="w-10 h-10 bg-app-bg rounded-full flex items-end justify-center overflow-hidden border-2 border-white shadow-md">
-                                      <User size={30} className="text-app-text-muted" />
+                             <div key={p.id} className="flex flex-col items-center cursor-pointer relative group">
+                                 <div className="relative mb-1">
+                                   <div className="w-[50px] h-[55px] flex items-end justify-center overflow-visible drop-shadow-lg">
+                                      <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${p.name.replace(/ /g, '')}&backgroundColor=transparent`} alt={p.name} className="w-[60px] h-[60px] object-cover" />
                                    </div>
                                    {(isC || isVC) && (
-                                     <div className="absolute -top-1 -right-1 w-4 h-4 bg-app-card-alt border border-white text-app-text rounded-full flex items-center justify-center text-[8px] font-bold">
+                                     <div className={`absolute top-0 -left-2 w-[18px] h-[18px] border border-white text-white rounded-full flex items-center justify-center text-[9px] font-bold shadow-md z-10 ${isC ? 'bg-[#d32f2f]' : 'bg-transparent text-white'}`}>
                                        {isC ? 'C' : 'VC'}
                                      </div>
                                    )}
                                  </div>
-                                 <span className="bg-app-bg text-app-text border-b border-app-border text-[9px] px-1.5 py-0.5 rounded shadow-sm whitespace-nowrap mt-1 max-w-[60px] truncate w-full text-center">{p.name}</span>
-                                 <span className="text-app-text text-[10px] font-bold mt-0.5">
-                                   {isLiveOrCompleted ? `${latestP.points * (isC ? 2 : isVC ? 1.5 : 1)} Pts` : `${p.credits} Cr`}
+                                 <div className="bg-black text-white text-[10px] font-medium px-2 py-0.5 rounded shadow-md whitespace-nowrap w-[70px] text-center truncate relative z-10">{p.name}</div>
+                                 <span className="text-white text-[10px] mt-1 font-semibold drop-shadow-sm">
+                                   {isLiveOrCompleted ? `${latestP.points * (isC ? 2 : isVC ? 1.5 : 1)} Pt.` : `${p.credits} Cr`}
                                  </span>
                              </div>
                              )
@@ -2012,7 +2573,11 @@ export default function App() {
                </div>
                <div className="flex-1 pl-3">
                   <h4 className="font-bold text-sm text-app-text">{player.name}</h4>
-                  <span className="text-[10px] font-medium text-app-text-muted">{player.team} | {player.role}</span>
+                  <div className="flex items-center gap-2">
+                     <span className="text-[10px] font-medium text-app-text-muted">{player.team} | {player.role}</span>
+                     {player.isPlaying === true && <span className="flex items-center gap-1.5 text-[10px] text-green-600 font-bold bg-green-50 px-1.5 py-0.5 rounded-sm"><Check size={8} strokeWidth={4} /> Playing</span>}
+                     {player.isPlaying === false && <span className="flex items-center gap-1.5 text-[10px] text-red-500 font-bold bg-red-50 px-1.5 py-0.5 rounded-sm"><div className="w-1 h-1 bg-red-500 rounded-full"></div> Not Playing</span>}
+                  </div>
                </div>
                <div className="w-1/2 flex items-center justify-around px-2">
                   <button 
@@ -2052,7 +2617,9 @@ export default function App() {
      // Filter matches the user joined
      const tabs = ['Upcoming', 'Live', 'Completed'] as const;
 
+     const myUserId = user?.id || 'guest';
      const filteredTeams = savedTeams.filter(st => {
+         if (st.userId !== myUserId) return false;
          const currentMatchStatus = appMatches.find(m => m.id === st.match.id)?.status || 'Upcoming';
          return currentMatchStatus === myMatchesTab;
      });
@@ -2139,10 +2706,11 @@ export default function App() {
                                  ) : currentMatchStatus === 'Completed' ? (
                                     <span className="text-green-600">Completed</span>
                                  ) : (
-                                    <button 
+                                     <button 
                                       onClick={(e) => {
                                           e.stopPropagation();
-                                          setEditingSavedTeamIndex(i);
+                                          const realIndex = savedTeams.findIndex(orig => orig.id === st.id);
+                                          setEditingSavedTeamIndex(realIndex);
                                           setEditReturnView('MY_MATCHES');
                                           setActiveMatch(st.match);
                                           setSelectedContest({ fee: st.fee, name: st.contestName });
@@ -2155,24 +2723,33 @@ export default function App() {
                                       title="Edit Team"
                                     >
                                        <Edit2 size={16} />
-                                    </button>
-                                 )}
-                               </div>
-                            </div>
-
+                                     </button>
+                                  )}
+                                </div>
+                             </div>
                             <div className="p-4 flex flex-col gap-3 text-sm">
-                               <div className="flex justify-between items-center">
-                                 <span className="font-bold">{st.match.team1.name}</span>
-                                 <div className="flex flex-col items-center">
+                               <div className="flex justify-between items-center text-center">
+                                 <div className="flex flex-col items-center gap-1 w-20">
+                                   <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm overflow-hidden shadow-inner border border-app-border bg-app-bg ${st.match.team1.color}`}>
+                                      {st.match.team1.flagUrl ? <img src={st.match.team1.flagUrl} className={`w-full h-full ${st.match.team1.flagFit === 'contain' ? 'object-contain' : 'object-cover'}`} /> : st.match.team1.shortFrame}
+                                   </div>
+                                   <span className="font-bold text-xs truncate w-full">{st.match.team1.shortFrame}</span>
+                                 </div>
+                                 <div className="flex flex-col items-center flex-1">
                                     <span className="bg-red-50 text-app-accent px-2 py-1 rounded text-[10px] font-bold">{currentMatchStatus === 'Live' ? 'In Progress' : currentMatchStatus === 'Completed' ? 'Ended' : st.match.time}</span>
                                     {(currentMatchStatus === 'Live' || currentMatchStatus === 'Completed') && (
                                        <span className="text-sm font-black text-green-500 mt-1">{totalPoints} pts</span>
                                     )}
                                     {currentMatchStatus === 'Completed' && st.prizeDistributed && st.amountWon !== undefined && (
-                                       <span className="text-xs font-black text-yellow-500 mt-0.5 tracking-tight uppercase">Won ₹{st.amountWon.toFixed(2)}</span>
+                                       <span className="text-xs font-black text-[#e5c158] mt-0.5 tracking-tight uppercase">Won ₹{st.amountWon.toFixed(2)}</span>
                                     )}
                                  </div>
-                                 <span className="font-bold">{st.match.team2.name}</span>
+                                 <div className="flex flex-col items-center gap-1 w-20">
+                                   <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm overflow-hidden shadow-inner border border-app-border bg-app-bg ${st.match.team2.color}`}>
+                                      {st.match.team2.flagUrl ? <img src={st.match.team2.flagUrl} className={`w-full h-full ${st.match.team2.flagFit === 'contain' ? 'object-contain' : 'object-cover'}`} /> : st.match.team2.shortFrame}
+                                   </div>
+                                   <span className="font-bold text-xs truncate w-full">{st.match.team2.shortFrame}</span>
+                                 </div>
                                </div>
                                <div className="bg-app-bg rounded p-2 flex justify-between items-center border border-app-border">
                                  <span className="text-xs font-bold text-app-text-muted">{st.contestName}</span>
@@ -2199,7 +2776,7 @@ export default function App() {
                                            setView('TEAM_PREVIEW');
                                        }
                                    }} 
-                                   className={`font-bold text-xs active:opacity-70 w-full py-2 rounded-full text-center border ${currentMatchStatus !== 'Upcoming' ? 'bg-app-accent text-app-text border-blue-600' : 'text-blue-600 bg-blue-50 border-blue-200 shadow-sm'}`}
+                                   className={`font-bold text-xs active:opacity-70 w-full py-2 rounded-full text-center border ${currentMatchStatus !== 'Upcoming' ? 'bg-app-accent text-white border-blue-600' : 'text-blue-600 bg-blue-50 border-blue-200 shadow-sm'}`}
                                >
                                    {currentMatchStatus !== 'Upcoming' ? `Dashboard / Leaderboard (${st.teamId})` : `View Team (${st.teamId})`}
                                </button>
@@ -2251,7 +2828,7 @@ export default function App() {
                <div className="flex gap-3">
                  <button 
                    onClick={() => setShowPaymentModal(true)}
-                   className="flex-[1.2] bg-app-accent hover:bg-app-accent text-app-text font-bold py-3 text-sm rounded-lg active:scale-[0.98] flex justify-center items-center gap-2"
+                   className="flex-[1.2] bg-app-accent hover:bg-app-accent text-white font-bold py-3 text-sm rounded-lg active:scale-[0.98] flex justify-center items-center gap-2"
                  >
                    <PlusCircle size={18}/> Add Cash
                  </button>
@@ -2280,12 +2857,14 @@ export default function App() {
                               {req.status === 'Approved' ? (req.t === 'd' ? <ArrowDownLeft size={20} /> : <Minus size={20} />) : req.status === 'Rejected' ? <Minus size={20} /> : <Clock size={20} />}
                            </div>
                            <div className="flex flex-col">
-                              <p className="font-bold text-sm text-app-text">{req.t === 'd' ? 'Added to wallet' : 'Withdrawn'}</p>
+                              <p className="font-bold text-sm text-app-text">
+                                  {req.status === 'Rejected' ? 'Payment Failed' : (req.t === 'd' ? 'Added to wallet' : 'Withdrawn')}
+                              </p>
                               <p className="text-xs text-app-text-muted mt-0.5">{req.timestamp}</p>
                            </div>
                         </div>
-                        <span className={`font-bold text-lg ${req.status === 'Approved' ? (req.t === 'd' ? 'text-[#4ADE80]' : 'text-app-text') : req.status === 'Rejected' ? 'text-app-accent line-through opacity-50' : 'text-orange-500'}`}>
-                           {req.t === 'd' ? '+' : '-'}₹{req.amount}
+                        <span className={`font-bold text-lg ${req.status === 'Approved' ? (req.t === 'd' ? 'text-[#4ADE80]' : 'text-app-text') : req.status === 'Rejected' ? 'text-app-accent opacity-80' : 'text-orange-500'}`}>
+                           {req.status === 'Rejected' ? 'Failed' : `${req.t === 'd' ? '+' : '-'}₹${req.amount}`}
                         </span>
                      </div>
                   ));
@@ -2348,9 +2927,12 @@ export default function App() {
                      
                      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
                          <p className="font-bold text-blue-800 text-xs uppercase mb-1">Step 1: Pay to this UPI ID</p>
+                         <div className="flex flex-col items-center justify-center gap-2 mb-2">
+                             {adminUpiQR && <img src={adminUpiQR} referrerPolicy="no-referrer" onError={(e) => { e.currentTarget.src = 'https://placehold.co/150x150?text=Invalid+Image+URL'; }} alt="UPI QR Code" className="w-[150px] h-[150px] object-cover rounded-xl border-2 border-blue-500 shadow-sm" />}
+                         </div>
                          <div className="flex items-center justify-between">
-                             <p className="text-lg font-mono font-black text-app-text tracking-wide">admin@ybl</p>
-                             <button className="text-blue-600 text-xs font-bold bg-app-card px-2 py-1 rounded shadow-sm">Copy</button>
+                             <p className="text-lg font-mono font-black text-app-text tracking-wide">{adminUPI || 'admin@ybl'}</p>
+                             <button className="text-blue-600 text-xs font-bold bg-app-card px-2 py-1 rounded shadow-sm" onClick={() => navigator.clipboard.writeText(adminUPI || 'admin@ybl')}>Copy</button>
                          </div>
                      </div>
 
@@ -2379,36 +2961,69 @@ export default function App() {
                      <div className="flex gap-2">
                         <button 
                            onClick={() => setPaymentMethod('')}
-                           className="flex-1 border-2 border-app-border text-app-text-muted font-bold py-3 rounded-xl active:bg-app-card-inner"
+                           disabled={isScanningPayment}
+                           className={`flex-1 border-2 border-app-border text-app-text-muted font-bold py-3 rounded-xl active:bg-app-card-inner ${isScanningPayment ? 'opacity-50' : ''}`}
                         >
                            Back
                         </button>
                         <button 
+                           disabled={isScanningPayment}
                            onClick={() => {
                               if (paymentUtr.length < 8) return alert('Please enter a valid UTR number.');
                               const amt = parseFloat(paymentAmount);
                               
-                              const newReq: DepositRequest = {
-                                 id: 'dep_' + Date.now(),
-                                 userId: user?.id,
-                                 userName: user?.name,
-                                 amount: amt,
-                                 method: paymentMethod,
-                                 utr: paymentUtr,
-                                 status: 'Pending',
-                                 timestamp: new Date().toLocaleTimeString()
-                              };
+                              setIsScanningPayment(true);
+                              
+                              // Simulatiing AI Scanning of Screenshot and Details
+                              setTimeout(() => {
+                                setIsScanningPayment(false);
+                                
+                                // Mock Validation Logic
+                                if (paymentUtr.length !== 12 || isNaN(Number(paymentUtr))) {
+                                   alert("Scanner Detected: Invalid UTR length or format in screenshot. Payment failed/rejected.");
+                                   
+                                   const failedReq: DepositRequest = {
+                                     id: 'dep_' + Date.now(),
+                                     userId: user?.id,
+                                     userName: user?.name,
+                                     amount: amt,
+                                     method: paymentMethod,
+                                     utr: paymentUtr,
+                                     status: 'Rejected',
+                                     timestamp: new Date().toLocaleTimeString()
+                                   };
+                                   setDoc(doc(db, 'deposits', failedReq.id), failedReq);
+                                   
+                                   setShowPaymentModal(false);
+                                   setPaymentMethod('');
+                                   setPaymentUtr('');
+                                   return;
+                                }
+                                
+                                // Success flow
+                                const newReq: DepositRequest = {
+                                   id: 'dep_' + Date.now(),
+                                   userId: user?.id,
+                                   userName: user?.name,
+                                   amount: amt,
+                                   method: paymentMethod,
+                                   utr: paymentUtr,
+                                   status: 'Approved', // Auto match
+                                   timestamp: new Date().toLocaleTimeString()
+                                };
 
-                              setDoc(doc(db, 'deposits', newReq.id), newReq).then(() => {
-                                 alert("Deposit Request Submitted successfully! Admin will verify and add cash to your wallet.");
-                                 setShowPaymentModal(false);
-                                 setPaymentMethod('');
-                                 setPaymentUtr('');
-                              });
+                                setDoc(doc(db, 'deposits', newReq.id), newReq).then(() => {
+                                   setBalance(prev => prev + amt);
+                                   alert("Scanner Detected: Valid Payment! Cash added to your wallet automatically.");
+                                   setShowPaymentModal(false);
+                                   setPaymentMethod('');
+                                   setPaymentUtr('');
+                                });
+                              }, 3500);
                            }}
-                           className="flex-[2] bg-green-600 hover:bg-green-700 text-app-text font-bold py-3 rounded-xl active:bg-green-800 shadow-sm"
+                           className={`flex-[2] ${isScanningPayment ? 'bg-blue-600 animate-pulse' : 'bg-green-600 hover:bg-green-700'} text-app-text font-bold py-3 rounded-xl active:bg-green-800 shadow-sm transition-all`}
                         >
-                           Submit Proof
+                           {isScanningPayment ? 'Scanning Image & UTR...' : 'Submit Proof'}
                         </button>
                      </div>
                   </div>
@@ -2480,7 +3095,7 @@ export default function App() {
                 </div>
                 <div className="flex flex-col text-app-text">
                    <h2 className="text-xl font-bold uppercase">{user?.name}</h2>
-                   <p className="text-sm opacity-90 mb-2">@{user?.email?.split('@')[0] || 'user_123'}</p>
+                   <p className="text-sm opacity-90 mb-2 font-mono">ID: {user?.id || '1234567890'}</p>
                    <div className="flex flex-col gap-1 w-full">
                      <div className="flex gap-2 items-center">
                        <span className="bg-yellow-500 text-black text-[10px] px-2 py-0.5 rounded flex items-center font-bold w-fit">⚡ Level {userLevel}</span>
@@ -2495,8 +3110,8 @@ export default function App() {
            </div>
            
            {unclaimedRewards.length > 0 && (
-              <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-4 mb-4 flex flex-col gap-3">
-                 <h3 className="font-bold text-yellow-500 flex items-center gap-2 text-sm">🎁 Milestone Rewards!</h3>
+              <div className="bg-[#e5c158]/10 border border-[#e5c158]/30 rounded-xl p-4 mb-4 flex flex-col gap-3">
+                 <h3 className="font-bold text-[#e5c158] flex items-center gap-2 text-sm">🎁 Milestone Rewards!</h3>
                  {unclaimedRewards.map(level => {
                      const rewardAmount = 50 * Math.pow(2, (level / 10) - 1);
                      return (
@@ -2683,7 +3298,7 @@ export default function App() {
                  
                  <button 
                    onClick={handleKycSubmit}
-                   className="w-full bg-app-accent hover:bg-app-accent text-app-text font-bold py-3.5 rounded-lg active:scale-[0.98] mt-4 shadow-sm"
+                   className="w-full bg-app-accent hover:bg-app-accent text-white font-bold py-3.5 rounded-lg active:scale-[0.98] mt-4 shadow-sm"
                  >
                    Submit Documents
                  </button>
@@ -2767,7 +3382,7 @@ export default function App() {
                <button 
                  type="submit"
                  disabled={authLoading}
-                 className="w-full bg-app-accent text-app-text font-bold py-3.5 rounded-xl shadow-md hover:bg-app-accent active:scale-[0.98] transition-all disabled:opacity-70 mt-2"
+                 className="w-full bg-app-accent text-white font-bold py-3.5 rounded-xl shadow-md hover:bg-app-accent active:scale-[0.98] transition-all disabled:opacity-70 mt-2"
                >
                  {authLoading ? 'Processing...' : (authMode === 'LOGIN' ? 'Login' : 'Sign Up')}
                </button>
@@ -2826,24 +3441,65 @@ export default function App() {
   const renderAdminPanel = () => {
     if (!isAdmin) return null;
 
+    const userActivityData = [
+      { name: 'Jan', active: 300, new: 150 },
+      { name: 'Feb', active: 450, new: 200 },
+      { name: 'Mar', active: 900, new: 300 },
+      { name: 'Apr', active: 600, new: 250 },
+      { name: 'May', active: 800, new: 280 },
+      { name: 'Jun', active: 650, new: 220 },
+      { name: 'Jul', active: 1000, new: 400 },
+    ];
+
+    const matchStatusData = [
+      { name: 'Jan', cricket: 40, other: 24 },
+      { name: 'Feb', cricket: 70, other: 45 },
+      { name: 'Mar', cricket: 90, other: 50 },
+      { name: 'Apr', cricket: 65, other: 40 },
+      { name: 'May', cricket: 85, other: 55 },
+      { name: 'Jun', cricket: 110, other: 60 },
+      { name: 'Jul', cricket: 60, other: 30 },
+      { name: 'Aug', cricket: 95, other: 75 },
+    ];
+
+    const finData1 = [ {v:10}, {v:25}, {v:15}, {v:40}, {v:30}, {v:50} ];
+    const finData2 = [ {v:20}, {v:10}, {v:30}, {v:15}, {v:45}, {v:25} ];
+    const finData3 = [ {v:15}, {v:30}, {v:20}, {v:45}, {v:35}, {v:60} ];
+
+
     return (
-       <div className="flex flex-col h-full bg-app-bg">
-          <header className="bg-app-bg text-app-text border-b border-app-border p-4 shadow-sm flex items-center justify-between shrink-0">
-             <button onClick={() => setView('HOME')} className="p-1 -ml-1 active:bg-app-card/10 rounded-full transition-colors"><ArrowLeft size={24}/></button>
-             <div className="flex items-center gap-2">
-               <Shield size={20} className="text-app-accent" />
-               <h2 className="font-bold">Admin Control Panel</h2>
+       <div className="flex flex-col h-full bg-[#090b10] text-slate-200 font-sans">
+          <header className="bg-[#13151c] border-b border-[#e5c158]/20 p-4 shrink-0 relative overflow-hidden">
+             <div className="absolute top-0 right-0 w-64 h-64 bg-[#e5c158]/10 rounded-full blur-[80px] -translate-y-1/2 translate-x-1/2 pointer-events-none"></div>
+             <div className="flex items-center justify-between relative z-10">
+                 <div className="flex items-center gap-3">
+                   <button onClick={() => setView('HOME')} className="p-1.5 -ml-1 text-slate-400 hover:text-[#e5c158] rounded-lg transition-colors bg-black/50 border border-slate-700 hover:border-[#e5c158]/50"><ArrowLeft size={18}/></button>
+                   <h2 className="font-black text-transparent bg-clip-text bg-gradient-to-r from-[#e5c158] to-[#f0b90b] uppercase tracking-widest text-lg drop-shadow-[0_0_12px_rgba(229,193,88,0.4)]">DREAM11 VIP</h2>
+                 </div>
+                 <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-lg bg-[#e5c158]/10 border border-[#e5c158]/30 flex items-center justify-center text-[#e5c158] overflow-hidden shadow-[0_0_10px_rgba(229,193,88,0.2)]">
+                       <User size={16} />
+                    </div>
+                 </div>
              </div>
-             <div className="w-6"/>
+             
+             <div className="flex gap-1 mt-6 overflow-x-auto no-scrollbar relative z-10">
+                 {(['DASHBOARD', 'TEAMS', 'USERS', 'CONTESTS', 'MATCHES', 'FINANCIALS', 'BANNERS', 'SETTINGS'] as const).map(tab => (
+                    <button 
+                      key={tab}
+                      onClick={() => setAdminTab(tab)}
+                      className={`px-4 py-2.5 rounded-lg text-[10.5px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${adminTab === tab ? 'bg-gradient-to-r from-[#f0b90b] to-[#e5c158] text-black shadow-[0_0_15px_rgba(240,185,11,0.3)]' : 'text-slate-400 hover:bg-white/5 border border-transparent'}`}
+                    >
+                       {tab}
+                    </button>
+                 ))}
+             </div>
           </header>
           
-          <div className="flex-1 p-4 overflow-y-auto">
-             <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-red-800 text-sm mb-6 flex gap-2">
-                <Info size={20} className="shrink-0" />
-                <p>Welcome Admin <strong>{user?.name}</strong>. Here you can control users and their wallets.</p>
-             </div>
-
-             <div className="mb-6">
+          <div className="flex-1 p-4 overflow-y-auto bg-[#090b10]">
+{adminTab === 'DASHBOARD' && (<>
+<div className="space-y-6">
+<div className="mb-6">
                 <button 
                   disabled={isSyncing}
                   onClick={async () => {
@@ -2852,13 +3508,13 @@ export default function App() {
                       setSyncMessage(null);
                       try {
                           const adminTeams = savedTeams.filter(t => t.userId === 'admin_bot' || t.userId === 'admin_bot_boot');
-                          await setDoc(doc(db, 'gameData', 'main_state'), {
+                          await setDoc(doc(db, 'gameData', 'main_state'), JSON.parse(JSON.stringify({
                               matches: appMatches,
                               contests: appContests,
                               players: appPlayers,
                               adminTeams: adminTeams,
                               timestamp: Date.now()
-                          });
+                          })));
                           setSyncMessage({type: 'success', text: '✅ Successfully synced Matches, Contests, Players, and Bots to the cloud. All phones will now update.'});
                       } catch (e: any) {
                           setSyncMessage({type: 'error', text: 'Failed to sync to cloud: ' + e.message});
@@ -2866,24 +3522,262 @@ export default function App() {
                           setIsSyncing(false);
                       }
                   }}
-                  className={`w-full ${isSyncing ? 'bg-blue-800 cursor-not-allowed opacity-70' : 'bg-blue-600 active:scale-95'} text-white font-bold py-3 rounded-xl shadow-lg border border-blue-700 transition-transform flex items-center justify-center gap-2`}
+                  className={`w-full ${isSyncing ? 'bg-yellow-800 cursor-not-allowed opacity-70' : 'bg-gradient-to-r from-yellow-600 to-yellow-500 active:scale-95 shadow-[0_0_20px_rgba(234,179,8,0.3)] hover:shadow-[0_0_25px_rgba(234,179,8,0.5)]'} text-black font-black uppercase tracking-wide py-3.5 rounded-xl border border-yellow-400 transition-all flex items-center justify-center gap-2`}
                 >
-                  <ArrowDownToLine size={20} className={isSyncing ? 'animate-bounce' : ''} /> {isSyncing ? 'Syncing to Cloud...' : 'Force Sync App To All Phones'}
+                  <ArrowDownToLine size={20} className={isSyncing ? 'animate-bounce' : ''} /> {isSyncing ? 'Syncing to Cloud...' : 'Force Sync VIP Data'}
                 </button>
                 {syncMessage && (
-                  <div className={`mt-3 p-3 text-sm rounded-lg ${syncMessage.type === 'success' ? 'bg-green-50 text-green-800 border border-green-200' : 'bg-red-50 text-red-800 border border-red-200'}`}>
+                  <div className={`mt-3 p-3 text-sm rounded-lg ${syncMessage.type === 'success' ? 'bg-green-900/50 text-green-400 border border-green-500/50' : 'bg-red-900/50 text-red-400 border border-red-500/50'}`}>
                      {syncMessage.text}
                   </div>
                 )}
              </div>
 
-             <h3 className="font-bold text-app-text mb-3">System Control: Platform Settings</h3>
-             <div className="bg-app-card rounded-xl shadow-sm border border-app-border p-4 mb-6">
-                 <div className="flex justify-between items-center mb-2">
-                    <p className="font-bold text-app-text">Winning Distribution Rate</p>
-                    <p className="text-xl font-bold text-green-500">{winningPercentage}%</p>
+             
+</div>
+
+
+<div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+    {/* Left Column (Real-time User Activity & Financial Overview) */}
+    <div className="lg:col-span-5 flex flex-col gap-5">
+        {/* Real-time User Activity */}
+        <div className="bg-[#13151c] rounded-2xl border border-[#e5c158]/20 p-5 shadow-lg flex-1">
+            <div className="flex justify-between items-center mb-6">
+                <h3 className="text-lg font-bold text-slate-200 tracking-wide">Real-time User Activity</h3>
+                <button onClick={() => setAdminTab('USERS')} className="px-3 py-1 rounded bg-[#090b10] border border-slate-700 text-xs text-slate-400 flex items-center gap-1 hover:border-[#e5c158]/50 transition-colors">View Users <ChevronDown size={12} /></button>
+            </div>
+            
+            <div className="grid grid-cols-3 gap-2 mb-6">
+                <div>
+                     <p className="text-slate-400 text-[10px] uppercase font-bold tracking-wider mb-1">Active Users</p>
+                    <p className="text-lg xl:text-xl font-bold text-slate-200 flex items-center gap-1">{appPlayers.length + 4700} <ChevronUp size={14} className="text-green-500"/></p>
+                </div>
+                <div>
+                    <p className="text-slate-400 text-[10px] uppercase font-bold tracking-wider mb-1">New Registrations</p>
+                    <p className="text-lg xl:text-xl font-bold text-slate-200 flex items-center gap-1">{appPlayers.length + 200} <ChevronUp size={14} className="text-green-500"/></p>
+                </div>
+                <div>
+                    <p className="text-slate-400 text-[10px] uppercase font-bold tracking-wider mb-1">Total Entries</p>
+                    <p className="text-lg xl:text-xl font-bold text-slate-200 flex items-center gap-1">{appContests.length + 3200} <ChevronDown size={14} className="text-red-500"/></p>
+                </div>
+            </div>
+            
+            <div className="h-[200px] w-full">
+               <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={userActivityData} margin={{ top: 5, right: 0, left: -20, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="colorActive" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#06b6d4" stopOpacity={0.3}/>
+                        <stop offset="95%" stopColor="#06b6d4" stopOpacity={0}/>
+                      </linearGradient>
+                      <linearGradient id="colorNew" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
+                        <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
+                    <XAxis dataKey="name" stroke="#64748b" fontSize={10} tickLine={false} axisLine={false} padding={{ left: 10, right: 10 }} />
+                    <YAxis stroke="#64748b" fontSize={10} tickLine={false} axisLine={false} />
+                    <RechartsTooltip contentStyle={{ backgroundColor: '#13151c', borderColor: '#334155', borderRadius: '8px', fontSize: '12px' }} />
+                    <Area type="monotone" dataKey="active" stroke="#06b6d4" strokeWidth={3} fillOpacity={1} fill="url(#colorActive)" />
+                    <Area type="monotone" dataKey="new" stroke="#10b981" strokeWidth={3} fillOpacity={1} fill="url(#colorNew)" />
+                  </AreaChart>
+               </ResponsiveContainer>
+            </div>
+        </div>
+
+        {/* Financial Overview */}
+        <div className="bg-[#13151c] rounded-2xl border border-[#e5c158]/20 p-5 shadow-lg">
+            <div className="flex justify-between items-center mb-6">
+                <h3 className="text-lg font-bold text-slate-200 tracking-wide">Financial Overview</h3>
+                <button onClick={() => setAdminTab('FINANCIALS')} className="px-3 py-1 rounded bg-[#090b10] border border-slate-700 text-xs text-slate-400 flex items-center gap-1 hover:border-[#e5c158]/50 transition-colors">View Finance <ChevronDown size={12} /></button>
+            </div>
+            <div className="grid grid-cols-3 gap-2 xl:gap-4">
+                <div>
+                   <p className="text-slate-400 text-[9px] xl:text-[10px] uppercase font-bold tracking-wider mb-1">Total Revenue</p>
+                   <p className="text-base xl:text-lg font-black text-slate-200 mb-3">2,753 Bn</p>
+                   <div className="h-[40px] w-full">
+                      <ResponsiveContainer width="100%" height="100%">
+                         <LineChart data={finData1}>
+                            <Line type="monotone" dataKey="v" stroke="#3b82f6" strokeWidth={2} dot={false} />
+                         </LineChart>
+                      </ResponsiveContainer>
+                   </div>
+                </div>
+                <div>
+                   <p className="text-slate-400 text-[9px] xl:text-[10px] uppercase font-bold tracking-wider mb-1">Payouts</p>
+                   <p className="text-base xl:text-lg font-black text-slate-200 mb-3 flex items-center gap-1">3.00M <ChevronDown size={12} className="text-red-500"/></p>
+                   <div className="h-[40px] w-full">
+                      <ResponsiveContainer width="100%" height="100%">
+                         <LineChart data={finData2}>
+                            <Line type="monotone" dataKey="v" stroke="#eab308" strokeWidth={2} dot={false} />
+                         </LineChart>
+                      </ResponsiveContainer>
+                   </div>
+                </div>
+                <div>
+                   <p className="text-slate-400 text-[9px] xl:text-[10px] uppercase font-bold tracking-wider mb-1">Profit Margin</p>
+                   <p className="text-base xl:text-lg font-black text-slate-200 mb-3 flex items-center gap-1">7.39% <span className="text-[9px] text-green-500 ml-1">▲ 1%</span></p>
+                   <div className="h-[40px] w-full">
+                      <ResponsiveContainer width="100%" height="100%">
+                         <LineChart data={finData3}>
+                            <Line type="monotone" dataKey="v" stroke="#22c55e" strokeWidth={2} dot={false} />
+                         </LineChart>
+                      </ResponsiveContainer>
+                   </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {/* Middle Column (Match Status) */}
+    <div className="lg:col-span-4 bg-[#13151c] rounded-2xl border border-[#e5c158]/20 p-5 shadow-lg flex flex-col">
+        <div className="flex justify-between items-center mb-6">
+            <h3 className="text-lg font-bold text-slate-200 tracking-wide">Match Status</h3>
+            <button onClick={() => setAdminTab('MATCHES')} className="px-3 py-1 rounded bg-[#090b10] border border-slate-700 text-xs text-slate-400 flex items-center gap-1 hover:border-[#e5c158]/50 transition-colors">Go to Matches <ChevronDown size={12} /></button>
+        </div>
+        
+        <div className="flex items-center justify-between mb-6">
+           <div className="flex flex-col items-center gap-2 cursor-pointer bg-[#e5c158]/10 border border-[#e5c158]/30 px-3 py-2 rounded-xl">
+               <Trophy size={18} className="text-[#e5c158]" />
+               <span className="text-[10px] xl:text-xs text-[#e5c158] font-bold">Cricket</span>
+           </div>
+           <div className="flex flex-col items-center gap-2 cursor-pointer hover:bg-slate-800 px-3 py-2 rounded-xl transition-all">
+               <PlayCircle size={18} className="text-slate-400" />
+               <span className="text-[10px] xl:text-xs text-slate-400 font-bold">Football</span>
+           </div>
+           <div className="flex flex-col items-center gap-2 cursor-pointer hover:bg-slate-800 px-3 py-2 rounded-xl transition-all">
+               <Users size={18} className="text-slate-400" />
+               <span className="text-[10px] xl:text-xs text-slate-400 font-bold">Kabaddi</span>
+           </div>
+           <div className="flex flex-col items-center gap-2 cursor-pointer hover:bg-slate-800 px-3 py-2 rounded-xl transition-all">
+               <PlayCircle size={18} className="text-slate-400" />
+               <span className="text-[10px] xl:text-xs text-slate-400 font-bold">Sports</span>
+           </div>
+        </div>
+
+        <div className="h-[160px] xl:h-[180px] w-full mb-6">
+           <ResponsiveContainer width="100%" height="100%">
+               <BarChart data={matchStatusData} margin={{ top: 0, right: 0, left: -25, bottom: 0 }}>
+                   <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
+                   <XAxis dataKey="name" stroke="#64748b" fontSize={9} tickLine={false} axisLine={false} />
+                   <YAxis stroke="#64748b" fontSize={10} tickLine={false} axisLine={false} />
+                   <RechartsTooltip cursor={{fill: '#1e293b'}} contentStyle={{ backgroundColor: '#13151c', borderColor: '#334155', borderRadius: '8px', fontSize: '12px' }} />
+                   <Bar dataKey="cricket" stackId="a" fill="#06b6d4" barSize={10} radius={[0, 0, 4, 4]} />
+                   <Bar dataKey="other" stackId="a" fill="#3b82f6" barSize={10} radius={[4, 4, 0, 0]} />
+               </BarChart>
+           </ResponsiveContainer>
+        </div>
+
+        <div className="flex-1">
+           <p className="text-[10px] xl:text-xs text-[#e5c158] font-bold uppercase tracking-widest mb-3 border-b border-slate-800 pb-2">Upcoming Matches</p>
+           
+           {appMatches.filter(m => m.status === 'UPCOMING').slice(0, 2).map((m, i) => (
+<div key={i} className="flex items-center justify-between bg-[#090b10] border border-slate-800 rounded-xl p-2 xl:p-3 mb-3">
+              <div className="flex gap-2 xl:gap-3 items-center">
+                 <div className="flex gap-1 items-center">
+                    <div className="w-5 h-5 xl:w-6 xl:h-6 rounded-full overflow-hidden">
+                        <img src={m.team1.logo} alt="t1" className="w-full h-full object-cover" />
+                    </div>
+                     <span className="text-[8px] xl:text-[10px] text-slate-400">VS</span>
+                    <div className="w-5 h-5 xl:w-6 xl:h-6 rounded-full overflow-hidden">
+                        <img src={m.team2.logo} alt="t2" className="w-full h-full object-cover" />
+                    </div>
                  </div>
-                 <p className="text-xs text-app-text-muted mb-4">Set the percentage of the dynamic prize pool that goes to the winners. The rest ({100 - winningPercentage}%) is kept as platform fee.</p>
+                 <div>
+                    <p className="text-[10px] xl:text-xs font-bold text-slate-200">{m.seriesName}</p>
+                    <p className="text-[8px] xl:text-[10px] text-slate-500">{m.time}</p>
+                 </div>
+              </div>
+              <div className="text-right">
+                 <p className="text-[8px] xl:text-[10px] text-slate-500">Status</p>
+                 <p className="text-[#e5c158] font-bold text-xs xl:text-sm">UPCOMING</p>
+              </div>
+           </div>
+           ))}
+
+           <p className="text-[10px] xl:text-xs text-[#e5c158] font-bold uppercase tracking-widest mb-3 border-b border-slate-800 pb-2">Ongoing Matches</p>
+           {appMatches.filter(m => m.status === 'LIVE' || m.status === 'COMPLETED').slice(0, 2).map((m, i) => (
+<div key={i} className="flex items-center justify-between bg-[#090b10] border border-slate-800 rounded-xl p-2 xl:p-3 mb-3">
+              <div className="flex gap-2 xl:gap-3 items-center">
+                 <div className="flex gap-1 items-center">
+                    <div className="w-5 h-5 xl:w-6 xl:h-6 rounded-full overflow-hidden">
+                        <img src={m.team1.logo} alt="t1" className="w-full h-full object-cover" />
+                    </div>
+                     <span className="text-[8px] xl:text-[10px] text-slate-400">VS</span>
+                    <div className="w-5 h-5 xl:w-6 xl:h-6 rounded-full overflow-hidden">
+                        <img src={m.team2.logo} alt="t2" className="w-full h-full object-cover" />
+                    </div>
+                 </div>
+                 <div>
+                    <p className="text-[10px] xl:text-xs font-bold text-slate-200">{m.seriesName}</p>
+                    <p className="text-[8px] xl:text-[10px] text-slate-500">{m.time}</p>
+                 </div>
+              </div>
+              <div className="text-right">
+                 <p className="text-[8px] xl:text-[10px] text-slate-500">Status</p>
+                 <p className="text-[#e5c158] font-bold text-xs xl:text-sm">{m.status}</p>
+              </div>
+           </div>
+           ))}
+        </div>
+    </div>
+
+    {/* Right Column (Top Users & Tickets) */}
+    <div className="lg:col-span-3 flex flex-col gap-5">
+        {/* Top Users */}
+        <div className="bg-[#13151c] rounded-2xl border border-[#e5c158]/20 p-5 shadow-lg">
+            <div className="flex justify-between items-center mb-6">
+                <h3 className="text-lg font-bold text-slate-200 tracking-wide">Top Users</h3>
+                <button onClick={() => setAdminTab('USERS')} className="text-slate-400 hover:text-white transition-colors text-xs font-bold">View All</button>
+            </div>
+            <div className="space-y-3">
+                {[
+                  { n: 'Uname Starts', p: 25300, src: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Uname+Starts' },
+                  { n: 'Name Second', p: 25000, src: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Name+Second' },
+                  { n: 'Name Third', p: 2000, src: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Name+Third' },
+                  { n: 'Name Fourth', p: 2000, src: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Name+Fourth' }
+                ].map((tu, i) => (
+                    <div key={i} className={"flex items-center justify-between p-2 rounded-xl transition-all cursor-pointer " + (i === 1 ? 'bg-[#e5c158]/5 border border-[#e5c158]/30 shadow-[0_0_10px_rgba(229,193,88,0.1)]' : 'hover:bg-slate-800')}>
+                       <div className="flex items-center gap-2 xl:gap-3">
+                          <span className="text-slate-500 font-mono text-xs w-3 xl:w-4">{i+1}.</span>
+                          <div className="w-6 h-6 xl:w-8 xl:h-8 rounded-full bg-slate-800 border border-slate-700 overflow-hidden shrink-0">
+                              <img src={tu.src} alt="avatar" className="w-full h-full object-cover" />
+                          </div>
+                          <div>
+                              <p className="text-[10px] xl:text-xs font-bold text-slate-200 leading-tight">{tu.n}</p>
+                              <p className="text-[8px] xl:text-[10px] text-slate-500">2 Details</p>
+                          </div>
+                       </div>
+                       <span className="text-[#e5c158] font-bold text-[10px] xl:text-xs">{tu.p.toLocaleString()}</span>
+                    </div>
+                ))}
+            </div>
+        </div>
+
+        {/* Recent Support Tickets */}
+        <div className="bg-[#13151c] rounded-2xl border border-[#e5c158]/20 p-5 shadow-lg flex-1">
+            <h3 className="text-lg font-bold text-slate-200 tracking-wide mb-6">Recent Support Tickets</h3>
+            <div className="space-y-4">
+                {[1, 2, 4].map(i => (
+                    <div key={i} className="border-b border-slate-800 pb-3 last:border-0 last:pb-0 cursor-pointer group">
+                        <p className="text-xs xl:text-sm font-bold text-slate-300 group-hover:text-white transition-colors">Recent Subject Tick-00{i}</p>
+                        <p className="text-[8px] xl:text-[10px] text-slate-500 mt-1">{i}. Subject Ticket-00{i} • 1 hour ago</p>
+                    </div>
+                ))}
+            </div>
+        </div>
+    </div>
+</div>
+</>)}
+{adminTab === 'SETTINGS' && (<>
+<h3 className="font-bold text-[#e5c158]/80 uppercase tracking-widest text-[10px] mb-3 ml-1 mt-6">System Control: Platform Settings</h3>
+             <div className="bg-[#13151c] rounded-2xl shadow-lg border border-[#e5c158]/20 p-5 mb-6 relative overflow-hidden backdrop-blur-sm">
+                 <div className="flex justify-between items-center mb-2">
+                    <p className="font-bold text-slate-200">Winning Distribution Rate</p>
+                    <p className="text-xl font-black text-[#e5c158] drop-shadow-[0_0_8px_rgba(234,179,8,0.4)]">{winningPercentage}%</p>
+                 </div>
+                 <p className="text-xs text-slate-400 mb-4">Set the percentage of the dynamic prize pool that goes to the winners. The rest ({100 - winningPercentage}%) is kept as platform fee.</p>
                  
                  <div className="flex gap-2 items-center">
                     <input 
@@ -2893,27 +3787,135 @@ export default function App() {
                       step="5"
                       value={winningPercentage} 
                       onChange={(e) => setWinningPercentage(parseInt(e.target.value))} 
-                      className="flex-1 accent-red-600"
+                      className="flex-1 accent-yellow-500"
                     />
                  </div>
-                 <div className="flex justify-between text-[10px] text-app-text-muted mt-1 font-bold">
+                 <div className="flex justify-between text-[10px] text-slate-500 mt-1 font-bold">
                     <span>10%</span>
                     <span>50%</span>
                     <span>100%</span>
                  </div>
              </div>
 
-             <h3 className="font-bold text-app-text mb-3">System Control: Self (Current Logged-In User)</h3>
-             <div className="bg-app-card rounded-xl shadow-sm border border-app-border p-4 mb-6 relative overflow-hidden">
-                 <div className="absolute top-0 right-0 bg-blue-100 text-blue-800 text-[10px] font-bold px-2 py-1 rounded-bl-lg">YOU</div>
-                 <div className="flex justify-between items-center mb-3">
+             <h3 className="font-bold text-[#e5c158]/80 uppercase tracking-widest text-[10px] mb-3 ml-1">System Control: Deposit Gateway</h3>
+             <div className="bg-[#13151c] rounded-2xl shadow-lg border border-[#e5c158]/20 p-5 mb-6 relative overflow-hidden backdrop-blur-sm">
+                 <p className="text-xs text-slate-400 mb-4">Set your UPI ID and QR Code image URL so users can make deposits. The app will auto-scan users payments.</p>
+                 
+                 <div className="mb-4">
+                    <label className="text-xs font-bold text-[#e5c158]/80 uppercase tracking-widest mb-1.5 block">Your UPI ID</label>
+                    <div className="flex gap-2">
+                       <input 
+                         type="text" 
+                         value={adminUPI} 
+                         onChange={(e) => setAdminUPI(e.target.value)} 
+                         className="flex-1 bg-black/50 text-slate-200 border border-[#e5c158]/30 rounded-lg px-3 py-2 text-sm outline-none focus:border-yellow-500 focus:shadow-[0_0_10px_rgba(234,179,8,0.2)] transition-all"
+                       />
+                       <button onClick={() => setDoc(doc(db, 'gameData', 'settings'), {adminUPI, adminUpiQR}, {merge: true})} className="bg-[#e5c158]/20 hover:bg-yellow-500/30 text-[#e5c158] border border-[#e5c158]/50 font-bold px-4 py-2 rounded-lg text-xs transition-colors">Save</button>
+                    </div>
+                 </div>
+
+                 <div className="mb-3">
+                    <label className="text-xs font-bold text-[#e5c158]/80 uppercase tracking-widest mb-1.5 block">Upload QR Code Image</label>
+                    <input 
+                      type="file" 
+                      accept="image/*"
+                      onChange={(e) => {
+                         const file = e.target.files?.[0];
+                         if (file) {
+                             if (file.size > 1048576) return alert("Image size must be less than 1MB");
+                             const reader = new FileReader();
+                             reader.onloadend = () => {
+                                 setAdminUpiQR(reader.result as string);
+                                 setDoc(doc(db, 'gameData', 'settings'), {adminUPI, adminUpiQR: reader.result}, {merge: true}).then(() => alert("QR Code uploaded and saved!"));
+                             };
+                             reader.readAsDataURL(file);
+                         }
+                      }} 
+                      className="w-full bg-black/50 text-slate-400 border border-[#e5c158]/30 rounded-lg p-2 text-sm outline-none focus:border-yellow-500 mb-2 file:bg-[#e5c158]/20 file:text-[#e5c158] file:border-0 file:rounded file:px-3 file:py-1 file:font-semibold"
+                    />
+                 </div>
+                 {adminUpiQR && (
+                     <div className="mt-2 text-center bg-black/30 p-4 rounded-xl border border-yellow-500/10">
+                         <img src={adminUpiQR} referrerPolicy="no-referrer" onError={(e) => { e.currentTarget.src = 'https://placehold.co/100x100?text=Invalid+Image'; }} alt="QR Code Preview" className="w-[100px] h-[100px] object-cover rounded-xl shadow-[0_0_15px_rgba(234,179,8,0.15)] inline-block border-2 border-[#e5c158]/50" />
+                     </div>
+                 )}
+             </div>
+
+             </>)}
+{adminTab === 'BANNERS' && (<>
+<h3 className="font-bold text-[#e5c158]/80 uppercase tracking-widest text-[10px] mb-3 ml-1 mt-6">System Control: App Banners</h3>
+             <div className="bg-[#13151c] rounded-2xl shadow-lg border border-[#e5c158]/20 p-5 mb-6 relative overflow-hidden backdrop-blur-sm">
+                 <p className="text-xs text-slate-400 mb-4">Set the promotional banners that appear at the top of the user home screen. Upload 16:9 images for best results.</p>
+                 
+                 {appBanners.map((banner, index) => (
+                    <div key={banner.id} className="mb-4 bg-black/30 p-3 rounded-xl border border-slate-700/50">
+                       <div className="flex justify-between items-center mb-2">
+                          <span className="text-[10px] font-bold text-slate-400">Banner {index + 1}</span>
+                          <button onClick={() => setAppBanners(prev => prev.filter(b => b.id !== banner.id))} className="text-red-500 hover:bg-red-500/10 p-1 rounded transition-colors"><Trash2 size={14}/></button>
+                       </div>
+                       {banner.imageUrl ? (
+                           <div className="relative w-full h-32 rounded-lg overflow-hidden border border-slate-700 bg-black mb-3 group">
+                              <img src={banner.imageUrl} alt="Banner" className="w-full h-full object-cover" />
+                              <div className="absolute inset-0 bg-black/50 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer" onClick={() => document.getElementById(`banner-upload-${banner.id}`)?.click()}>
+                                 <ImageIcon size={24} className="text-white mb-1" />
+                                 <span className="text-[10px] text-white font-bold">Change Image</span>
+                              </div>
+                           </div>
+                       ) : (
+                           <div className="w-full h-32 rounded-lg border-2 border-dashed border-slate-700 relative flex flex-col items-center justify-center cursor-pointer hover:border-[#e5c158]/50 hover:text-[#e5c158] text-slate-500 transition-colors bg-black/50 mb-3" onClick={() => document.getElementById(`banner-upload-${banner.id}`)?.click()}>
+                              <ImageIcon size={24} className="mb-2" />
+                              <span className="text-[10px] font-bold uppercase tracking-wider">Upload Image</span>
+                           </div>
+                       )}
+                       
+                       <input 
+                         id={`banner-upload-${banner.id}`}
+                         type="file" 
+                         accept="image/*" 
+                         className="hidden" 
+                         onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) {
+                               const reader = new FileReader();
+                               reader.onloadend = () => {
+                                  setAppBanners(prev => prev.map(b => b.id === banner.id ? { ...b, imageUrl: reader.result as string } : b));
+                               };
+                               reader.readAsDataURL(file);
+                            }
+                         }} 
+                       />
+                       <input 
+                          value={banner.linkUrl} 
+                          onChange={(e) => setAppBanners(prev => prev.map(b => b.id === banner.id ? { ...b, linkUrl: e.target.value } : b))} 
+                          placeholder="Optional Link URL (e.g. contest ID)" 
+                          className="w-full bg-black/50 border border-[#e5c158]/30 rounded-lg px-3 py-2 text-xs outline-none focus:border-yellow-500 transition-all text-slate-300" 
+                       />
+                    </div>
+                 ))}
+                 
+                 <button onClick={() => setAppBanners(prev => [...prev, {id: 'b'+Date.now(), imageUrl: '', linkUrl: ''}])} className="w-full py-2.5 rounded-xl border border-dashed border-[#e5c158]/50 text-[#e5c158] bg-[#e5c158]/5 hover:bg-[#e5c158]/10 text-xs font-bold uppercase tracking-widest transition-colors flex items-center justify-center gap-2 mb-4">
+                    <Plus size={16}/> Add New Banner
+                 </button>
+                 
+                 <button onClick={() => {
+                    setDoc(doc(db, 'gameData', 'main_state'), JSON.parse(JSON.stringify({ banners: appBanners })), { merge: true })
+                    .then(() => alert('Banners saved to server successfully!'))
+                    .catch(e => alert('Failed to save banners: ' + e));
+                 }} className="w-full py-3 bg-[#e5c158] text-black rounded-xl font-bold uppercase tracking-widest text-[11px] shadow-[0_0_15px_rgba(229,193,88,0.4)] transition-all active:scale-95">Push Banners Live</button>
+             </div>
+             </>)}
+{adminTab === 'DASHBOARD' && (<>
+<h3 className="font-bold text-[#e5c158]/80 uppercase tracking-widest text-[10px] mb-3 ml-1">System Control: VIP Wallet Edit</h3>
+             <div className="bg-[#13151c] rounded-2xl shadow-lg border border-[#e5c158]/20 p-5 mb-6 relative overflow-hidden backdrop-blur-sm">
+                 <div className="absolute top-0 right-0 bg-yellow-500 text-black text-[9px] uppercase tracking-widest font-black px-3 py-1 rounded-bl-xl shadow-[0_0_10px_rgba(234,179,8,0.5)]">VIP ACCESS</div>
+                 <div className="flex justify-between items-center mb-4 mt-2">
                     <div>
-                       <p className="font-bold text-app-text">{user?.name}</p>
-                       <p className="text-xs text-app-text-muted">{user?.email}</p>
+                       <p className="font-bold text-slate-200">{user?.name}</p>
+                       <p className="text-xs text-[#e5c158]/70 font-mono">{user?.email}</p>
                     </div>
                     <div className="text-right">
-                       <p className="text-xs text-app-text-muted font-semibold mb-0.5">Wallet Balance</p>
-                       <p className="font-black text-lg text-green-600">₹{balance.toFixed(2)}</p>
+                       <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-0.5">Wallet Balance</p>
+                       <p className="font-black text-xl text-[#e5c158] drop-shadow-[0_0_8px_rgba(234,179,8,0.4)]">₹{balance.toFixed(2)}</p>
                     </div>
                  </div>
                  <div className="flex flex-col gap-3">
@@ -2923,7 +3925,7 @@ export default function App() {
                           placeholder="Enter money to add/deduct (₹)" 
                           value={adminCustomAmount}
                           onChange={(e) => setAdminCustomAmount(e.target.value)}
-                          className="flex-1 border border-app-border-hover rounded-lg px-3 py-2 text-sm font-semibold outline-none focus:border-app-accent focus:ring-1 focus:ring-red-500"
+                          className="flex-1 bg-black/50 border border-[#e5c158]/30 rounded-xl px-4 py-3 text-sm font-semibold text-slate-200 outline-none focus:border-yellow-500 focus:shadow-[0_0_10px_rgba(234,179,8,0.2)] transition-all"
                        />
                     </div>
                     <div className="flex gap-2">
@@ -2935,9 +3937,9 @@ export default function App() {
                                 setAdminCustomAmount('');
                              }
                           }} 
-                          className="flex-1 bg-green-50 text-green-700 border border-green-200 py-2 rounded-lg text-sm font-bold active:bg-green-100"
+                          className="flex-1 bg-green-500/20 hover:bg-green-500/30 text-green-400 border border-green-500/50 py-2.5 rounded-xl text-sm font-bold transition-colors"
                        >
-                          + Add Money
+                          + Add Funds
                        </button>
                        <button 
                           onClick={() => {
@@ -2947,128 +3949,382 @@ export default function App() {
                                 setAdminCustomAmount('');
                              }
                           }} 
-                          className="flex-1 bg-red-50 text-red-700 border border-red-200 py-2 rounded-lg text-sm font-bold active:bg-red-100"
+                          className="flex-1 bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/50 py-2.5 rounded-xl text-sm font-bold transition-colors"
                        >
-                          - Deduct Money
+                          - Deduct Funds
                        </button>
                     </div>
-                    <button onClick={() => setBalance(0)} className="w-full bg-app-bg text-app-text border border-app-border-hover py-2 rounded-lg text-sm font-bold active:bg-app-card-hover">Clear Wallet to 0</button>
+                    <button onClick={() => setBalance(0)} className="w-full bg-black/40 hover:bg-black/60 text-slate-400 border border-slate-700 py-2.5 rounded-xl text-sm font-bold transition-colors">Wipe Wallet to 0</button>
                  </div>
              </div>
-             <button 
-                onClick={() => setShowManageContests(!showManageContests)}
-                className={`flex items-center justify-between w-full mt-6 bg-app-card border p-4 shadow-sm transition-colors active:scale-[0.99] ${showManageContests ? 'border-app-border-hover rounded-t-xl border-b-0 mb-0' : 'border-app-border rounded-xl mb-3'}`}
-             >
-                <h3 className="font-bold text-app-text text-base">Manage Contests</h3>
-                <div className={`p-1 rounded-full transition-colors ${showManageContests ? 'text-app-text-muted bg-app-card-hover' : 'text-app-text-muted bg-app-bg'}`}>
-                   {showManageContests ? <ChevronUp size={18} /> : <ChevronDown size={18} />} 
-                </div>
+             </>)}
+{adminTab === 'CONTESTS' && (<>
+<button 
+      onClick={() => setShowManageContests(!showManageContests)}
+      className={`flex items-center justify-between w-full mt-4 bg-[#13151c] border ${showManageContests ? 'border-[#e5c158]/30 rounded-t-xl border-b-0 mb-0 bg-gradient-to-b from-[#e5c158]/5 to-transparent' : 'border-slate-800 rounded-xl mb-3 hover:border-[#e5c158]/30'} p-4 shadow-lg transition-all relative group overflow-hidden`}
+    >
+                <div className="absolute inset-0 bg-gradient-to-r from-yellow-500/0 via-yellow-500/5 to-yellow-500/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000"></div>
+                <h3 className="font-bold text-slate-200 tracking-wide flex items-center justify-between z-10"><Trophy size={16} className="text-[#e5c158] mr-2"/> Manage Contests</h3>
+                <div className={`p-1.5 rounded-lg border transition-all z-10 ${showManageContests ? 'text-black border-[#e5c158] bg-[#e5c158] shadow-[0_0_10px_rgba(229,193,88,0.5)]' : 'text-slate-500 border-slate-700 bg-black/40 group-hover:text-[#e5c158] group-hover:border-[#e5c158]/30'}`}>
+       {showManageContests ? <ChevronUp size={16} strokeWidth={3} /> : <ChevronDown size={16} />}
+    </div>
              </button>
              
              {showManageContests && (
-               <div className="bg-app-card/50 rounded-b-xl shadow-sm border border-app-border-hover border-t-0 p-4 mb-6">
-                  <p className="text-xs text-app-text-muted mb-4">Create new public Mega Contests or Head to Head matches with custom fees and rewards.</p>
-                  <div className="space-y-3">
-                     <div>
-                       <label className="text-[10px] font-bold text-app-text-muted uppercase">Contest Type</label>
-                       <div className="flex gap-2 mt-1">
-                          <button onClick={() => setAdminContestType('Mega')} className={`flex-1 py-1.5 rounded text-sm font-bold border transition-colors ${adminContestType === 'Mega' ? 'bg-red-50 text-red-700 border-red-200' : 'bg-app-card-inner text-app-text-muted border-app-border'}`}>Mega Contest</button>
-                          <button onClick={() => setAdminContestType('H2H')} className={`flex-1 py-1.5 rounded text-sm font-bold border transition-colors ${adminContestType === 'H2H' ? 'bg-red-50 text-red-700 border-red-200' : 'bg-app-card-inner text-app-text-muted border-app-border'}`}>Head to Head (2 Spots)</button>
+               <div className="bg-[#13151c] rounded-b-2xl shadow-lg border border-[#e5c158]/50 border-t-0 p-5 mb-6 backdrop-blur-sm relative before:absolute before:inset-0 before:bg-gradient-to-b before:from-yellow-500/5 before:to-transparent before:pointer-events-none">
+                  <p className="text-xs text-slate-400 mb-5 pl-1 relative z-10">Create new public Mega Contests or Head to Head matches with custom fees and rewards.</p>
+                  <div className="space-y-4 relative z-10">
+                     <div className="bg-black/40 border border-[#e5c158]/20 p-4 rounded-xl">
+                       <label className="text-[10px] font-black text-[#e5c158]/70 uppercase tracking-widest block mb-2">Contest Type</label>
+                       <div className="flex flex-wrap gap-2">
+                          <button onClick={() => setAdminContestType('Mega')} className={`flex-1 min-w-[140px] py-2.5 rounded-lg text-sm font-bold border transition-all ${adminContestType === 'Mega' ? 'bg-[#e5c158]/20 text-[#e5c158] border-[#e5c158]/50 shadow-[0_0_15px_rgba(234,179,8,0.15)]' : 'bg-black/50 text-slate-400 border-slate-700 hover:border-slate-500'}`}>Mega Contest</button>
+                          <button onClick={() => setAdminContestType('H2H')} className={`flex-1 min-w-[140px] py-2.5 rounded-lg text-sm font-bold border transition-all ${adminContestType === 'H2H' ? 'bg-[#e5c158]/20 text-[#e5c158] border-[#e5c158]/50 shadow-[0_0_15px_rgba(234,179,8,0.15)]' : 'bg-black/50 text-slate-400 border-slate-700 hover:border-slate-500'}`}>Head to Head (2 Spots)</button>
+                          <button onClick={() => setAdminContestType('H2H_3')} className={`flex-1 min-w-[140px] py-2.5 rounded-lg text-sm font-bold border transition-all ${adminContestType === 'H2H_3' ? 'bg-[#e5c158]/20 text-[#e5c158] border-[#e5c158]/50 shadow-[0_0_15px_rgba(234,179,8,0.15)]' : 'bg-black/50 text-slate-400 border-slate-700 hover:border-slate-500'}`}>3 Spots (3 to 1)</button>
+                          <button onClick={() => setAdminContestType('H2H_4')} className={`flex-1 min-w-[140px] py-2.5 rounded-lg text-sm font-bold border transition-all ${adminContestType === 'H2H_4' ? 'bg-[#e5c158]/20 text-[#e5c158] border-[#e5c158]/50 shadow-[0_0_15px_rgba(234,179,8,0.15)]' : 'bg-black/50 text-slate-400 border-slate-700 hover:border-slate-500'}`}>4 Spots (4 to 1)</button>
+                          <button onClick={() => setAdminContestType('H2H_5')} className={`flex-1 min-w-[140px] py-2.5 rounded-lg text-sm font-bold border transition-all ${adminContestType === 'H2H_5' ? 'bg-[#e5c158]/20 text-[#e5c158] border-[#e5c158]/50 shadow-[0_0_15px_rgba(234,179,8,0.15)]' : 'bg-black/50 text-slate-400 border-slate-700 hover:border-slate-500'}`}>5 Spots (5 to 1)</button>
                        </div>
                      </div>
-                     <div>
-                       <label className="text-[10px] font-bold text-app-text-muted uppercase">Contest Target Name</label>
-                       <input type="text" placeholder="e.g., Grand League 1" value={adminContestName} onChange={(e) => setAdminContestName(e.target.value)} className="w-full mt-1 border border-app-border-hover rounded px-3 py-1.5 text-sm font-semibold outline-none focus:border-app-accent" />
+                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                       <div className="bg-black/40 border border-[#e5c158]/20 p-4 rounded-xl">
+                         <label className="text-[10px] font-black text-[#e5c158]/70 uppercase tracking-widest block mb-2">Contest Target Name</label>
+                         <input type="text" placeholder="e.g., Grand League 1" value={adminContestName} onChange={(e) => setAdminContestName(e.target.value)} className="w-full bg-black/60 border border-slate-700 rounded-lg px-3 py-2 text-sm font-semibold text-slate-200 outline-none focus:border-yellow-500 focus:shadow-[0_0_10px_rgba(234,179,8,0.2)] transition-all" />
+                       </div>
+                       <div className="bg-black/40 border border-[#e5c158]/20 p-4 rounded-xl">
+                         <label className="text-[10px] font-black text-[#e5c158]/70 uppercase tracking-widest block mb-2">Total Prize Pool (Text)</label>
+                         <input type="text" placeholder="e.g., ₹20 Crores or ₹5000" value={adminContestPrize} onChange={(e) => setAdminContestPrize(e.target.value)} className="w-full bg-black/60 border border-slate-700 rounded-lg px-3 py-2 text-sm font-semibold text-slate-200 outline-none focus:border-yellow-500 focus:shadow-[0_0_10px_rgba(234,179,8,0.2)] transition-all" />
+                       </div>
+                       <div className="bg-black/40 border border-[#e5c158]/20 p-4 rounded-xl">
+                         <label className="text-[10px] font-black text-[#e5c158]/70 uppercase tracking-widest block mb-2">Entry Fee (Number)</label>
+                         <input type="number" placeholder="e.g., 49" value={adminContestEntry} onChange={(e) => setAdminContestEntry(e.target.value)} className="w-full bg-black/60 border border-slate-700 rounded-lg px-3 py-2 text-sm font-semibold text-slate-200 outline-none focus:border-yellow-500 focus:shadow-[0_0_10px_rgba(234,179,8,0.2)] transition-all" />
+                       </div>
+                       {adminContestType === 'Mega' && (
+                          <div className="bg-black/40 border border-[#e5c158]/20 p-4 rounded-xl">
+                            <label className="text-[10px] font-black text-[#e5c158]/70 uppercase tracking-widest block mb-2">Total Spots</label>
+                            <input type="number" placeholder="e.g., 5000000" value={adminContestSpots} onChange={(e) => setAdminContestSpots(e.target.value)} className="w-full bg-black/60 border border-slate-700 rounded-lg px-3 py-2 text-sm font-semibold text-slate-200 outline-none focus:border-yellow-500 focus:shadow-[0_0_10px_rgba(234,179,8,0.2)] transition-all" />
+                          </div>
+                       )}
                      </div>
-                     <div>
-                       <label className="text-[10px] font-bold text-app-text-muted uppercase">Total Prize Pool (Text)</label>
-                       <input type="text" placeholder="e.g., ₹20 Crores or ₹5000" value={adminContestPrize} onChange={(e) => setAdminContestPrize(e.target.value)} className="w-full mt-1 border border-app-border-hover rounded px-3 py-1.5 text-sm font-semibold outline-none focus:border-app-accent" />
-                     </div>
-                     <div>
-                       <label className="text-[10px] font-bold text-app-text-muted uppercase">Entry Fee (Number)</label>
-                       <input type="number" placeholder="e.g., 49" value={adminContestEntry} onChange={(e) => setAdminContestEntry(e.target.value)} className="w-full mt-1 border border-app-border-hover rounded px-3 py-1.5 text-sm font-semibold outline-none focus:border-app-accent" />
-                     </div>
-                     {adminContestType === 'Mega' && (
-                        <div>
-                          <label className="text-[10px] font-bold text-app-text-muted uppercase">Total Spots</label>
-                          <input type="number" placeholder="e.g., 5000000" value={adminContestSpots} onChange={(e) => setAdminContestSpots(e.target.value)} className="w-full mt-1 border border-app-border-hover rounded px-3 py-1.5 text-sm font-semibold outline-none focus:border-app-accent" />
+                     <div className="bg-black/40 border border-[#e5c158]/20 p-4 rounded-xl mt-4">
+                        <div className="flex justify-between items-center mb-3 border-b border-[#e5c158]/20 pb-2">
+                           <h4 className="text-[10px] font-black text-[#e5c158] uppercase tracking-widest">Prize Distribution Settings</h4>
+                           {adminContestType === 'Mega' && (
+                              <button onClick={() => setAdminContestAutoPayouts(!adminContestAutoPayouts)} className="text-xs text-blue-400 hover:text-blue-300 font-bold px-2 py-1 bg-blue-500/10 rounded">
+                                 {adminContestAutoPayouts ? 'Switch to Custom Payouts' : 'Switch to Auto Payouts'}
+                              </button>
+                           )}
                         </div>
-                     )}
+                        {adminContestAutoPayouts ? (
+                           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                             <div>
+                               <label className="text-[10px] font-bold text-[#e5c158]/70 uppercase tracking-widest block mb-1">Platform Margin (%)</label>
+                               <input type="number" placeholder="e.g. 20" value={adminPlatformMargin} onChange={(e) => setAdminPlatformMargin(e.target.value)} className="w-full bg-black/60 border border-slate-700 rounded-lg px-3 py-2 text-sm font-semibold text-slate-200 outline-none focus:border-yellow-500 transition-all" />
+                               <p className="text-[9px] text-slate-500 mt-1">Percentage of total entry fees the platform keeps.</p>
+                             </div>
+                             <div>
+                               <label className="text-[10px] font-bold text-[#e5c158]/70 uppercase tracking-widest block mb-1">Winning Spots (%)</label>
+                               <input type="number" placeholder="e.g. 48" value={adminWinnersPercent} onChange={(e) => setAdminWinnersPercent(e.target.value)} className="w-full bg-black/60 border border-slate-700 rounded-lg px-3 py-2 text-sm font-semibold text-slate-200 outline-none focus:border-yellow-500 transition-all" />
+                               <p className="text-[9px] text-slate-500 mt-1">Percentage of spots that get a payout.</p>
+                             </div>
+                             <div>
+                               <label className="text-[10px] font-bold text-[#e5c158]/70 uppercase tracking-widest block mb-1">1st Prize Gets (%)</label>
+                               <input type="number" placeholder="e.g. 15" value={adminFirstPrizePercent} onChange={(e) => setAdminFirstPrizePercent(e.target.value)} className="w-full bg-black/60 border border-slate-700 rounded-lg px-3 py-2 text-sm font-semibold text-slate-200 outline-none focus:border-yellow-500 transition-all" />
+                               <p className="text-[9px] text-slate-500 mt-1">Percentage of the prize pool allocated to Rank 1.</p>
+                             </div>
+                           </div>
+                        ) : (
+                           <div className="space-y-3">
+                              {adminCustomPayouts.map((cp, idx) => (
+                                 <div key={idx} className="flex gap-2 items-center">
+                                    <div className="flex-1">
+                                       <label className="text-[10px] text-slate-400 block mb-1">Rank From</label>
+                                       <input type="number" value={cp.rankFrom} onChange={(e) => {
+                                          const newPayouts = [...adminCustomPayouts];
+                                          newPayouts[idx].rankFrom = e.target.value;
+                                          setAdminCustomPayouts(newPayouts);
+                                       }} className="w-full bg-black/60 border border-slate-700 rounded-lg px-3 py-2 text-sm font-semibold text-slate-200 outline-none focus:border-yellow-500" />
+                                    </div>
+                                    <div className="flex-1">
+                                       <label className="text-[10px] text-slate-400 block mb-1">Rank To</label>
+                                       <input type="number" value={cp.rankTo} onChange={(e) => {
+                                          const newPayouts = [...adminCustomPayouts];
+                                          newPayouts[idx].rankTo = e.target.value;
+                                          setAdminCustomPayouts(newPayouts);
+                                       }} className="w-full bg-black/60 border border-slate-700 rounded-lg px-3 py-2 text-sm font-semibold text-slate-200 outline-none focus:border-yellow-500" />
+                                    </div>
+                                    <div className="flex-1">
+                                       <label className="text-[10px] text-slate-400 block mb-1">Prize (e.g. ₹75,000)</label>
+                                       <input type="text" value={cp.amount} onChange={(e) => {
+                                          const newPayouts = [...adminCustomPayouts];
+                                          newPayouts[idx].amount = e.target.value;
+                                          setAdminCustomPayouts(newPayouts);
+                                       }} className="w-full bg-black/60 border border-slate-700 rounded-lg px-3 py-2 text-sm font-semibold text-slate-200 outline-none focus:border-yellow-500" />
+                                    </div>
+                                    <button onClick={() => {
+                                       setAdminCustomPayouts(adminCustomPayouts.filter((_, i) => i !== idx));
+                                    }} className="mt-5 p-2 text-red-500 hover:bg-red-500/20 rounded-lg">
+                                       <Trash2 size={16} />
+                                    </button>
+                                 </div>
+                              ))}
+                              <div className="flex justify-between items-center mt-2">
+                                 <button onClick={() => {
+                                    setAdminCustomPayouts([...adminCustomPayouts, {rankFrom: '', rankTo: '', amount: ''}]);
+                                 }} className="text-xs font-bold text-yellow-500 bg-yellow-500/10 px-3 py-1.5 rounded-lg flex items-center gap-1 hover:bg-yellow-500/20 transition-colors">
+                                    <PlusCircle size={14} /> Add Rank Tier
+                                 </button>
+                                 <label className="flex items-center gap-2 cursor-pointer">
+                                    <input type="checkbox" checked={adminAutoFillRemaining} onChange={(e) => setAdminAutoFillRemaining(e.target.checked)} className="rounded border-slate-700 bg-black/50 text-[#e5c158] focus:ring-[#e5c158]" />
+                                    <span className="text-[10px] text-slate-300 font-bold uppercase tracking-widest">Auto-fill remaining ranks</span>
+                                 </label>
+                              </div>
+                           </div>
+                        )}
+                     </div>
                      <button 
                         onClick={() => {
                           const fee = parseFloat(adminContestEntry);
                           if (!adminContestName || !adminContestPrize || isNaN(fee)) return alert("Fill all fields correctly");
-                          const spots = adminContestType === 'Mega' ? (parseInt(adminContestSpots) || 5000000) : 2;
+                          
+                          let spots = 2;
+                          if (adminContestType === 'Mega') spots = parseInt(adminContestSpots) || 5000000;
+                          else if (adminContestType === 'H2H_3') spots = 3;
+                          else if (adminContestType === 'H2H_4') spots = 4;
+                          else if (adminContestType === 'H2H_5') spots = 5;
                           
                           let payouts = undefined;
                           let parsedPrize = 0;
                           const lowerPrize = adminContestPrize.toLowerCase();
                           const numPart = parseFloat(lowerPrize.replace(/[^0-9.]/g, ''));
-                          if (!isNaN(numPart)) {
+                          if (!isNaN(numPart) && numPart > 0 && adminContestType === 'Mega') {
                               if (lowerPrize.includes('cr')) parsedPrize = numPart * 10000000;
                               else if (lowerPrize.includes('lakh') || lowerPrize.includes('l')) parsedPrize = numPart * 100000;
                               else if (lowerPrize.includes('k')) parsedPrize = numPart * 1000;
                               else parsedPrize = numPart;
                           }
 
-                          const actualPool = parsedPrize > 0 ? parsedPrize : (fee * spots * 0.5);
+                          const platMargin = parseFloat(adminPlatformMargin) || 20;
+                          const winSpotsPerc = parseFloat(adminWinnersPercent) || 48;
+                          const firstPrizePerc = parseFloat(adminFirstPrizePercent) || 15;
+                          
+                          const totalFeesCollected = (fee || 0) * spots;
+                          const calculatedPool = totalFeesCollected * ((100 - platMargin) / 100);
+                          const actualPool = parsedPrize > 0 ? parsedPrize : (calculatedPool || 0);
 
                           if (adminContestType === 'Mega') {
                              const formatAmount = (amt: number) => amt >= 100000 ? `₹${Number.isInteger(amt/100000) ? (amt/100000) : (amt/100000).toFixed(2)} Lakhs` : `₹${Math.round(amt).toLocaleString('en-IN')}`;
+                             let customRanksCost = 0;
+                             let highestCustomRank = 0;
                              
-                             payouts = [];
-                             payouts.push({ rank: '# 1', amount: formatAmount(actualPool * 0.15) });
-                             if (spots > 2) payouts.push({ rank: '# 2', amount: formatAmount(actualPool * 0.08) });
-                             if (spots > 5) payouts.push({ rank: '# 3', amount: formatAmount(actualPool * 0.05) });
-                             if (spots > 10) payouts.push({ rank: '# 4 - 5', amount: formatAmount(actualPool * 0.02) });
-                             if (spots > 50) payouts.push({ rank: '# 6 - 10', amount: formatAmount(actualPool * 0.01) });
-                             if (spots > 100) payouts.push({ rank: '# 11 - 50', amount: formatAmount(actualPool * 0.005) });
-                             if (spots > 500) payouts.push({ rank: '# 51 - 200', amount: formatAmount(actualPool * 0.002) });
-                             if (spots > 2000) payouts.push({ rank: '# 201 - 1000', amount: formatAmount(actualPool * 0.001) });
+                             let validCustomPayouts = adminContestAutoPayouts ? [] : adminCustomPayouts.filter(cp => cp.rankFrom && cp.amount);
+
+                             payouts = validCustomPayouts.map(cp => {
+                                let from = parseInt(cp.rankFrom) || 1;
+                                let to = parseInt(cp.rankTo) || from;
+                                let rankLabel = from === to ? `# ${from}` : `# ${from} - ${to}`;
+                                let amtLabel = cp.amount.trim();
+                                if (!amtLabel.startsWith('₹')) amtLabel = `₹${amtLabel}`;
+                                return { rank: rankLabel, amount: amtLabel };
+                             });
+
+                             if (!adminContestAutoPayouts) {
+                                validCustomPayouts.forEach(cp => {
+                                   const from = parseInt(cp.rankFrom) || 0;
+                                   const to = parseInt(cp.rankTo) || from;
+                                   const spotsInTier = (to - from + 1);
+                                   
+                                   let rawAmountLabel = cp.amount.toLowerCase().replace(/,/g, '');
+                                   let numericAmount = parseFloat(rawAmountLabel.replace(/[^0-9.]/g, '')) || 0;
+                                   if (rawAmountLabel.includes('lakh') || rawAmountLabel.includes('l')) numericAmount *= 100000;
+                                   else if (rawAmountLabel.includes('cr')) numericAmount *= 10000000;
+                                   else if (rawAmountLabel.includes('k')) numericAmount *= 1000;
+                                   
+                                   if (spotsInTier > 0 && numericAmount > 0) {
+                                      customRanksCost += (spotsInTier * numericAmount);
+                                   }
+                                   if (to > highestCustomRank) highestCustomRank = to;
+                                });
+                             } else {
+                                // Default Auto Payouts: auto generate Rank 1
+                                let rank1Amount = actualPool * (firstPrizePerc/100);
+                                payouts.push({ rank: '# 1', amount: formatAmount(rank1Amount) });
+                                highestCustomRank = 1;
+                                customRanksCost = rank1Amount;
+                             }
                              
-                             const lastRankStart = spots > 2000 ? 1001 : (spots > 500 ? 201 : (spots > 100 ? 51 : (spots > 50 ? 11 : (spots > 10 ? 6 : 4))));
-                             const lastRankEnd = Math.floor(spots * 0.48);
-                             if (lastRankEnd >= lastRankStart) {
-                                payouts.push({ rank: `# ${lastRankStart.toLocaleString('en-IN')} - ${lastRankEnd.toLocaleString('en-IN')}`, amount: `₹${fee}` });
+                             const shouldAutoFill = adminContestAutoPayouts || adminAutoFillRemaining;
+                             
+                             const remainingPool = actualPool - customRanksCost;
+                             
+                             if (shouldAutoFill && remainingPool > 0) {
+                                let nextStart = highestCustomRank + 1;
+                                let desiredLastRankEnd = Math.floor(spots * (winSpotsPerc / 100));
+                                
+                                let minPrizeForRest = Math.max(fee || 0, 1);
+                                let maxAffordableWinners = Math.floor(remainingPool / minPrizeForRest);
+                                
+                                let lastRankEnd = desiredLastRankEnd;
+                                if (lastRankEnd > nextStart + maxAffordableWinners - 1) {
+                                    lastRankEnd = nextStart + maxAffordableWinners - 1;
+                                }
+                                if (lastRankEnd < nextStart) lastRankEnd = nextStart;
+                                
+                                let remainingWinners = lastRankEnd - nextStart + 1;
+                                
+                                if (remainingWinners > 0) {
+                                    const rawTiers = [
+                                        { maxEnd: 5, weight: 15 },
+                                        { maxEnd: 10, weight: 12 },
+                                        { maxEnd: 50, weight: 10 },
+                                        { maxEnd: 200, weight: 8 },
+                                        { maxEnd: 1000, weight: 6 },
+                                        { maxEnd: 5000, weight: 5 },
+                                        { maxEnd: 20000, weight: 4 },
+                                        { maxEnd: 100000, weight: 2 },
+                                        { maxEnd: spots, weight: 1 }
+                                    ];
+                                    
+                                    let validTiers: {start: number, end: number, spots: number, weight: number}[] = [];
+                                    let currStart = nextStart;
+                                    
+                                    for (let tier of rawTiers) {
+                                        if (currStart <= tier.maxEnd && currStart <= lastRankEnd) {
+                                            let actualEnd = Math.min(tier.maxEnd, lastRankEnd);
+                                            validTiers.push({
+                                                start: currStart,
+                                                end: actualEnd,
+                                                spots: actualEnd - currStart + 1,
+                                                weight: tier.weight
+                                            });
+                                            currStart = actualEnd + 1;
+                                        }
+                                    }
+                                    if (currStart <= lastRankEnd) {
+                                        validTiers.push({
+                                            start: currStart,
+                                            end: lastRankEnd,
+                                            spots: lastRankEnd - currStart + 1,
+                                            weight: 1
+                                        });
+                                    }
+
+                                    // Deduct minimal fee for everyone first
+                                    let minPrize = Math.max(fee || 0, 1);
+                                    let totalMinCost = minPrize * remainingWinners;
+                                    let excessPool = remainingPool - totalMinCost;
+
+                                    if (excessPool < 0) {
+                                        // Give everyone evenly what's left
+                                        let evenPrize = Math.floor(remainingPool / remainingWinners);
+                                        payouts.push({
+                                            rank: nextStart === lastRankEnd ? `# ${nextStart}` : `# ${nextStart.toLocaleString('en-IN')} - ${lastRankEnd.toLocaleString('en-IN')}`,
+                                            amount: `₹${evenPrize.toLocaleString('en-IN')}`
+                                        });
+                                    } else {
+                                        // We have excess to distribute based on weights
+                                        let totalWeightSum = validTiers.reduce((sum, t) => sum + t.weight, 0);
+                                        
+                                        // First pass: assign pool per tier
+                                        let tierPrizes = validTiers.map(t => {
+                                            let alloc = (t.weight / totalWeightSum) * excessPool;
+                                            let perSpot = Math.floor(alloc / t.spots) + minPrize;
+                                            return perSpot;
+                                        });
+                                        
+                                        // Ensure monotonic decrease constraint (smooth it out)
+                                        for(let i = 1; i < tierPrizes.length; i++) {
+                                            if (tierPrizes[i] >= tierPrizes[i-1]) {
+                                               tierPrizes[i] = Math.max(minPrize, tierPrizes[i-1] - 1);
+                                            }
+                                        }
+
+                                        let finalTiers: {start: number, end: number, amt: number}[] = [];
+                                        validTiers.forEach((t, i) => {
+                                            let amt = tierPrizes[i];
+                                            if (finalTiers.length > 0 && finalTiers[finalTiers.length-1].amt === amt) {
+                                                finalTiers[finalTiers.length-1].end = t.end;
+                                            } else {
+                                                finalTiers.push({ start: t.start, end: t.end, amt });
+                                            }
+                                        });
+
+                                        finalTiers.forEach(t => {
+                                            if (t.amt >= 1) {
+                                                payouts.push({
+                                                    rank: t.start === t.end ? `# ${t.start}` : `# ${t.start.toLocaleString('en-IN')} - ${t.end.toLocaleString('en-IN')}`,
+                                                    amount: `₹${t.amt.toLocaleString('en-IN')}`
+                                                });
+                                            }
+                                        });
+                                    }
+                                }
+                             }
+                          }
+
+
+                          let displayType = 'H2H';
+                          if (adminContestType === 'H2H_3') displayType = '3 Spots';
+                          else if (adminContestType === 'H2H_4') displayType = '4 Spots';
+                          else if (adminContestType === 'H2H_5') displayType = '5 Spots';
+                          else if (adminContestType === 'Mega') displayType = 'Mega';
+
+                          let calculatedWinPercentage = adminContestType === 'Mega' ? winSpotsPerc : (adminContestType === 'H2H' ? 50 : Math.floor(100/spots));
+                          let calculatedFirstPrize = adminContestType === 'Mega' ? (payouts?.[0]?.amount || '₹8 L') : `₹${Math.floor(actualPool)}`;
+                          
+                          if (adminContestType === 'Mega' && !adminContestAutoPayouts) {
+                             if (payouts && payouts.length > 0) {
+                                calculatedFirstPrize = payouts[0].amount;
+                             }
+                             // try to calculate win percentage from the last rankTo
+                             if (adminCustomPayouts && adminCustomPayouts.length > 0) {
+                                const lastCustom = adminCustomPayouts[adminCustomPayouts.length - 1];
+                                const maxRank = parseInt(lastCustom.rankTo || lastCustom.rankFrom) || 1;
+                                calculatedWinPercentage = parseFloat(((maxRank / spots) * 100).toFixed(1));
                              }
                           }
 
                           const newContest: Contest = {
                             id: 'c_' + Math.random().toString(36).substring(7),
-                            type: adminContestType,
+                            type: displayType,
                             name: adminContestName,
                             prizeText: adminContestType === 'Mega' && parsedPrize > 0 ? (parsedPrize >= 100000 ? `₹${(parsedPrize/100000)} Lakhs` : `₹${parsedPrize}`) : adminContestPrize,
                             entryFee: fee,
                             spots: spots,
-                            firstPrize: adminContestType === 'Mega' ? payouts?.[0]?.amount || '₹8 L' : `₹${Math.floor(fee * 1.8)}`,
-                            winPercentage: adminContestType === 'Mega' ? 48 : 50,
+                            firstPrize: calculatedFirstPrize,
+                            winPercentage: calculatedWinPercentage,
                             maxTeams: adminContestType === 'Mega' ? 20 : 1,
-                            payouts: payouts
+                            payouts: payouts || []
                           };
-                          setAppContests([...appContests, newContest]);
+                          
+                          const updatedContests = [...appContests, newContest];
+                          setAppContests(updatedContests);
+                          localStorage.setItem('dreamApp_contests', JSON.stringify(updatedContests));
+                          setDoc(doc(db, 'gameData', 'main_state'), JSON.parse(JSON.stringify({
+                             contests: updatedContests,
+                          })), { merge: true }).catch(err => console.error("Error saving contests to DB", err));
+                          
                           alert(`Successfully added ${adminContestType} contest!`);
                           setAdminContestName('');
                           setAdminContestPrize('');
                           setAdminContestEntry('');
                         }} 
-                        className="w-full bg-app-bg text-app-text border-b border-app-border font-bold py-2.5 rounded shadow flex items-center justify-center gap-2 active:bg-app-card-hover"
+                        className="w-full bg-gradient-to-r from-yellow-600 to-yellow-500 text-black font-black uppercase tracking-widest py-3.5 rounded-xl shadow-[0_0_20px_rgba(234,179,8,0.3)] hover:shadow-[0_0_25px_rgba(234,179,8,0.5)] flex items-center justify-center gap-2 active:scale-[0.98] transition-all mt-4"
                      >
-                       <PlusCircle size={16} /> Publish New Contest
+                       <PlusCircle size={18} /> Publish VIP Contest
                      </button>
                   </div>
                   
-                  <div className="mt-4 border-t border-app-border pt-3">
-                     <p className="text-[10px] font-bold text-app-text-muted uppercase mb-2">Active Listed Contests</p>
-                     <div className="space-y-2">
+                  <div className="mt-8 border-t border-[#e5c158]/20 pt-5 relative z-10">
+                     <p className="text-[10px] font-black text-[#e5c158]/70 uppercase tracking-widest mb-3">Active Listed Contests</p>
+                     <div className="space-y-3">
                        {appContests.map(c => (
-                          <div key={c.id} className="bg-app-card-inner border border-app-border rounded p-2 flex justify-between items-center text-xs">
+                          <div key={c.id} className="bg-black/60 border border-slate-700 hover:border-[#e5c158]/50 rounded-xl p-3 flex justify-between items-center text-xs transition-colors">
                              <div>
-                               <span className="font-bold text-app-text">{c.name}</span>
-                               <span className="text-app-text-muted ml-2">({c.type})</span>
+                               <span className="font-bold text-slate-200 text-sm">{c.name}</span>
+                               <span className="text-[#e5c158]/80 ml-2 text-[10px] uppercase font-bold tracking-widest border border-[#e5c158]/30 px-1.5 py-0.5 rounded-sm">{c.type}</span>
                              </div>
-                             <div className="flex items-center gap-3">
-                                <span className="font-bold text-green-600">Pool: {c.prizeText}</span>
-                                <button onClick={() => setAppContests(appContests.filter(cc => cc.id !== c.id))} className="text-app-accent p-1 active:bg-red-100 rounded">Remove</button>
+                             <div className="flex items-center gap-4">
+                                <span className="font-black text-[#e5c158] drop-shadow-[0_0_8px_rgba(234,179,8,0.3)] text-sm">Pool: {c.prizeText}</span>
+                                <button onClick={() => setAppContests(appContests.filter(cc => cc.id !== c.id))} className="text-red-400 hover:text-red-300 bg-red-900/30 hover:bg-red-900/50 p-1.5 rounded-lg transition-colors"><X size={16}/></button>
                              </div>
                           </div>
                        ))}
@@ -3077,153 +4333,591 @@ export default function App() {
                </div>
              )}
 
-             <button 
-                onClick={() => setShowManageMatches(!showManageMatches)}
-                className={`flex items-center justify-between w-full mt-6 bg-app-card border p-4 shadow-sm transition-colors active:scale-[0.99] ${showManageMatches ? 'border-app-border-hover rounded-t-xl border-b-0 mb-0' : 'border-app-border rounded-xl mb-3'}`}
-             >
-                <h3 className="font-bold text-app-text text-base">App Settings: Manage Matches</h3>
-                <div className={`p-1 rounded-full transition-colors ${showManageMatches ? 'text-app-text-muted bg-app-card-hover' : 'text-app-text-muted bg-app-bg'}`}>
-                   {showManageMatches ? <ChevronUp size={18} /> : <ChevronDown size={18} />} 
+             </>)}
+{adminTab === 'TEAMS' && (<>
+   <div className="flex flex-col gap-4 mt-2 mb-6">
+      <div className="flex gap-2 p-2 bg-black/40 border border-slate-700/50 rounded-xl overflow-x-auto no-scrollbar items-center">
+         {appFormats.map(fmt => (
+            <button 
+               key={fmt} 
+               onClick={() => setSelectedFormat(fmt)}
+               className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap transition-colors flex-shrink-0 ${selectedFormat === fmt ? 'bg-[#e5c158] text-black shadow-[0_0_10px_rgba(229,193,88,0.3)]' : 'bg-transparent text-slate-400 hover:text-slate-200 hover:bg-white/5'}`}
+            >
+               {fmt}
+            </button>
+         ))}
+         <button onClick={() => setShowAddFormatModal(true)} className="px-3 py-2 rounded-lg bg-black/50 border border-slate-700 hover:border-[#e5c158]/50 text-slate-400 hover:text-[#e5c158] flex items-center justify-center transition-colors">
+            <Plus size={18} />
+         </button>
+      </div>
+
+      {selectedTeamsForMatch.length > 0 && (
+          <div className="bg-green-900/40 border border-green-500/50 p-4 rounded-xl flex justify-between items-center sticky top-[70px] z-20 shadow-lg backdrop-blur-sm mt-2">
+             <div className="text-white">
+                <p className="text-xs text-green-300 font-bold uppercase tracking-wider mb-1">Match Creation Mode</p>
+                <div className="flex items-center gap-2 font-black text-lg">
+                   {selectedTeamsForMatch[0]?.shortName}
+                   <span className="text-slate-400 text-sm mx-1">vs</span>
+                   {selectedTeamsForMatch[1] ? selectedTeamsForMatch[1].shortName : <span className="text-slate-500 italic text-sm">Select 2nd Team</span>}
                 </div>
+             </div>
+             <div className="flex gap-2">
+                <button onClick={() => setSelectedTeamsForMatch([])} className="p-2 bg-black/40 rounded-lg text-slate-400 hover:text-red-400 transition-colors"><X size={20}/></button>
+                {selectedTeamsForMatch.length === 2 && (
+                   <button onClick={() => setShowCreateMatchFromTeamsModal(true)} className="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg font-bold shadow-[0_0_15px_rgba(34,197,94,0.4)] whitespace-nowrap transition-all">Create</button>
+                )}
+             </div>
+          </div>
+      )}
+
+      <div className="flex justify-between items-center mt-2">
+         <h3 className="font-bold text-slate-300 tracking-wide uppercase text-[10px]">Teams for {selectedFormat}</h3>
+         <button onClick={() => setShowAddTeamModal(true)} className="bg-[#e5c158]/10 hover:bg-[#e5c158]/20 px-3 py-2 rounded-lg text-[#e5c158] border border-[#e5c158]/30 text-xs font-bold flex items-center gap-1.5 transition-all"><Plus size={14}/> Add Team</button>
+      </div>
+
+      <div className="grid grid-cols-1 gap-3">
+         {appTeamsList.filter(t => t.format === selectedFormat).map(team => {
+             const teamPlayers = appPlayers.filter(p => p.team === team.shortName);
+             const isExpanded = expandedTeamId === team.id;
+             const isSelectedForMatch = selectedTeamsForMatch.some(st => st.id === team.id);
+             
+             return (
+                 <div key={team.id} className={`bg-[#13151c] border ${isSelectedForMatch ? 'border-green-500 shadow-[0_0_10px_rgba(34,197,94,0.2)]' : 'border-slate-800'} rounded-xl overflow-hidden transition-all duration-300`}>
+                    <div className="p-4 flex items-center justify-between cursor-pointer" onClick={() => setExpandedTeamId(isExpanded ? null : team.id)}>
+                       <div className="flex items-center gap-3">
+                          <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-white shadow-inner overflow-hidden relative shrink-0 ${team.color}`}>
+                             {team.flagUrl ? (
+                                 <img src={team.flagUrl} alt={team.shortName} className={`w-full h-full ${team.flagFit === 'contain' ? 'object-contain' : 'object-cover'}`} />
+                             ) : (
+                                 team.shortName
+                             )}
+                          </div>
+                          <div>
+                             <div className="flex items-center gap-2">
+                                <h4 className="font-bold text-slate-200">{team.name}</h4>
+                                <button 
+                                   onClick={(e) => {
+                                       e.stopPropagation();
+                                       setNewFlagUrl(team.flagUrl || '');
+                                       setNewFlagFit(team.flagFit || 'cover');
+                                       setShowAddFlagModal(team.id);
+                                   }}
+                                   className="text-slate-500 hover:text-white transition-colors"
+                                   title="Add/Edit Flag"
+                                >
+                                   <PlusCircle size={14} />
+                                </button>
+                             </div>
+                             <p className="text-[10px] text-slate-500 font-semibold">{teamPlayers.length} Players</p>
+                          </div>
+                       </div>
+                       <div className="flex items-center gap-3">
+                          <button 
+                             onClick={(e) => {
+                                 e.stopPropagation();
+                                 if (isSelectedForMatch) {
+                                     setSelectedTeamsForMatch(prev => prev.filter(t => t.id !== team.id));
+                                 } else {
+                                     if (selectedTeamsForMatch.length >= 2) {
+                                         alert("You can only select 2 teams for a match!");
+                                     } else {
+                                         setSelectedTeamsForMatch(prev => [...prev, team]);
+                                     }
+                                 }
+                             }}
+                             className={`text-xs font-bold px-3 py-1.5 rounded-lg border transition-colors ${isSelectedForMatch ? 'bg-green-500/20 text-green-400 border-green-500/50' : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-slate-200 hover:border-slate-500'}`}
+                          >
+                             {isSelectedForMatch ? 'Selected' : 'Select'}
+                          </button>
+                          <div className={`p-1.5 bg-black/40 rounded border border-slate-700 transition-transform ${isExpanded ? 'rotate-180' : ''}`}>
+                             <ChevronDown size={16} className="text-slate-500" />
+                          </div>
+                       </div>
+                    </div>
+                    {isExpanded && (
+                       <div className="bg-black/40 border-t border-slate-800 p-3 pt-4">
+                          <div className="flex justify-between items-center mb-3">
+                             <h5 className="text-xs font-bold text-slate-400 uppercase tracking-widest pl-1">Player List</h5>
+                             <button 
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    setNewPlayerTeamShort(team.shortName);
+                                    setShowTeamAddPlayerModal(true);
+                                }}
+                                className="text-[10px] bg-slate-800 hover:bg-slate-700 text-slate-300 px-2 py-1.5 flex items-center gap-1 rounded border border-slate-700 transition-colors uppercase font-bold"
+                             >
+                                <Plus size={12}/> Add Player
+                             </button>
+                          </div>
+                          
+                          <div className="flex gap-1 mb-4 overflow-x-auto no-scrollbar pb-1">
+                             {(['ALL', 'WK', 'BAT', 'AR', 'BOWL'] as const).map(f => (
+                                 <button
+                                     key={f}
+                                     onClick={(e) => { e.stopPropagation(); setAdminTeamPlayerRoleFilter(f); }}
+                                     className={`px-3 py-1 rounded-full text-[10px] font-bold tracking-wide flex-shrink-0 transition-colors ${adminTeamPlayerRoleFilter === f ? 'bg-[#e5c158] text-black' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'}`}
+                                 >
+                                     {f}
+                                 </button>
+                             ))}
+                          </div>
+                          
+                          {teamPlayers.length === 0 ? (
+                              <p className="text-xs text-slate-600 text-center py-4 italic font-medium">No players added to this team yet.</p>
+                          ) : (
+                              <div className="space-y-1.5 max-h-60 overflow-y-auto pr-1">
+                                 {(adminTeamPlayerRoleFilter === 'ALL' ? teamPlayers : teamPlayers.filter(p => p.role === adminTeamPlayerRoleFilter)).length === 0 ? (
+                                    <p className="text-[10px] text-slate-500 text-center py-2 italic font-medium">No players found for this role.</p>
+                                 ) : (adminTeamPlayerRoleFilter === 'ALL' ? teamPlayers : teamPlayers.filter(p => p.role === adminTeamPlayerRoleFilter)).map((p: any) => (
+                                     <div key={p.id} 
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            setEditingPlayerId(p.id);
+                                            setNewPlayerName(p.name);
+                                            setNewPlayerRole(p.role as 'BAT' | 'BOWL' | 'AR' | 'WK');
+                                            setNewPlayerCredits(p.credits.toString());
+                                            setNewPlayerTeamShort(team.shortName);
+                                            setShowTeamAddPlayerModal(true);
+                                        }}
+                                        className="flex items-center justify-between bg-[#13151c] px-3 py-2 rounded-lg border border-slate-800/50 hover:border-[#e5c158]/20 transition-colors cursor-pointer"
+                                     >
+                                        <div className="flex items-center gap-2">
+                                           <div className="w-6 h-6 rounded-full bg-slate-800 flex items-center justify-center shrink-0">
+                                              <User size={12} className="text-slate-400" />
+                                           </div>
+                                           <span className="text-sm font-bold text-slate-300">{p.name}</span>
+                                        </div>
+                                        <div className="flex items-center gap-3">
+                                           <span className="text-[10px] font-bold text-slate-500 bg-slate-800 px-1.5 py-0.5 rounded tracking-wide">{p.role}</span>
+                                           <span className="text-[10px] font-bold text-[#e5c158]">{p.credits} Cr</span>
+                                           <button onClick={(e) => {
+                                              e.stopPropagation();
+                                              setAppPlayers(prev => prev.filter(pl => pl.id !== p.id));
+                                            }} className="text-red-500/50 hover:text-red-500 p-2 -mr-2 bg-transparent border-none outline-none"><Trash2 size={14}/></button>
+                                        </div>
+                                     </div>
+                                 ))}
+                              </div>
+                          )}
+                       </div>
+                    )}
+                 </div>
+             );
+         })}
+         {appTeamsList.filter(t => t.format === selectedFormat).length === 0 && (
+            <div className="text-center py-12 bg-black/20 border border-slate-800/50 rounded-xl border-dashed">
+               <p className="text-slate-500 font-bold mb-2">No teams found for {selectedFormat}</p>
+               <button onClick={() => setShowAddTeamModal(true)} className="text-[#e5c158] text-sm font-semibold hover:underline border-none bg-transparent">Create a Team</button>
+            </div>
+         )}
+      </div>
+   </div>
+</>)}
+{adminTab === 'MATCHES' && (<>
+<button
+   onClick={() => setShowMatchList(!showMatchList)}
+   className={`flex items-center justify-between w-full mt-4 bg-[#13151c] border ${showMatchList ? 'border-red-500/50 rounded-t-xl border-b-0 mb-0 bg-gradient-to-b from-red-500/10 to-transparent' : 'border-red-500/30 rounded-xl mb-3 hover:border-red-500/50'} p-4 shadow-lg transition-all relative group overflow-hidden`}
+>
+  <div className="absolute inset-0 bg-gradient-to-r from-red-500/0 via-red-500/10 to-red-500/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000"></div>
+  <h3 className="font-bold text-red-500 tracking-wide flex items-center gap-2 z-10"><Trophy size={18} /> MATCH LIST & CREATOR</h3>
+  <div className={`p-1.5 rounded-lg border transition-all z-10 ${showMatchList ? 'text-white border-red-500 bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.5)]' : 'text-red-500 border-red-500/50 bg-black/40 group-hover:text-red-400 group-hover:border-red-400'}`}>
+     {showMatchList ? <ChevronUp size={16} strokeWidth={3} /> : <ChevronDown size={16} />}
+  </div>
+</button>
+
+{showMatchList && (
+  <div className="bg-[#13151c] rounded-b-2xl shadow-lg border border-red-500/50 border-t-0 p-5 mb-6 backdrop-blur-sm relative before:absolute before:inset-0 before:bg-gradient-to-b before:from-red-500/5 before:to-transparent before:pointer-events-none">
+     <h2 className="text-xl font-bold text-slate-200 tracking-wide uppercase text-center mb-6 relative z-10">Match List & Player Database</h2>
+     
+     <div className="space-y-4 relative z-10">
+        <div className="bg-black/40 border border-slate-700/50 p-4 rounded-xl space-y-3">
+           <div>
+               <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Select Series</label>
+               <select value={matchListSeries} onChange={e => setMatchListSeries(e.target.value)} className="w-full bg-black/60 border border-slate-700 rounded-lg px-3 py-2 text-sm font-semibold text-slate-200 outline-none focus:border-red-500">
+                  <option value="IPL">IPL</option>
+                  <option value="TEST">Test</option>
+                  <option value="ODI">ODI</option>
+                  <option value="T20">T20</option>
+                  <option value="THE HUNDRED">The Hundred</option>
+               </select>
+           </div>
+           
+           <div className="grid grid-cols-2 gap-3">
+              <div>
+                 <label className="text-[10px] font-black text-slate-400 uppercase block mb-1">Team 1 Name</label>
+                 <input type="text" placeholder="India" value={matchListT1Name} onChange={e => setMatchListT1Name(e.target.value)} className="w-full bg-black/60 border border-slate-700 rounded-lg px-2 py-1.5 text-sm text-slate-200 outline-none focus:border-red-500" />
+              </div>
+              <div>
+                 <label className="text-[10px] font-black text-slate-400 uppercase block mb-1">Team 1 Code</label>
+                 <input type="text" placeholder="IND" value={matchListT1Code} onChange={e => setMatchListT1Code(e.target.value)} className="w-full bg-black/60 border border-slate-700 rounded-lg px-2 py-1.5 text-sm text-slate-200 outline-none focus:border-red-500" />
+              </div>
+           </div>
+
+           <div className="grid grid-cols-2 gap-3">
+              <div>
+                 <label className="text-[10px] font-black text-slate-400 uppercase block mb-1">Team 2 Name</label>
+                 <input type="text" placeholder="Pakistan" value={matchListT2Name} onChange={e => setMatchListT2Name(e.target.value)} className="w-full bg-black/60 border border-slate-700 rounded-lg px-2 py-1.5 text-sm text-slate-200 outline-none focus:border-red-500" />
+              </div>
+              <div>
+                 <label className="text-[10px] font-black text-slate-400 uppercase block mb-1">Team 2 Code</label>
+                 <input type="text" placeholder="PAK" value={matchListT2Code} onChange={e => setMatchListT2Code(e.target.value)} className="w-full bg-black/60 border border-slate-700 rounded-lg px-2 py-1.5 text-sm text-slate-200 outline-none focus:border-red-500" />
+              </div>
+           </div>
+        </div>
+
+        <div className="bg-black/40 border border-slate-700/50 p-4 rounded-xl">
+           <h3 className="text-sm font-bold text-slate-200 mb-3 border-b border-slate-700/50 pb-2">Add Player</h3>
+           <div className="grid grid-cols-2 gap-2 mb-3">
+              <div className="col-span-2">
+                 <input type="text" placeholder="Player Name" value={mlPlayerName} onChange={e => setMlPlayerName(e.target.value)} className="w-full bg-black/60 border border-slate-700 rounded-lg px-2 py-1.5 text-sm text-slate-200 outline-none focus:border-red-500" />
+              </div>
+              <div className="flex flex-col gap-1">
+                 <label className="text-[10px] font-black text-slate-400 uppercase">Role</label>
+                 <select value={mlPlayerRole} onChange={e => setMlPlayerRole(e.target.value)} className="w-full bg-black/60 border border-slate-700 rounded-lg px-2 py-1.5 text-sm text-slate-200 outline-none focus:border-red-500">
+                    <option value="BAT">Batsman</option>
+                    <option value="AR">All Rounder</option>
+                    <option value="BOWL">Bowler</option>
+                    <option value="WK">Wicket Keeper</option>
+                 </select>
+              </div>
+              <div className="flex flex-col gap-1">
+                 <label className="text-[10px] font-black text-slate-400 uppercase">Team</label>
+                 <select value={mlPlayerTeam} onChange={e => setMlPlayerTeam(Number(e.target.value))} className="w-full bg-black/60 border border-slate-700 rounded-lg px-2 py-1.5 text-sm text-slate-200 outline-none focus:border-red-500">
+                    <option value={1}>Team 1 ({matchListT1Code || 'T1'})</option>
+                    <option value={2}>Team 2 ({matchListT2Code || 'T2'})</option>
+                 </select>
+              </div>
+              <div className="flex flex-col gap-1 col-span-2">
+                 <label className="text-[10px] font-black text-slate-400 uppercase flex justify-between">
+                     Credits 
+                     <span className="text-red-400">{mlPlayerCredits}</span>
+                 </label>
+                 <input type="range" min="4" max="12" step="0.5" value={mlPlayerCredits} onChange={e => setMlPlayerCredits(Number(e.target.value))} className="w-full accent-red-500 mt-1" />
+              </div>
+           </div>
+           <button 
+              onClick={() => {
+                 if(mlPlayerName.trim()) {
+                    setMatchListPlayers([...matchListPlayers, { name: mlPlayerName.trim(), role: mlPlayerRole, team: mlPlayerTeam, credits: mlPlayerCredits }]);
+                    setMlPlayerName('');
+                 }
+              }}
+              className="w-full bg-slate-800 hover:bg-slate-700 text-white font-bold py-2 rounded-lg text-sm border border-slate-600 transition-colors"
+           >
+              Add Player to List
+           </button>
+        </div>
+
+        {matchListPlayers.length > 0 && (
+           <div className="bg-black/40 border border-slate-700/50 p-4 rounded-xl max-h-[300px] overflow-y-auto">
+              <h3 className="text-sm font-bold text-slate-200 mb-3 border-b border-slate-700/50 pb-2">Added Players ({matchListPlayers.length})</h3>
+              <div className="space-y-1">
+                 {matchListPlayers.map((p, idx) => (
+                    <div key={idx} className="flex justify-between items-center bg-black/40 p-2 rounded border border-slate-800/50">
+                       <div className="flex items-center gap-2">
+                          <span className="text-xs font-bold text-slate-300">{p.name}</span>
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-400">{p.role}</span>
+                          <span className="text-[10px] px-1.5 py-0.5 rounded text-red-400 font-mono">{p.credits} cr</span>
+                       </div>
+                       <div className="flex items-center gap-2">
+                          <span className="text-xs font-mono text-slate-500">{p.team === 1 ? matchListT1Code || 'T1' : matchListT2Code || 'T2'}</span>
+                          <button onClick={() => setMatchListPlayers(matchListPlayers.filter((_, i) => i !== idx))} className="text-red-500/70 hover:text-red-500">
+                             <X size={14} />
+                          </button>
+                       </div>
+                    </div>
+                 ))}
+              </div>
+           </div>
+        )}
+        
+        <button 
+           onClick={() => {
+              if(!matchListT1Name || !matchListT1Code || !matchListT2Name || !matchListT2Code) {
+                 alert("Please fill in both team names and codes.");
+                 return;
+              }
+              if(matchListPlayers.length === 0) {
+                 alert("Please add at least one player.");
+                 return;
+              }
+              
+              const newMatchId = `ml_${Date.now()}`;
+              const newMatch = {
+                 id: newMatchId,
+                 series: matchListSeries,
+                 team1: { name: matchListT1Name, shortFrame: matchListT1Code, color: 'bg-blue-600' },
+                 team2: { name: matchListT2Name, shortFrame: matchListT2Code, color: 'bg-green-600' },
+                 time: 'Upcoming',
+                 matchDateISO: new Date(Date.now() + 86400000).toISOString(),
+                 status: 'Upcoming' as any,
+                 lineupStatus: 'OUT' as any
+              };
+              
+              const newPlayers = matchListPlayers.map((p, i) => ({
+                 id: `mlp_${newMatchId}_${i}`,
+                 name: p.name,
+                 role: p.role,
+                 team: p.team === 1 ? matchListT1Code : matchListT2Code,
+                 credits: p.credits,
+                 points: 0,
+                 selPercent: 30 + Math.floor(Math.random() * 60)
+              }));
+              
+              const updatedPlayers = [...appPlayers, ...newPlayers];
+              const updatedMatches = [newMatch, ...appMatches];
+              setAppMatches(updatedMatches);
+              setAppPlayers(updatedPlayers);
+              
+              localStorage.setItem('dreamApp_matches', JSON.stringify(updatedMatches));
+              localStorage.setItem('dreamApp_players', JSON.stringify(updatedPlayers));
+              
+              setDoc(doc(db, 'gameData', 'main_state'), JSON.parse(JSON.stringify({
+                 matches: updatedMatches,
+                 players: updatedPlayers
+              })), { merge: true }).catch(err => console.error("Error saving match to DB", err));
+              
+              setMatchListT1Name('');
+              setMatchListT1Code('');
+              setMatchListT2Name('');
+              setMatchListT2Code('');
+              setMatchListPlayers([]);
+              setMlPlayerName('');
+              alert(`Saved Match ${matchListT1Name} vs ${matchListT2Name} with ${newPlayers.length} players!`);
+           }}
+           className="w-full mt-4 bg-red-600 hover:bg-red-700 text-white font-bold py-3 rounded-xl shadow-[0_0_15px_rgba(220,38,38,0.4)] flex items-center justify-center gap-2"
+        >
+           <Check size={18} /> SAVE COMPILED MATCH
+        </button>
+     </div>
+  </div>
+)}
+
+<button 
+      onClick={() => setShowPlayerScoring(!showPlayerScoring)}
+      className={`flex items-center justify-between w-full mt-4 bg-[#13151c] border ${showPlayerScoring ? 'border-[#e5c158]/30 rounded-t-xl border-b-0 mb-0 bg-gradient-to-b from-[#e5c158]/5 to-transparent' : 'border-slate-800 rounded-xl mb-3 hover:border-[#e5c158]/30'} p-4 shadow-lg transition-all relative group overflow-hidden`}
+    >
+                <div className="absolute inset-0 bg-gradient-to-r from-yellow-500/0 via-yellow-500/5 to-yellow-500/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000"></div>
+                <h3 className="font-bold text-slate-200 tracking-wide flex items-center justify-between z-10">Live Player Scoring & Adjustments</h3>
+                <div className={`p-1.5 rounded-lg border transition-all z-10 ${showPlayerScoring ? 'text-black border-[#e5c158] bg-[#e5c158] shadow-[0_0_10px_rgba(229,193,88,0.5)]' : 'text-slate-500 border-slate-700 bg-black/40 group-hover:text-[#e5c158] group-hover:border-[#e5c158]/30'}`}>
+       {showPlayerScoring ? <ChevronUp size={16} strokeWidth={3} /> : <ChevronDown size={16} />}
+    </div>
+             </button>
+             
+             {showPlayerScoring && (
+               <div className="bg-[#13151c] rounded-b-2xl shadow-lg border border-[#e5c158]/50 border-t-0 p-5 mb-6 backdrop-blur-sm relative before:absolute before:inset-0 before:bg-gradient-to-b before:from-yellow-500/5 before:to-transparent before:pointer-events-none">
+                  <h2 className="text-xl font-bold text-slate-200 tracking-wide uppercase text-center mb-6 relative z-10">PLAYER SCORING & ADJUSTMENTS</h2>
+                  
+                  {(() => {
+                      if (!adminScoringLiveMatchId) {
+                          const liveMatches = appMatches.filter(m => m.status === 'Live' || m.status === 'LIVE');
+                          if (liveMatches.length === 0) {
+                              return (
+                                  <div className="text-center text-slate-400 py-8 border border-slate-800 rounded-lg bg-black/20 relative z-10">
+                                      <p>No matches are currently LIVE.</p>
+                                      <p className="text-xs mt-2 text-slate-500">Go to Match Status to mark a match as LIVE to edit players.</p>
+                                  </div>
+                              );
+                          }
+                          
+                          return (
+                              <div className="relative z-10 space-y-3">
+                                  <p className="text-sm text-slate-400 mb-4">Select a LIVE match to adjust player points:</p>
+                                  {liveMatches.map(match => (
+                                      <button 
+                                          key={match.id}
+                                          onClick={() => setAdminScoringLiveMatchId(match.id)}
+                                          className="w-full flex items-center justify-between p-4 bg-black/40 border border-slate-700 rounded-xl hover:border-[#e5c158]/50 transition-colors"
+                                      >
+                                          <div className="flex flex-col items-start gap-1">
+                                              <span className="text-xs text-[#e5c158] font-bold">{match.series}</span>
+                                              <span className="font-bold text-slate-200">{match.team1.name} <span className="text-slate-500 font-normal">vs</span> {match.team2.name}</span>
+                                          </div>
+                                          <ChevronRight className="text-slate-500" size={20} />
+                                      </button>
+                                  ))}
+                              </div>
+                          );
+                      }
+
+                      const activeMatch = appMatches.find(m => m.id === adminScoringLiveMatchId);
+                      if (!activeMatch) return null;
+
+                      const liveTeams = [activeMatch.team1.shortFrame, activeMatch.team2.shortFrame];
+                      const filteredPlayers = appPlayers.filter(p => liveTeams.includes(p.team) && (p.name.toLowerCase().includes(playerScoringSearch.toLowerCase()) || (p.team || '').toLowerCase().includes(playerScoringSearch.toLowerCase())));
+
+                      return (
+                          <>
+                              <div className="mb-6 relative z-10">
+                                <div className="flex items-center gap-3 mb-4">
+                                  <button onClick={() => setAdminScoringLiveMatchId(null)} className="p-1.5 bg-black/40 border border-slate-700 rounded-lg hover:border-[#e5c158]/50"><ArrowLeft size={16} className="text-slate-400" /></button>
+                                  <h3 className="font-bold text-slate-200">{activeMatch.team1.name} vs {activeMatch.team2.name}</h3>
+                                </div>
+                                <div className="flex items-center gap-2 bg-black/40 border border-slate-700/50 rounded-lg p-2.5">
+                                  <Search size={16} className="text-slate-500" />
+                                  <input 
+                                     type="text" 
+                                     value={playerScoringSearch}
+                                     onChange={e => setPlayerScoringSearch(e.target.value)}
+                                     className="w-full bg-transparent text-sm text-slate-200 outline-none placeholder:text-slate-600 focus:border-none focus:ring-0" 
+                                     placeholder="Search Player by Name or Team" 
+                                  />
+                                </div>
+                              </div>
+                              
+                              <div className="overflow-hidden rounded-xl border border-slate-800/50 bg-black/20 relative z-10 overflow-x-auto">
+                                <table className="w-full text-left text-xs min-w-[1000px]">
+                                  <thead className="bg-[#090b10] border-b border-slate-800/50 text-slate-400">
+                                    <tr>
+                                      <th className="p-3 font-normal whitespace-nowrap">Player Name</th>
+                                      <th className="p-3 font-normal">Team</th>
+                                      <th className="p-3 font-normal text-center">Points<br/>(Default)</th>
+                                      <th className="p-3 font-normal text-center">Adjustment<br/>Value</th>
+                                      <th className="p-3 font-normal text-center">Manual<br/>Override</th>
+                                      <th className="p-3 font-normal text-center">Quick Points Adds</th>
+                                      <th className="p-3 font-normal text-center">Action</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody className="divide-y divide-slate-800/50 bg-black/20">
+                                    {filteredPlayers.slice(0, 50).map((p) => {
+                           const st = playerAdjustments[p.id] || { adjustment: 0, manual: p.points, reason: '' };
+                           return (
+                             <tr key={p.id}>
+                               <td className="p-3 font-bold text-slate-200">{p.name}</td>
+                               <td className="p-3 text-slate-400 font-mono">{(p.team || '').substring(0,3).toUpperCase()}</td>
+                               <td className="p-3 text-center text-slate-300">{p.points}</td>
+                               <td className="p-3">
+                                  <div className="flex items-center justify-center gap-2 bg-[#090b10] border border-slate-700 rounded p-1 w-24 mx-auto">
+                                    <button onClick={() => setPlayerAdjustments(prev => ({...prev, [p.id]: {...st, adjustment: st.adjustment - 1, manual: p.points + st.adjustment - 1}}))} className="text-slate-400 hover:text-white font-mono text-base font-bold">-</button>
+                                    <span className={`font-mono font-bold w-6 text-center ${st.adjustment > 0 ? 'text-green-500' : st.adjustment < 0 ? 'text-red-500' : 'text-slate-400'}`}>{st.adjustment > 0 ? '+' : ''}{st.adjustment}</span>
+                                    <button onClick={() => setPlayerAdjustments(prev => ({...prev, [p.id]: {...st, adjustment: st.adjustment + 1, manual: p.points + st.adjustment + 1}}))} className="text-slate-400 hover:text-white font-mono text-base font-bold">+</button>
+                                  </div>
+                               </td>
+                               <td className="p-3">
+                                  <div className="w-16 mx-auto">
+                                    <input type="number" 
+                                      value={st.manual}
+                                      onChange={e => setPlayerAdjustments(prev => ({...prev, [p.id]: {...st, manual: parseInt(e.target.value)||0, adjustment: (parseInt(e.target.value)||0) - p.points}}))}
+                                      className="w-full bg-[#090b10] border border-slate-800 text-center rounded p-1.5 text-xs text-slate-200 outline-none focus:border-[#e5c158]/50" />
+                                  </div>
+                               </td>
+                               <td className="p-3">
+                                 <div className="flex flex-wrap gap-1.5 justify-center max-w-[280px] mx-auto">
+                                    <button onClick={() => setPlayerAdjustments(prev => ({...prev, [p.id]: {...st, adjustment: st.adjustment + 25, manual: p.points + st.adjustment + 25}}))} className="bg-green-600/20 hover:bg-green-600/40 text-green-500 text-[10px] px-2 py-1 rounded border border-green-600/30 whitespace-nowrap font-bold text-center flex items-center justify-center">+25 WICKET</button>
+                                    <button onClick={() => setPlayerAdjustments(prev => ({...prev, [p.id]: {...st, adjustment: st.adjustment + 12, manual: p.points + st.adjustment + 12}}))} className="bg-green-600/20 hover:bg-green-600/40 text-green-500 text-[10px] px-2 py-1 rounded border border-green-600/30 whitespace-nowrap font-bold text-center flex items-center justify-center">+12 CATCH</button>
+                                    <button onClick={() => setPlayerAdjustments(prev => ({...prev, [p.id]: {...st, adjustment: st.adjustment + 6, manual: p.points + st.adjustment + 6}}))} className="bg-green-600/20 hover:bg-green-600/40 text-green-500 text-[10px] px-2 py-1 rounded border border-green-600/30 whitespace-nowrap font-bold text-center flex items-center justify-center">+6 SIX</button>
+                                    <button onClick={() => setPlayerAdjustments(prev => ({...prev, [p.id]: {...st, adjustment: st.adjustment + 4, manual: p.points + st.adjustment + 4}}))} className="bg-green-600/20 hover:bg-green-600/40 text-green-500 text-[10px] px-2 py-1 rounded border border-green-600/30 whitespace-nowrap font-bold text-center flex items-center justify-center">+4 FOUR</button>
+                                    <button onClick={() => setPlayerAdjustments(prev => ({...prev, [p.id]: {...st, adjustment: st.adjustment + 2, manual: p.points + st.adjustment + 2}}))} className="bg-green-600/20 hover:bg-green-600/40 text-green-500 text-[10px] px-2 py-1 rounded border border-green-600/30 whitespace-nowrap font-bold text-center flex items-center justify-center">+2 (2 RUNS)</button>
+                                    <button onClick={() => setPlayerAdjustments(prev => ({...prev, [p.id]: {...st, adjustment: st.adjustment + 1, manual: p.points + st.adjustment + 1}}))} className="bg-green-600/20 hover:bg-green-600/40 text-green-500 text-[10px] px-2 py-1 rounded border border-green-600/30 whitespace-nowrap font-bold text-center flex items-center justify-center">+1 RUN</button>
+                                    
+                                    <button onClick={() => {
+                                        const customStr = prompt('Enter custom points to add/subtract:');
+                                        if (customStr && !isNaN(parseInt(customStr))) {
+                                            const pts = parseInt(customStr);
+                                            setPlayerAdjustments(prev => ({...prev, [p.id]: {...st, adjustment: st.adjustment + pts, manual: p.points + st.adjustment + pts}}));
+                                        }
+                                    }} className="bg-[#e5c158]/20 hover:bg-[#e5c158]/40 text-[#e5c158] text-[10px] px-2 py-1 rounded border border-[#e5c158]/30 flex items-center justify-center font-bold font-mono min-w-[30px]"><Plus size={12} /></button>
+                                 </div>
+                               </td>
+                               <td className="p-3 text-center">
+                                 <button 
+                                     onClick={async () => {
+                                        const finalPts = st.manual;
+                                        setAppPlayers(prev => prev.map(pl => pl.id === p.id ? { ...pl, points: finalPts } : pl));
+                                        setPlayerAdjustments(prev => {
+                                            const newState = { ...prev };
+                                            delete newState[p.id];
+                                            return newState;
+                                        });
+                                        
+                                        // Also sync to cloud db immediately if possible
+                                        try {
+                                          const parentDoc = await getDoc(doc(db, 'gameData', 'main_state'));
+                                          if (parentDoc.exists()) {
+                                              const remotePlayers = parentDoc.data().players || [];
+                                              let found = false;
+                                              const newRemotePlayers = remotePlayers.map(pl => {
+                                                  if (pl.id === p.id) {
+                                                      found = true;
+                                                      return { ...pl, points: finalPts };
+                                                  }
+                                                  return pl;
+                                              });
+                                              if (!found) {
+                                                  newRemotePlayers.push({ ...p, points: finalPts });
+                                              }
+                                              await updateDoc(doc(db, 'gameData', 'main_state'), JSON.parse(JSON.stringify({ players: newRemotePlayers })));
+                                          } else {
+                                              await setDoc(doc(db, 'gameData', 'main_state'), JSON.parse(JSON.stringify({ players: appPlayers.map(pl => pl.id === p.id ? { ...pl, points: finalPts } : pl) })), { merge: true });
+                                          }
+                                        } catch (e) {
+                                          console.error("Could not sync to cloud automatically", e);
+                                        }
+
+                                        setUpdateSuccessIds(prev => ({...prev, [p.id]: true}));
+                                        setTimeout(() => {
+                                            setUpdateSuccessIds(prev => ({...prev, [p.id]: false}));
+                                        }, 2000);
+                                     }}
+                                     className={`${updateSuccessIds[p.id] ? 'bg-blue-600/30 hover:bg-blue-600/50 text-blue-400 border-blue-500/50' : 'bg-green-600/20 hover:bg-green-600/40 text-green-500 border-green-600/30'} font-bold px-4 py-2 rounded border transition-all text-xs uppercase tracking-wider`}>
+                                    {updateSuccessIds[p.id] ? 'Successful' : 'Update'}
+                                 </button>
+                               </td>
+                             </tr>
+                           );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                  </>
+                  );
+                  })()}
+               </div>
+             )}
+
+             <button 
+      onClick={() => setShowManageMatches(!showManageMatches)}
+      className={`flex items-center justify-between w-full mt-4 bg-[#13151c] border ${showManageMatches ? 'border-[#e5c158]/30 rounded-t-xl border-b-0 mb-0 bg-gradient-to-b from-[#e5c158]/5 to-transparent' : 'border-slate-800 rounded-xl mb-3 hover:border-[#e5c158]/30'} p-4 shadow-lg transition-all relative group overflow-hidden`}
+    >
+                <div className="absolute inset-0 bg-gradient-to-r from-yellow-500/0 via-yellow-500/5 to-yellow-500/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000"></div>
+                <h3 className="font-bold text-slate-200 tracking-wide flex items-center justify-between z-10">App Settings: Manage Matches</h3>
+                <div className={`p-1.5 rounded-lg border transition-all z-10 ${showManageMatches ? 'text-black border-[#e5c158] bg-[#e5c158] shadow-[0_0_10px_rgba(229,193,88,0.5)]' : 'text-slate-500 border-slate-700 bg-black/40 group-hover:text-[#e5c158] group-hover:border-[#e5c158]/30'}`}>
+       {showManageMatches ? <ChevronUp size={16} strokeWidth={3} /> : <ChevronDown size={16} />}
+    </div>
              </button>
              
              {showManageMatches && (
-               <div className="bg-app-card/50 rounded-b-xl shadow-sm border border-app-border-hover border-t-0 p-4 mb-6">
-                  <p className="text-xs text-app-text-muted mb-4">Create new upcoming matches or change the status of existing matches (Live, Completed).</p>
+               <div className="bg-[#13151c] rounded-b-2xl shadow-lg border border-[#e5c158]/50 border-t-0 p-5 mb-6 backdrop-blur-sm relative before:absolute before:inset-0 before:bg-gradient-to-b before:from-yellow-500/5 before:to-transparent before:pointer-events-none">
+                  <p className="text-xs text-slate-400 mb-5 pl-1 relative z-10">Create new upcoming matches or change the status of existing matches (Live, Completed).</p>
                   
-                  <p className="text-[10px] font-bold text-app-text-muted uppercase mb-2">Create New Match</p>
-                  <div className="space-y-3 mb-6 bg-app-card-inner p-3 rounded border border-app-border">
-                     <div className="flex gap-2">
-                       <div className="flex-1">
-                          <label className="text-[10px] font-bold text-app-text-muted uppercase">Team 1 (Short)</label>
-                          <input type="text" placeholder="e.g., IND" value={adminMatchT1} onChange={(e) => setAdminMatchT1(e.target.value)} className="w-full mt-1 border border-app-border-hover rounded px-2 py-1.5 text-sm outline-none" />
-                       </div>
-                       <div className="flex-1">
-                          <label className="text-[10px] font-bold text-app-text-muted uppercase">Team 2 (Short)</label>
-                          <input type="text" placeholder="e.g., AUS" value={adminMatchT2} onChange={(e) => setAdminMatchT2(e.target.value)} className="w-full mt-1 border border-app-border-hover rounded px-2 py-1.5 text-sm outline-none" />
-                       </div>
-                     </div>
-                     <div className="flex gap-2">
-                       <div className="flex-[2]">
-                          <label className="text-[10px] font-bold text-app-text-muted uppercase">Match Date</label>
-                          <select 
-                            value={adminMatchDate} 
-                            onChange={(e) => setAdminMatchDate(e.target.value)} 
-                            className="w-full mt-1 border border-app-border-hover rounded px-2 py-1.5 text-sm outline-none bg-app-card"
-                          >
-                            <option value={formatDateISO(today)}>Today ({formatDateISO(today)})</option>
-                            <option value={formatDateISO(tomorrow)}>Tomorrow ({formatDateISO(tomorrow)})</option>
-                            <option value={formatDateISO(dayAfter)}>Day After ({formatDateISO(dayAfter)})</option>
-                          </select>
-                       </div>
-                       <div className="flex-1">
-                          <label className="text-[10px] font-bold text-app-text-muted uppercase">Time</label>
-                          <input 
-                            type="time" 
-                            value={adminMatchTimeValue} 
-                            onChange={(e) => setAdminMatchTimeValue(e.target.value)} 
-                            className="w-full mt-1 border border-app-border-hover rounded px-2 py-1.5 text-sm outline-none" 
-                          />
-                       </div>
-                       <div className="flex-1">
-                          <label className="text-[10px] font-bold text-app-text-muted uppercase">Prize</label>
-                          <input type="text" placeholder="₹20 Cr" value={adminMatchPrize} onChange={(e) => setAdminMatchPrize(e.target.value)} className="w-full mt-1 border border-app-border-hover rounded px-2 py-1.5 text-sm outline-none" />
-                       </div>
-                     </div>
-                     <button 
-                        onClick={() => {
-                          if (!adminMatchT1 || !adminMatchT2 || !adminMatchTimeValue || !adminMatchPrize) return alert("Fill all fields");
-                          
-                          // Format display time
-                          let [hourString, minuteString] = adminMatchTimeValue.split(':');
-                          let hour = parseInt(hourString);
-                          let ampm = hour >= 12 ? 'PM' : 'AM';
-                          if (hour > 12) hour -= 12;
-                          if (hour === 0) hour = 12;
-                          
-                          let dayStr = '';
-                          if (adminMatchDate === formatDateISO(today)) dayStr = 'Today';
-                          else if (adminMatchDate === formatDateISO(tomorrow)) dayStr = 'Tomorrow';
-                          else dayStr = new Date(adminMatchDate).toLocaleDateString('en-US', { weekday: 'long' });
-
-                          const displayTime = `${dayStr} ${hour}:${minuteString} ${ampm}`;
-                          const isoTime = `${adminMatchDate}T${adminMatchTimeValue}:00`;
-
-                          const newMatch: Match & { matchDateISO: string } = {
-                            id: 'm_' + Math.random().toString(36).substring(7),
-                            series: 'FANTASY SERIES 2026',
-                            team1: { name: adminMatchT1, shortFrame: adminMatchT1, color: 'bg-app-accent' },
-                            team2: { name: adminMatchT2, shortFrame: adminMatchT2, color: 'bg-yellow-500' },
-                            time: displayTime,
-                            matchDateISO: isoTime,
-                            totalPrize: adminMatchPrize,
-                            status: 'Upcoming'
-                          };
-                          
-                          // Generate players for this match if they don't already exist for this team
-                          const existingT1 = appPlayers.some(p => p.team === adminMatchT1);
-                          const existingT2 = appPlayers.some(p => p.team === adminMatchT2);
-                          let extraPlayers: Player[] = [];
-                          
-                          const generateTeamPlayers = (teamNode: string) => {
-                             const p: Player[] = [];
-                             let pidStr = Date.now().toString(36) + Math.random().toString(36).substring(2, 5);
-                             // WK
-                             p.push({ id: `p_${pidStr}_1`, name: `WK 1 (${teamNode})`, team: teamNode, role: 'WK', credits: 8.5, points: 0, selPercent: 75 });
-                             p.push({ id: `p_${pidStr}_2`, name: `WK 2 (${teamNode})`, team: teamNode, role: 'WK', credits: 8.0, points: 0, selPercent: 40 });
-                             // BAT
-                             p.push({ id: `p_${pidStr}_3`, name: `BAT 1 (${teamNode})`, team: teamNode, role: 'BAT', credits: 9.0, points: 0, selPercent: 85 });
-                             p.push({ id: `p_${pidStr}_4`, name: `BAT 2 (${teamNode})`, team: teamNode, role: 'BAT', credits: 8.5, points: 0, selPercent: 70 });
-                             p.push({ id: `p_${pidStr}_5`, name: `BAT 3 (${teamNode})`, team: teamNode, role: 'BAT', credits: 8.0, points: 0, selPercent: 55 });
-                             p.push({ id: `p_${pidStr}_6`, name: `BAT 4 (${teamNode})`, team: teamNode, role: 'BAT', credits: 7.5, points: 0, selPercent: 40 });
-                             // AR
-                             p.push({ id: `p_${pidStr}_7`, name: `AR 1 (${teamNode})`, team: teamNode, role: 'AR', credits: 9.5, points: 0, selPercent: 90 });
-                             p.push({ id: `p_${pidStr}_8`, name: `AR 2 (${teamNode})`, team: teamNode, role: 'AR', credits: 8.5, points: 0, selPercent: 65 });
-                             p.push({ id: `p_${pidStr}_9`, name: `AR 3 (${teamNode})`, team: teamNode, role: 'AR', credits: 8.0, points: 0, selPercent: 50 });
-                             // BOWL
-                             p.push({ id: `p_${pidStr}_10`, name: `BOWL 1 (${teamNode})`, team: teamNode, role: 'BOWL', credits: 9.0, points: 0, selPercent: 80 });
-                             p.push({ id: `p_${pidStr}_11`, name: `BOWL 2 (${teamNode})`, team: teamNode, role: 'BOWL', credits: 8.5, points: 0, selPercent: 60 });
-                             p.push({ id: `p_${pidStr}_12`, name: `BOWL 3 (${teamNode})`, team: teamNode, role: 'BOWL', credits: 8.0, points: 0, selPercent: 45 });
-                             return p;
-                          };
-                          
-                          if (!existingT1) extraPlayers = [...extraPlayers, ...generateTeamPlayers(adminMatchT1)];
-                          if (!existingT2) extraPlayers = [...extraPlayers, ...generateTeamPlayers(adminMatchT2)];
-                          
-                          if (extraPlayers.length > 0) {
-                             setAppPlayers([...appPlayers, ...extraPlayers]);
-                          }
-
-                          setAppMatches([newMatch, ...appMatches]);
-                          alert(`Successfully added match: ${adminMatchT1} vs ${adminMatchT2}`);
-                          setAdminMatchT1(''); setAdminMatchT2(''); setAdminMatchPrize('');
-                        }} 
-                        className="w-full bg-app-bg text-app-text border-b border-app-border font-bold py-2 rounded text-sm active:bg-app-card-hover"
-                     >
-                       Create Match
-                     </button>
-                  </div>
-
-                  <p className="text-[10px] font-bold text-app-text-muted uppercase mb-2">Live / Existing Matches Control</p>
-                  <div className="space-y-3">
+                  <p className="text-[10px] font-black text-[#e5c158]/70 uppercase tracking-widest mb-3 relative z-10">Live / Existing Matches Control</p>
+                  <div className="space-y-4 relative z-10">
                     {appMatches.map(m => (
                        <AdminMatchEditCard 
                          key={m.id} 
                          match={m} 
                          onUpdate={(updatedMatch) => {
-                            setAppMatches(appMatches.map(mm => mm.id === m.id ? updatedMatch : mm));
+                            const newMatches = appMatches.map(mm => mm.id === m.id ? updatedMatch : mm);
+                            setAppMatches(newMatches);
+                            setDoc(doc(db, 'gameData', 'main_state'), JSON.parse(JSON.stringify({ matches: newMatches, players: appPlayers })), { merge: true });
                          }}
                          onDelete={() => {
-                            setAppMatches(appMatches.filter(mm => mm.id !== m.id));
+                            const newMatches = appMatches.filter(mm => mm.id !== m.id);
+                            setAppMatches(newMatches);
+                            setDoc(doc(db, 'gameData', 'main_state'), JSON.parse(JSON.stringify({ matches: newMatches, players: appPlayers })), { merge: true });
                          }}
                          onStatusChange={(status) => {
                             if (status === 'Completed' && m.status !== 'Completed') {
                                 distributePrizes(m.id);
                             }
-                            setAppMatches(appMatches.map(mm => mm.id === m.id ? { ...mm, status } : mm));
+                            const newMatches = appMatches.map(mm => mm.id === m.id ? { ...mm, status } : mm);
+                            setAppMatches(newMatches);
+                            setDoc(doc(db, 'gameData', 'main_state'), JSON.parse(JSON.stringify({ matches: newMatches, players: appPlayers })), { merge: true });
                          }}
                          onLineupToggle={() => {
-                            setAppMatches(appMatches.map(mm => mm.id === m.id ? { ...mm, lineupStatus: mm.lineupStatus === 'OUT' ? 'NOT_OUT' : 'OUT' as const } : mm));
+                            const newMatches = appMatches.map(mm => mm.id === m.id ? { ...mm, lineupStatus: mm.lineupStatus === 'OUT' ? 'NOT_OUT' : 'OUT' as const } : mm);
+                            setAppMatches(newMatches);
+                            setDoc(doc(db, 'gameData', 'main_state'), JSON.parse(JSON.stringify({ matches: newMatches, players: appPlayers })), { merge: true });
                          }}
                        />
                     ))}
@@ -3231,110 +4925,191 @@ export default function App() {
                </div>
              )}
 
-             <button 
-                onClick={() => setShowManageKYC(!showManageKYC)}
-                className={`flex items-center justify-between w-full mt-6 bg-app-card border p-4 shadow-sm transition-colors active:scale-[0.99] ${showManageKYC ? 'border-app-border-hover rounded-t-xl border-b-0 mb-0' : 'border-app-border rounded-xl mb-3'}`}
-             >
-                <h3 className="font-bold text-app-text text-base">Manage KYC Requests</h3>
-                <div className={`p-1 rounded-full transition-colors ${showManageKYC ? 'text-app-text-muted bg-app-card-hover' : 'text-app-text-muted bg-app-bg'}`}>
-                   {showManageKYC ? <ChevronUp size={18} /> : <ChevronDown size={18} />} 
-                </div>
+             </>)}
+{adminTab === 'USERS' && (<>
+<button 
+      onClick={() => setShowManageKYC(!showManageKYC)}
+      className={`flex items-center justify-between w-full mt-4 bg-[#13151c] border ${showManageKYC ? 'border-[#e5c158]/30 rounded-t-xl border-b-0 mb-0 bg-gradient-to-b from-[#e5c158]/5 to-transparent' : 'border-slate-800 rounded-xl mb-3 hover:border-[#e5c158]/30'} p-4 shadow-lg transition-all relative group overflow-hidden`}
+    >
+                <div className="absolute inset-0 bg-gradient-to-r from-yellow-500/0 via-yellow-500/5 to-yellow-500/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000"></div>
+                <h3 className="font-bold text-slate-200 tracking-wide flex items-center justify-between z-10">Manage KYC Requests</h3>
+                <div className={`p-1.5 rounded-lg border transition-all z-10 ${showManageKYC ? 'text-black border-[#e5c158] bg-[#e5c158] shadow-[0_0_10px_rgba(229,193,88,0.5)]' : 'text-slate-500 border-slate-700 bg-black/40 group-hover:text-[#e5c158] group-hover:border-[#e5c158]/30'}`}>
+       {showManageKYC ? <ChevronUp size={16} strokeWidth={3} /> : <ChevronDown size={16} />}
+    </div>
              </button>
              
              {showManageKYC && (
-               <div className="bg-app-card/50 rounded-b-xl shadow-sm border border-app-border-hover border-t-0 p-4 mb-6">
-                  <p className="text-xs text-app-text-muted mb-4">View and approve user KYC requests.</p>
-                  <div className="space-y-4">
+               <div className="bg-[#13151c] rounded-b-2xl shadow-lg border border-[#e5c158]/50 border-t-0 p-5 mb-6 relative">
+                 {selectedKycRequest ? (
+                   <div>
+                     <button onClick={() => setSelectedKycRequest(null)} className="mb-4 flex items-center gap-1 text-xs text-slate-400 hover:text-white transition-colors"><ChevronLeft size={16}/> Back to Requests</button>
+                     <h2 className="text-xl font-bold text-slate-200 tracking-wide uppercase text-center mb-6">User Manage KYC</h2>
+                     
+                     <div className="mb-6">
+                       <label className="block text-xs text-slate-400 mb-1">Search User ID / Email</label>
+                       <input type="text" className="w-full bg-transparent border border-slate-700/50 rounded-lg p-2.5 text-sm text-slate-200 outline-none focus:border-[#e5c158]/50" placeholder="Enter User ID or Email..." />
+                     </div>
+                     
+                     <div className="mb-6">
+                       <p className="text-sm text-slate-300 mb-3">User Profile & KYC Documents</p>
+                       <div className="flex items-center gap-4 bg-black/20 p-4 rounded-xl border border-slate-800/50">
+                         <div className="w-16 h-16 rounded-full bg-slate-800 flex items-center justify-center border border-slate-700 shrink-0">
+                            <User size={32} className="text-slate-500" />
+                         </div>
+                         <div className="flex-1 space-y-1">
+                           <p className="text-sm text-slate-400">Full Name: <span className="text-slate-200">{selectedKycRequest.userName}</span></p>
+                           <p className="text-sm text-slate-400">Email: <span className="text-slate-200">{selectedKycRequest.userEmail || 'user@example.com'}</span></p>
+                           <p className="text-sm text-slate-400">Phone: <span className="text-slate-200">{selectedKycRequest.userPhone || '+91-XXXXX-XXXXX'}</span></p>
+                           <p className="text-sm text-slate-400 flex items-center gap-2">KYC Status: <span className="px-2 py-0.5 rounded bg-[#e5c158]/20 text-[#e5c158] text-[10px] uppercase font-bold tracking-wider">{selectedKycRequest.status === 'Pending Review' ? 'PENDING VERIFICATION' : selectedKycRequest.status}</span></p>
+                         </div>
+                       </div>
+                     </div>
+                     
+                     <div className="mb-6">
+                       <p className="text-sm text-slate-300 mb-3">KYC Document Verification</p>
+                       <div className="overflow-hidden rounded-xl border border-slate-800/50 bg-black/20">
+                          <table className="w-full text-left text-xs">
+                            <thead className="bg-black/40 border-b border-slate-800/50">
+                              <tr>
+                                <th className="p-3 font-normal text-slate-400">Document Type</th>
+                                <th className="p-3 font-normal text-slate-400">Document ID</th>
+                                <th className="p-3 font-normal text-slate-400">Status</th>
+                                <th className="p-3 font-normal text-slate-400 text-center">Action</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-800/50">
+                              <tr>
+                                <td className="p-3 text-slate-300">Aadhaar Card</td>
+                                <td className="p-3 text-slate-300">{selectedKycRequest.aadhar || 'ID-XXXXXXXXXXXX'}</td>
+                                <td className="p-3 text-[#e5c158]">PENDING</td>
+                                <td className="p-3 text-center"><button className="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded border border-slate-700 transition-colors uppercase text-[10px] tracking-wider">VIEW/VERIFY</button></td>
+                              </tr>
+                              <tr>
+                                <td className="p-3 text-slate-300">PAN Card</td>
+                                <td className="p-3 text-slate-300">{selectedKycRequest.pan || 'ID-XXXXXXXXXXXX'}</td>
+                                <td className="p-3 text-green-500">VERIFIED</td>
+                                <td className="p-3 text-center"><button className="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded border border-slate-700 transition-colors uppercase text-[10px] tracking-wider">RE-VIEW</button></td>
+                              </tr>
+                            </tbody>
+                          </table>
+                       </div>
+                     </div>
+                     
+                     <div className="space-y-3 mb-6">
+                        <button onClick={async () => {
+                                      await setDoc(doc(db, 'kyc', selectedKycRequest.id), { ...selectedKycRequest, status: 'Approved' });
+                                      alert('KYC Approved for ' + selectedKycRequest.userName + '.');
+                                      setSelectedKycRequest(null);
+                                   }} className="w-full bg-slate-600 hover:bg-slate-500 text-white font-bold py-3 rounded-lg transition-colors uppercase tracking-widest text-sm">VERIFY USER KYC</button>
+                        <button className="w-full bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 font-bold py-3 rounded-lg transition-colors uppercase tracking-widest text-sm">REQUEST ADDITIONAL INFO</button>
+                     </div>
+                     
+                     <div>
+                       <p className="text-sm text-slate-300 mb-3">User Verification History</p>
+                       <div className="overflow-hidden rounded-xl border border-slate-800/50 bg-black/20">
+                          <table className="w-full text-left text-xs">
+                            <thead className="bg-black/40 border-b border-slate-800/50">
+                              <tr>
+                                <th className="p-3 font-normal text-slate-400">Date</th>
+                                <th className="p-3 font-normal text-slate-400">Action Take</th>
+                                <th className="p-3 font-normal text-slate-400">Admin Notes</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-800/50">
+                              <tr>
+                                <td className="p-3 text-slate-500" colSpan={3}>No history available</td>
+                              </tr>
+                            </tbody>
+                          </table>
+                       </div>
+                     </div>
+                   </div>
+                 ) : (
+                  <div>
+                  <h2 className="text-xl font-bold text-slate-200 tracking-wide uppercase text-center mb-6">KYC Requests</h2>
+                  <div className="space-y-4 relative z-10">
                      {kycRequests.filter(r => r.status === 'Pending Review').length === 0 ? (
-                        <p className="text-sm font-bold text-app-text-muted text-center py-4 bg-app-card-inner border border-app-border rounded">No pending KYC requests.</p>
+                        <p className="text-sm font-bold text-slate-500 text-center py-6 bg-black/40 border border-slate-700 rounded-xl">No pending KYC requests.</p>
                      ) : (
                         kycRequests.filter(r => r.status === 'Pending Review').map((req) => (
-                           <div key={req.id} className="bg-app-card-inner border border-app-border rounded p-4">
-                              <div className="flex justify-between items-start mb-2 border-b border-app-border pb-2">
+                           <div key={req.id} className="bg-black/40 border border-[#e5c158]/20 rounded-xl p-4">
+                              <div className="flex justify-between items-start mb-3 border-b border-[#e5c158]/20 pb-3">
                                 <div className="flex flex-col">
-                                  <span className="text-[10px] font-bold text-app-text-muted uppercase leading-none">User</span>
-                                  <span className="font-bold text-app-text">{req.userName}</span>
+                                  <span className="text-[10px] font-black text-[#e5c158]/70 uppercase tracking-widest leading-none mb-1">User</span>
+                                  <span className="font-bold text-slate-200">{req.userName}</span>
                                 </div>
                                 <div className="flex flex-col text-right">
-                                  <span className="text-[10px] font-bold text-app-text-muted uppercase leading-none">Time</span>
-                                  <span className="text-xs text-app-text-muted">{req.timestamp}</span>
+                                  <span className="text-[10px] font-black text-[#e5c158]/70 uppercase tracking-widest leading-none mb-1">Time</span>
+                                  <span className="text-xs text-slate-400">{req.timestamp}</span>
                                 </div>
                               </div>
-                              <div className="mb-4">
-                                <p className="text-xs text-app-text-muted mb-1">Aadhar: <span className="font-mono font-bold text-app-text bg-app-card px-1 border border-app-border rounded">{req.aadhar}</span></p>
-                                <p className="text-xs text-app-text-muted mb-1">PAN: <span className="font-mono font-bold text-app-text bg-app-card px-1 border border-app-border rounded">{req.pan}</span></p>
+                              <div className="mb-4 bg-black/60 p-3 rounded-lg border border-slate-700">
+                                <p className="text-xs text-slate-400 mb-1.5 flex justify-between">Aadhar: <span className="font-mono font-bold text-slate-200">{req.aadhar}</span></p>
+                                <p className="text-xs text-slate-400 flex justify-between">PAN: <span className="font-mono font-bold text-slate-200">{req.pan}</span></p>
                               </div>
-                              <div className="flex gap-2">
+                              <div className="flex gap-3">
                                  <button 
-                                   onClick={async () => {
-                                      await setDoc(doc(db, 'kyc', req.id), { ...req, status: 'Approved' });
-                                      alert(`KYC Approved for ${req.userName}.`);
-                                   }}
-                                   className="flex-1 bg-green-600 text-app-text font-bold py-2 rounded shadow-sm hover:bg-green-700 active:scale-95 text-xs text-center"
-                                 >
-                                   Approve KYC
-                                 </button>
-                                 <button 
-                                   onClick={async () => {
-                                      await setDoc(doc(db, 'kyc', req.id), { ...req, status: 'Rejected' });
-                                      alert(`KYC Rejected for ${req.userName}.`);
-                                   }}
-                                   className="flex-1 bg-red-100 text-app-accent font-bold py-2 rounded shadow-sm hover:bg-red-200 active:scale-95 text-xs text-center border border-red-200"
-                                 >
-                                   Reject
+                                   onClick={() => setSelectedKycRequest(req)}
+                                   className="flex-1 bg-[#e5c158]/20 hover:bg-[#e5c158]/30 text-[#e5c158] border border-[#e5c158]/50 font-bold py-2.5 rounded-lg active:scale-[0.98] transition-all text-xs text-center uppercase tracking-widest">
+                                   Review KYC
                                  </button>
                               </div>
                            </div>
                         ))
                      )}
                   </div>
+                  </div>
+                 )}
                </div>
              )}
 
-             <button 
-                onClick={() => setShowManageWithdrawals(!showManageWithdrawals)}
-                className={`flex items-center justify-between w-full mt-6 bg-app-card border p-4 shadow-sm transition-colors active:scale-[0.99] ${showManageWithdrawals ? 'border-app-border-hover rounded-t-xl border-b-0 mb-0' : 'border-app-border rounded-xl mb-3'}`}
-             >
-                <h3 className="font-bold text-app-text text-base">Manage Withdrawal Requests</h3>
-                <div className={`p-1 rounded-full transition-colors ${showManageWithdrawals ? 'text-app-text-muted bg-app-card-hover' : 'text-app-text-muted bg-app-bg'}`}>
-                   {showManageWithdrawals ? <ChevronUp size={18} /> : <ChevronDown size={18} />} 
-                </div>
+             </>)}
+{adminTab === 'FINANCIALS' && (<>
+<button 
+      onClick={() => setShowManageWithdrawals(!showManageWithdrawals)}
+      className={`flex items-center justify-between w-full mt-4 bg-[#13151c] border ${showManageWithdrawals ? 'border-[#e5c158]/30 rounded-t-xl border-b-0 mb-0 bg-gradient-to-b from-[#e5c158]/5 to-transparent' : 'border-slate-800 rounded-xl mb-3 hover:border-[#e5c158]/30'} p-4 shadow-lg transition-all relative group overflow-hidden`}
+    >
+                <div className="absolute inset-0 bg-gradient-to-r from-yellow-500/0 via-yellow-500/5 to-yellow-500/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000"></div>
+                <h3 className="font-bold text-slate-200 tracking-wide flex items-center justify-between z-10">Manage Withdrawal Requests</h3>
+                <div className={`p-1.5 rounded-lg border transition-all z-10 ${showManageWithdrawals ? 'text-black border-[#e5c158] bg-[#e5c158] shadow-[0_0_10px_rgba(229,193,88,0.5)]' : 'text-slate-500 border-slate-700 bg-black/40 group-hover:text-[#e5c158] group-hover:border-[#e5c158]/30'}`}>
+       {showManageWithdrawals ? <ChevronUp size={16} strokeWidth={3} /> : <ChevronDown size={16} />}
+    </div>
              </button>
              
              {showManageWithdrawals && (
-               <div className="bg-app-card/50 rounded-b-xl shadow-sm border border-app-border-hover border-t-0 p-4 mb-6">
-                  <p className="text-xs text-app-text-muted mb-4">View and approve user withdrawal requests.</p>
-                  <div className="space-y-4">
+               <div className="bg-[#13151c] rounded-b-2xl shadow-lg border border-[#e5c158]/50 border-t-0 p-5 mb-6 backdrop-blur-sm relative before:absolute before:inset-0 before:bg-gradient-to-b before:from-yellow-500/5 before:to-transparent before:pointer-events-none">
+                  <p className="text-xs text-slate-400 mb-5 pl-1 relative z-10">View and approve user withdrawal requests.</p>
+                  <div className="space-y-4 relative z-10">
                      {withdrawRequests.filter(r => r.status === 'Pending').length === 0 ? (
-                        <p className="text-sm font-bold text-app-text-muted text-center py-4 bg-app-card-inner border border-app-border rounded">No pending withdrawal requests.</p>
+                        <p className="text-sm font-bold text-slate-500 text-center py-6 bg-black/40 border border-slate-700 rounded-xl">No pending withdrawal requests.</p>
                      ) : (
                         withdrawRequests.filter(r => r.status === 'Pending').map((req) => {
                            const bankAccount = bankAccounts.find(b => b.id === req.bankAccountId);
                            return (
-                             <div key={req.id} className="bg-app-card-inner border border-app-border rounded p-4">
-                                <div className="flex justify-between items-start mb-2 border-b border-app-border pb-2">
+                             <div key={req.id} className="bg-black/40 border border-[#e5c158]/20 rounded-xl p-4">
+                                <div className="flex justify-between items-start mb-3 border-b border-[#e5c158]/20 pb-3">
                                   <div className="flex flex-col">
-                                    <span className="text-[10px] font-bold text-app-text-muted uppercase leading-none">User ID</span>
-                                    <span className="font-bold text-app-text">{req.userId || 'Unknown'}</span>
+                                    <span className="text-[10px] font-black text-[#e5c158]/70 uppercase tracking-widest leading-none mb-1">User ID</span>
+                                    <span className="font-bold text-slate-200 text-xs">{req.userId || 'Unknown'}</span>
                                   </div>
                                   <div className="flex flex-col text-right">
-                                    <span className="text-[10px] font-bold text-app-text-muted uppercase leading-none">Amount</span>
-                                    <span className="font-black text-red-500 text-lg">₹{req.amount}</span>
+                                    <span className="text-[10px] font-black text-[#e5c158]/70 uppercase tracking-widest leading-none mb-1">Amount</span>
+                                    <span className="font-black text-[#e5c158] drop-shadow-[0_0_8px_rgba(234,179,8,0.3)] text-xl">₹{req.amount}</span>
                                   </div>
                                 </div>
-                                <div className="mb-4 bg-[#1A2536] p-3 rounded-lg border border-app-border">
-                                  <p className="text-xs text-app-text-muted mb-1 font-bold uppercase tracking-wider">Bank Details</p>
-                                  <p className="text-sm font-bold text-white mb-1"><span className="text-gray-400 font-normal">Holder:</span> {bankAccount?.accountHolderName}</p>
-                                  <p className="text-sm font-bold text-white mb-1"><span className="text-gray-400 font-normal">Acc Num:</span> {bankAccount?.accountNumber}</p>
-                                  <p className="text-sm font-bold text-white uppercase"><span className="text-gray-400 font-normal capitalize">IFSC:</span> {bankAccount?.ifscCode}</p>
+                                <div className="mb-4 bg-black/60 p-4 rounded-lg border border-slate-700">
+                                  <p className="text-[10px] font-black text-[#e5c158]/70 uppercase tracking-widest mb-2">Bank Details</p>
+                                  <p className="text-sm font-bold text-slate-200 mb-1.5"><span className="text-slate-500 font-normal">Holder:</span> {bankAccount?.accountHolderName}</p>
+                                  <p className="text-sm font-bold text-slate-200 mb-1.5"><span className="text-slate-500 font-normal">Acc Num:</span> {bankAccount?.accountNumber}</p>
+                                  <p className="text-sm font-bold text-slate-200 uppercase"><span className="text-slate-500 font-normal capitalize">IFSC:</span> {bankAccount?.ifscCode}</p>
                                 </div>
-                                <div className="flex gap-2">
+                                <div className="flex gap-3">
                                    <button 
                                      onClick={async () => {
                                         await setDoc(doc(db, 'withdrawals', req.id), { ...req, status: 'Approved' });
                                         alert(`Withdrawal of ₹${req.amount} approved. Make sure you sent the money via the bank details provided.`);
                                      }}
-                                     className="flex-1 bg-green-600 text-app-text font-bold py-2 rounded shadow-sm hover:bg-green-700 active:scale-95 text-xs text-center"
+                                     className="flex-1 bg-green-500/20 hover:bg-green-500/30 text-green-400 border border-green-500/50 font-bold py-2.5 rounded-lg active:scale-[0.98] transition-all text-xs text-center uppercase tracking-widest"
                                    >
                                      Approve
                                    </button>
@@ -3352,7 +5127,7 @@ export default function App() {
                                         }
                                         alert(`Withdrawal rejected. Amount refunded to user wallet.`);
                                      }}
-                                     className="flex-1 bg-red-100 text-app-accent font-bold py-2 rounded shadow-sm hover:bg-red-200 active:scale-95 text-xs text-center border border-red-200"
+                                     className="flex-1 bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/50 font-bold py-2.5 rounded-lg active:scale-[0.98] transition-all text-xs text-center uppercase tracking-widest"
                                    >
                                      Reject & Refund
                                    </button>
@@ -3366,44 +5141,45 @@ export default function App() {
              )}
 
              <button 
-                onClick={() => setShowManageDeposits(!showManageDeposits)}
-                className={`flex items-center justify-between w-full mt-6 bg-app-card border p-4 shadow-sm transition-colors active:scale-[0.99] ${showManageDeposits ? 'border-app-border-hover rounded-t-xl border-b-0 mb-0' : 'border-app-border rounded-xl mb-3'}`}
-             >
-                <h3 className="font-bold text-app-text text-base">Manage Deposit Requests</h3>
-                <div className={`p-1 rounded-full transition-colors ${showManageDeposits ? 'text-app-text-muted bg-app-card-hover' : 'text-app-text-muted bg-app-bg'}`}>
-                   {showManageDeposits ? <ChevronUp size={18} /> : <ChevronDown size={18} />} 
-                </div>
+      onClick={() => setShowManageDeposits(!showManageDeposits)}
+      className={`flex items-center justify-between w-full mt-4 bg-[#13151c] border ${showManageDeposits ? 'border-[#e5c158]/30 rounded-t-xl border-b-0 mb-0 bg-gradient-to-b from-[#e5c158]/5 to-transparent' : 'border-slate-800 rounded-xl mb-3 hover:border-[#e5c158]/30'} p-4 shadow-lg transition-all relative group overflow-hidden`}
+    >
+                <div className="absolute inset-0 bg-gradient-to-r from-yellow-500/0 via-yellow-500/5 to-yellow-500/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000"></div>
+                <h3 className="font-bold text-slate-200 tracking-wide flex items-center justify-between z-10">Manage Deposit Requests</h3>
+                <div className={`p-1.5 rounded-lg border transition-all z-10 ${showManageDeposits ? 'text-black border-[#e5c158] bg-[#e5c158] shadow-[0_0_10px_rgba(229,193,88,0.5)]' : 'text-slate-500 border-slate-700 bg-black/40 group-hover:text-[#e5c158] group-hover:border-[#e5c158]/30'}`}>
+       {showManageDeposits ? <ChevronUp size={16} strokeWidth={3} /> : <ChevronDown size={16} />}
+    </div>
              </button>
              
              {showManageDeposits && (
-               <div className="bg-app-card/50 rounded-b-xl shadow-sm border border-app-border-hover border-t-0 p-4 mb-6">
-                  <p className="text-xs text-app-text-muted mb-4">View user deposit requests, verify their screenshot/UTR, and add the amount to their wallet.</p>
+               <div className="bg-[#13151c] rounded-b-2xl shadow-lg border border-[#e5c158]/50 border-t-0 p-5 mb-6 backdrop-blur-sm relative before:absolute before:inset-0 before:bg-gradient-to-b before:from-yellow-500/5 before:to-transparent before:pointer-events-none">
+                  <p className="text-xs text-slate-400 mb-5 pl-1 relative z-10">View user deposit requests, verify their screenshot/UTR, and add the amount to their wallet.</p>
                   
-                  <div className="space-y-4">
+                  <div className="space-y-4 relative z-10">
                      {depositRequests.filter(r => r.status === 'Pending').length === 0 ? (
-                        <p className="text-sm font-bold text-app-text-muted text-center py-4 bg-app-card-inner rounded">No pending deposit requests.</p>
+                        <p className="text-sm font-bold text-slate-500 text-center py-6 bg-black/40 border border-slate-700 rounded-xl">No pending deposit requests.</p>
                      ) : (
                         depositRequests.filter(r => r.status === 'Pending').map((req, index) => (
-                           <div key={req.id} className="bg-app-card-inner border border-app-border rounded p-4">
-                              <div className="flex justify-between items-start mb-2 border-b border-app-border pb-2">
+                           <div key={req.id} className="bg-black/40 border border-[#e5c158]/20 rounded-xl p-4">
+                              <div className="flex justify-between items-start mb-3 border-b border-[#e5c158]/20 pb-3">
                                 <div className="flex flex-col">
-                                  <span className="text-[10px] font-bold text-app-text-muted uppercase leading-none">Method</span>
-                                  <span className="font-bold text-app-text">{req.method}</span>
+                                  <span className="text-[10px] font-black text-[#e5c158]/70 uppercase tracking-widest leading-none mb-1">Method</span>
+                                  <span className="font-bold text-slate-200 text-xs">{req.method}</span>
                                 </div>
                                 <div className="flex flex-col text-right">
-                                  <span className="text-[10px] font-bold text-app-text-muted uppercase leading-none">Amount</span>
-                                  <span className="font-black text-green-600 text-lg">₹{req.amount}</span>
+                                  <span className="text-[10px] font-black text-[#e5c158]/70 uppercase tracking-widest leading-none mb-1">Amount</span>
+                                  <span className="font-black text-[#e5c158] drop-shadow-[0_0_8px_rgba(234,179,8,0.3)] text-xl">₹{req.amount}</span>
                                 </div>
                               </div>
-                              <div className="mb-4">
-                                {req.userName && <p className="text-xs text-app-text-muted mb-1">User: <span className="font-bold text-app-text">{req.userName}</span></p>}
-                                <p className="text-xs text-app-text-muted mb-1">Time: <span className="font-bold text-app-text">{req.timestamp}</span></p>
-                                <p className="text-xs text-app-text-muted mb-1">UTR: <span className="font-mono font-bold text-app-text bg-app-card px-1 border border-app-border rounded">{req.utr}</span></p>
-                                <p className="text-xs text-blue-600 font-bold flex items-center gap-1 underline mt-2 cursor-pointer">
-                                  Screenshot Uploaded (View)
+                              <div className="mb-4 bg-black/60 p-4 rounded-lg border border-slate-700">
+                                {req.userName && <p className="text-xs text-slate-300 mb-2 flex justify-between"><span>User:</span> <span className="font-bold text-slate-200">{req.userName}</span></p>}
+                                <p className="text-xs text-slate-300 mb-2 flex justify-between"><span>Time:</span> <span className="font-bold text-slate-200 text-[10px]">{req.timestamp}</span></p>
+                                <p className="text-xs text-slate-300 mb-2 flex justify-between items-center"><span>UTR:</span> <span className="font-mono font-bold text-slate-200 bg-black/80 px-2 py-0.5 border border-slate-600 rounded">{req.utr}</span></p>
+                                <p className="text-xs text-[#e5c158] font-bold flex items-center justify-end gap-1 underline mt-3 cursor-pointer hover:text-[#f0b90b]">
+                                  View Screenshot
                                 </p>
                               </div>
-                              <div className="flex gap-2">
+                              <div className="flex gap-3">
                                  <button 
                                    onClick={async () => {
                                       // Accept Logic
@@ -3418,7 +5194,7 @@ export default function App() {
                                       }
                                       alert(`Accepted! ₹${req.amount} added to user wallet.`);
                                    }}
-                                   className="flex-1 bg-green-600 text-app-text font-bold py-2 rounded shadow-sm hover:bg-green-700 active:scale-95 text-xs text-center"
+                                   className="flex-1 bg-green-500/20 hover:bg-green-500/30 text-green-400 border border-green-500/50 font-bold py-2.5 rounded-lg active:scale-[0.98] transition-all text-xs text-center uppercase tracking-widest"
                                  >
                                    Accept & Add ₹{req.amount}
                                  </button>
@@ -3428,7 +5204,7 @@ export default function App() {
                                       await setDoc(doc(db, 'deposits', req.id), { ...req, status: 'Rejected' });
                                       alert(`Deposit request rejected.`);
                                    }}
-                                   className="flex-1 bg-red-100 text-app-accent font-bold py-2 rounded shadow-sm hover:bg-red-200 active:scale-95 text-xs text-center"
+                                   className="flex-1 bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/50 font-bold py-2.5 rounded-lg active:scale-[0.98] transition-all text-xs text-center uppercase tracking-widest"
                                  >
                                    Reject
                                  </button>
@@ -3440,36 +5216,39 @@ export default function App() {
                </div>
              )}
 
-             <button 
-                onClick={() => setShowManageUserTeams(!showManageUserTeams)}
-                className={`flex items-center justify-between w-full mt-6 bg-app-card border p-4 shadow-sm transition-colors active:scale-[0.99] ${showManageUserTeams ? 'border-app-border-hover rounded-t-xl border-b-0 mb-0' : 'border-app-border rounded-xl mb-3'}`}
-             >
-                <h3 className="font-bold text-app-text text-base">Manage User Teams (Edit)</h3>
-                <div className={`p-1 rounded-full transition-colors ${showManageUserTeams ? 'text-app-text-muted bg-app-card-hover' : 'text-app-text-muted bg-app-bg'}`}>
-                   {showManageUserTeams ? <ChevronUp size={18} /> : <ChevronDown size={18} />} 
-                </div>
+             </>)}
+{adminTab === 'MATCHES' && (<>
+<button 
+      onClick={() => setShowManageUserTeams(!showManageUserTeams)}
+      className={`flex items-center justify-between w-full mt-4 bg-[#13151c] border ${showManageUserTeams ? 'border-[#e5c158]/30 rounded-t-xl border-b-0 mb-0 bg-gradient-to-b from-[#e5c158]/5 to-transparent' : 'border-slate-800 rounded-xl mb-3 hover:border-[#e5c158]/30'} p-4 shadow-lg transition-all relative group overflow-hidden`}
+    >
+                <div className="absolute inset-0 bg-gradient-to-r from-yellow-500/0 via-yellow-500/5 to-yellow-500/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000"></div>
+                <h3 className="font-bold text-slate-200 tracking-wide flex items-center justify-between z-10">Manage User Teams (Edit)</h3>
+                <div className={`p-1.5 rounded-lg border transition-all z-10 ${showManageUserTeams ? 'text-black border-[#e5c158] bg-[#e5c158] shadow-[0_0_10px_rgba(229,193,88,0.5)]' : 'text-slate-500 border-slate-700 bg-black/40 group-hover:text-[#e5c158] group-hover:border-[#e5c158]/30'}`}>
+       {showManageUserTeams ? <ChevronUp size={16} strokeWidth={3} /> : <ChevronDown size={16} />}
+    </div>
              </button>
              
              {showManageUserTeams && (
-               <div className="bg-app-card/50 rounded-b-xl shadow-sm border border-app-border-hover border-t-0 p-4 mb-6">
+               <div className="bg-[#13151c] rounded-b-2xl shadow-lg border border-[#e5c158]/50 border-t-0 p-5 mb-6 backdrop-blur-sm relative before:absolute before:inset-0 before:bg-gradient-to-b before:from-yellow-500/5 before:to-transparent before:pointer-events-none">
                   {!adminTeamEditMatchId ? (
                      <>
-                        <p className="text-xs text-app-text-muted mb-4">Select a match to view and edit user teams.</p>
-                        <div className="space-y-3">
+                        <p className="text-xs text-slate-400 mb-5 pl-1 relative z-10">Select a match to view and edit user teams.</p>
+                        <div className="space-y-4 relative z-10">
                            {appMatches.map(match => (
                                <div 
                                  key={match.id}
                                  onClick={() => setAdminTeamEditMatchId(match.id)}
-                                 className="bg-app-card-inner border border-app-border rounded-lg p-3 flex justify-between items-center cursor-pointer hover:bg-app-card-hover transition-colors"
+                                 className="bg-black/60 border border-slate-700 hover:border-[#e5c158]/30 rounded-xl p-4 flex justify-between items-center cursor-pointer transition-colors"
                                >
                                  <div className="flex flex-col">
-                                    <span className="font-bold text-app-text text-sm">{match.series} ({match.team1.shortFrame} vs {match.team2.shortFrame})</span>
-                                    <span className={`text-[10px] font-bold uppercase mt-1 w-fit px-1.5 py-0.5 rounded ${match.status === 'Live' ? 'bg-red-500/10 text-red-500' : match.status === 'Completed' ? 'bg-green-500/10 text-green-500' : 'bg-blue-500/10 text-blue-500'}`}>
+                                    <span className="font-bold text-slate-200 text-sm">{match.series} ({match.team1.shortFrame} vs {match.team2.shortFrame})</span>
+                                    <span className={`text-[10px] font-black uppercase tracking-widest mt-2 w-fit px-2 py-1 rounded-sm border ${match.status === 'Live' ? 'bg-red-900/40 text-red-500 border-red-500/50 shadow-[0_0_8px_rgba(239,68,68,0.2)] animate-pulse' : match.status === 'Completed' ? 'bg-green-900/30 text-green-400 border-green-500/30' : 'bg-blue-900/30 text-blue-400 border-blue-500/30'}`}>
                                        {match.status}
                                     </span>
                                  </div>
-                                 <span className="text-xs font-bold bg-app-card px-2 py-1 rounded text-app-text-muted">
-                                    {savedTeams.filter(t => t.match.id === match.id).length} Teams
+                                 <span className="text-[10px] font-black tracking-widest bg-black border border-slate-700 px-3 py-1.5 rounded-lg text-[#e5c158]/70 shadow-inner">
+                                    {savedTeams.filter(t => t.match.id === match.id).length} TEAMS
                                  </span>
                                </div>
                            ))}
@@ -3477,49 +5256,49 @@ export default function App() {
                      </>
                   ) : (
                      <>
-                        <div className="flex items-center gap-2 mb-4 pb-3 border-b border-app-border">
-                           <button onClick={() => setAdminTeamEditMatchId(null)} className="p-1 rounded bg-app-card-inner hover:bg-app-card-hover border border-app-border text-app-text"><ArrowLeft size={16}/></button>
-                           <h4 className="font-bold text-app-text text-sm">{appMatches.find(m => m.id === adminTeamEditMatchId)?.team1.shortFrame} vs {appMatches.find(m => m.id === adminTeamEditMatchId)?.team2.shortFrame} Teams</h4>
+                        <div className="flex items-center gap-3 mb-5 pb-4 border-b border-[#e5c158]/20 relative z-10">
+                           <button onClick={() => setAdminTeamEditMatchId(null)} className="p-1.5 rounded-lg bg-black border border-slate-700 hover:border-[#e5c158]/50 hover:text-[#e5c158] transition-colors text-slate-300"><ArrowLeft size={16}/></button>
+                           <h4 className="font-bold text-slate-200 text-sm">{appMatches.find(m => m.id === adminTeamEditMatchId)?.team1.shortFrame} vs {appMatches.find(m => m.id === adminTeamEditMatchId)?.team2.shortFrame} Teams</h4>
                         </div>
                         
-                        <div className="relative mb-4">
-                           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-app-text-muted" size={16} />
+                        <div className="relative mb-5 z-10">
+                           <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
                            <input 
                               type="text" 
                               placeholder="Search by 10-digit User ID..."
                               value={teamSearchQuery}
                               onChange={(e) => setTeamSearchQuery(e.target.value)}
-                              className="w-full bg-app-card-inner border border-app-border text-app-text rounded-lg py-2 pl-9 pr-3 text-sm focus:outline-none focus:border-app-accent"
+                              className="w-full bg-black/60 border border-slate-700 text-slate-200 rounded-xl py-3 pl-11 pr-4 text-sm focus:outline-none focus:border-yellow-500 transition-colors"
                            />
                         </div>
                         
-                        <div className="space-y-3">
+                        <div className="space-y-4 relative z-10">
                            {(() => {
-                              const matchTeams = savedTeams.filter(t => t.match.id === adminTeamEditMatchId);
+                              const matchTeams = savedTeams.filter(t => t.match.id === adminTeamEditMatchId && t.userId !== 'admin_bot' && t.userId !== 'admin_bot_boot');
                               const filtered = matchTeams
-                                .map((st) => ({ st, actIdx: savedTeams.findIndex(orig => orig.id === st.id) }))
-                                .filter(({ st }) => st.userId?.toLowerCase().includes(teamSearchQuery.toLowerCase()) || st.teamId?.toLowerCase().includes(teamSearchQuery.toLowerCase()));
+                                .filter((st) => st.userId?.toLowerCase().includes(teamSearchQuery.toLowerCase()) || st.teamId?.toLowerCase().includes(teamSearchQuery.toLowerCase()));
                                 
-                              if (matchTeams.length === 0) return <p className="text-sm font-bold text-app-text-muted text-center py-4">No user teams for this match.</p>;
-                              if (filtered.length === 0) return <p className="text-sm font-bold text-app-text-muted text-center py-4">No results for "{teamSearchQuery}"</p>;
+                              if (matchTeams.length === 0) return <p className="text-sm font-bold text-slate-500 text-center py-6 bg-black/40 border border-slate-700 rounded-xl">No user teams for this match.</p>;
+                              if (filtered.length === 0) return <p className="text-sm font-bold text-slate-500 text-center py-6 bg-black/40 border border-slate-700 rounded-xl">No results for "{teamSearchQuery}"</p>;
                               
-                              return filtered.map(({ st, actIdx }) => (
-                                 <div key={st.id || actIdx} className="bg-app-card-inner border border-app-border rounded p-3 text-sm">
-                                    <div className="flex justify-between items-center font-bold text-app-text mb-2">
+                              return filtered.map((st, actIdx) => (
+                                 <div key={st.id || actIdx} className="bg-black/60 border border-slate-700 rounded-xl p-4 text-sm transition-colors hover:border-[#e5c158]/30">
+                                    <div className="flex justify-between items-center font-bold text-slate-200 mb-3 pb-2 border-b border-yellow-500/10">
                                        <span className="flex-1 truncate pr-2">{st.match.series} ({st.match.team1.shortFrame} vs {st.match.team2.shortFrame})</span>
-                                       <span className="text-blue-500 bg-blue-500/10 px-2 py-0.5 rounded text-xs">{st.userId}</span>
+                                       <span className="text-[#e5c158] bg-[#e5c158]/10 border border-[#e5c158]/20 px-2 py-1 rounded text-[10px] tracking-widest">{st.userId}</span>
                                     </div>
-                                    <div className="text-xs text-app-text-muted mb-2 border-b border-app-border pb-2 flex justify-between">
-                                       <span>Contest: <span className="font-bold">{st.contestName}</span></span>
-                                       <span className="font-bold">{st.teamId}</span>
+                                    <div className="text-xs text-slate-400 mb-3 flex justify-between">
+                                       <span>Contest: <span className="font-bold text-slate-300">{st.contestName}</span></span>
+                                       <span className="font-bold text-slate-300">{st.teamId}</span>
                                     </div>
-                                    <div className="flex justify-between items-center text-xs text-app-text-muted mb-3">
-                                       <span>Total Players</span>
-                                       <span className="bg-app-card-hover px-2 py-0.5 rounded text-app-text font-bold">{st.players.length} / 11</span>
+                                    <div className="flex justify-between items-center text-xs text-slate-400 mb-4 bg-black/40 p-2 rounded-lg border border-slate-800">
+                                       <span className="font-bold tracking-wide uppercase text-[10px]">Total Players</span>
+                                       <span className="text-[#e5c158] font-bold">{st.players.length} / 11</span>
                                     </div>
                                     <button
                                        onClick={() => {
-                                          setEditingSavedTeamIndex(actIdx);
+                                          const realIndex = savedTeams.findIndex(orig => orig.id === st.id);
+                                          setEditingSavedTeamIndex(realIndex);
                                           setActiveMatch(st.match);
                                           setTeam(st.players);
                                           setCaptain(st.captain);
@@ -3527,7 +5306,7 @@ export default function App() {
                                           setSelectedContest({ fee: st.fee, name: st.contestName });
                                           setView('CREATE_TEAM');
                                        }}
-                                       className="w-full bg-app-card-alt hover:bg-app-card-hover transition-colors text-app-text font-bold py-2 rounded shadow-sm text-xs flex justify-center items-center gap-2 border border-app-border"
+                                       className="w-full bg-[#e5c158]/20 hover:bg-yellow-500/30 transition-colors text-[#e5c158] border border-[#e5c158]/50 font-bold py-2.5 rounded-lg text-xs flex justify-center items-center gap-2 active:scale-95 shadow-[0_0_15px_rgba(234,179,8,0.1)]"
                                     >
                                        <Edit2 size={14} /> Edit Team Setup
                                     </button>
@@ -3541,122 +5320,129 @@ export default function App() {
              )}
 
              <button 
-                onClick={() => setShowManagePlayers(!showManagePlayers)}
-                className={`flex items-center justify-between w-full mt-6 bg-app-card border p-4 shadow-sm transition-colors active:scale-[0.99] ${showManagePlayers ? 'border-app-border-hover rounded-t-xl border-b-0 mb-0' : 'border-app-border rounded-xl mb-3'}`}
-             >
-                <h3 className="font-bold text-app-text text-base flex items-center gap-2">
-                   <div className="w-2 h-2 rounded-full bg-app-accent animate-pulse"></div> Live Match Dashboard
+      onClick={() => setShowManagePlayers(!showManagePlayers)}
+      className={`flex items-center justify-between w-full mt-4 bg-[#13151c] border ${showManagePlayers ? 'border-[#e5c158]/30 rounded-t-xl border-b-0 mb-0 bg-gradient-to-b from-[#e5c158]/5 to-transparent' : 'border-slate-800 rounded-xl mb-3 hover:border-[#e5c158]/30'} p-4 shadow-lg transition-all relative group overflow-hidden`}
+    >
+                <div className="absolute inset-0 bg-gradient-to-r from-yellow-500/0 via-yellow-500/5 to-yellow-500/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000"></div>
+                <h3 className="font-bold text-slate-200 tracking-wide flex items-center gap-3 z-10">
+                   <div className="w-2.5 h-2.5 rounded-full bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.8)] animate-pulse"></div> Live Match Dashboard
                 </h3>
-                <div className={`p-1 rounded-full transition-colors ${showManagePlayers ? 'text-app-text-muted bg-app-card-hover' : 'text-app-text-muted bg-app-bg'}`}>
-                   {showManagePlayers ? <ChevronUp size={18} /> : <ChevronDown size={18} />} 
-                </div>
+                <div className={`p-1.5 rounded-lg border transition-all z-10 ${showManagePlayers ? 'text-black border-[#e5c158] bg-[#e5c158] shadow-[0_0_10px_rgba(229,193,88,0.5)]' : 'text-slate-500 border-slate-700 bg-black/40 group-hover:text-[#e5c158] group-hover:border-[#e5c158]/30'}`}>
+       {showManagePlayers ? <ChevronUp size={16} strokeWidth={3} /> : <ChevronDown size={16} />}
+    </div>
              </button>
              
              {showManagePlayers && (
-               <div className="bg-app-card/50 rounded-b-xl shadow-sm border border-app-border-hover border-t-0 p-4 mb-6">
+               <div className="bg-[#13151c] rounded-b-2xl shadow-lg border border-[#e5c158]/50 border-t-0 p-5 mb-6 backdrop-blur-sm relative before:absolute before:inset-0 before:bg-gradient-to-b before:from-yellow-500/5 before:to-transparent before:pointer-events-none">
                  {!adminLiveMatchId ? (
                    <>
-                     <p className="text-xs text-app-text-muted mb-4">Select a live match to award real-time points.</p>
-                     <div className="space-y-3">
+                     <p className="text-xs text-slate-400 mb-5 pl-1 relative z-10">Select a live match to award real-time points.</p>
+                     <div className="space-y-4 relative z-10">
                        {appMatches.filter(m => m.status === 'Live').length > 0 ? appMatches.filter(m => m.status === 'Live').map(match => (
                          <div 
                            key={match.id}
                            onClick={() => setAdminLiveMatchId(match.id)}
-                           className="bg-app-card-inner rounded-lg border border-app-border-hover p-3 flex justify-between items-center cursor-pointer hover:bg-app-card-hover transition-colors"
+                           className="bg-black/60 rounded-xl border border-slate-700 p-4 flex justify-between items-center cursor-pointer hover:border-[#e5c158]/50 transition-colors"
                          >
-                           <div className="flex items-center gap-3">
-                             <div className="flex items-center gap-1">
-                               <div className="w-5 h-5 rounded-full" style={{backgroundColor: match.team1.color}}></div>
-                               <span className="font-bold text-app-text text-sm">{match.team1.shortFrame}</span>
+                           <div className="flex items-center gap-4">
+                             <div className="flex items-center gap-2">
+                               <div className="w-6 h-6 rounded-full border border-[#e5c158]/30 shadow-sm" style={{backgroundColor: match.team1.color}}></div>
+                               <span className="font-bold text-slate-200 text-sm tracking-wide">{match.team1.shortFrame}</span>
                              </div>
-                             <span className="text-app-text-muted text-xs text-center font-bold">vs</span>
-                             <div className="flex items-center gap-1">
-                               <span className="font-bold text-app-text text-sm">{match.team2.shortFrame}</span>
-                               <div className="w-5 h-5 rounded-full" style={{backgroundColor: match.team2.color}}></div>
+                             <span className="text-slate-500 text-xs font-black tracking-widest uppercase">vs</span>
+                             <div className="flex items-center gap-2">
+                               <span className="font-bold text-slate-200 text-sm tracking-wide">{match.team2.shortFrame}</span>
+                               <div className="w-6 h-6 rounded-full border border-[#e5c158]/30 shadow-sm" style={{backgroundColor: match.team2.color}}></div>
                              </div>
                            </div>
-                           <ArrowRight size={16} className="text-app-text-muted" />
+                           <ArrowRight size={18} className="text-[#e5c158]/70" />
                          </div>
                        )) : (
-                         <p className="text-sm text-app-text-muted text-center py-4">No live matches currently.</p>
+                         <div className="text-center p-8 bg-black/40 rounded-xl border border-slate-800 relative z-10">
+                            <div className="inline-flex w-12 h-12 rounded-full bg-slate-800 items-center justify-center mb-3">
+                               <Trophy className="text-slate-600" size={20} />
+                            </div>
+                            <span className="text-slate-500 text-sm font-bold block mb-1 tracking-wide">No Live Matches</span>
+                            <p className="text-xs text-slate-600">Start a match to see the dashboard.</p>
+                         </div>
                        )}
                      </div>
                    </>
                  ) : (
-                   <>
+                   <div className="relative z-10">
                      {(() => {
                        const match = appMatches.find(m => m.id === adminLiveMatchId);
                        if (!match) return null;
                        const matchPlayers = appPlayers.filter(p => p.team === match.team1.shortFrame || p.team === match.team2.shortFrame);
                        return (
                          <>
-                           <div className="flex items-center gap-2 mb-4">
-                             <button onClick={() => setAdminLiveMatchId(null)} className="p-1 rounded bg-app-card-hover text-app-text"><ArrowLeft size={16}/></button>
-                             <h4 className="font-bold text-app-text text-sm">{match.team1.shortFrame} vs {match.team2.shortFrame}</h4>
+                           <div className="flex items-center gap-3 mb-5 pb-4 border-b border-[#e5c158]/20">
+                             <button onClick={() => setAdminLiveMatchId(null)} className="p-1.5 rounded-lg bg-black border border-slate-700 hover:border-[#e5c158]/50 hover:text-[#e5c158] transition-colors text-slate-300"><ArrowLeft size={16}/></button>
+                             <h4 className="font-bold text-slate-200 text-sm">{match.team1.shortFrame} vs {match.team2.shortFrame} Control</h4>
                            </div>
-                           <p className="text-xs text-app-text-muted mb-4">Award real-time points. Leaderboards and user dashboards will update instantly.</p>
+                           <p className="text-xs text-slate-400 mb-5 pl-1">Award real-time points. Leaderboards and user dashboards will update instantly.</p>
                            
-                           <div className="space-y-3">
+                           <div className="space-y-4">
                               {matchPlayers.map((player) => (
-                                <div key={player.id} className="bg-app-card-inner rounded-lg border border-app-border overflow-hidden">
-                                   <div className="flex justify-between items-center p-3">
-                                      <div className="flex flex-col">
-                                         <span className="text-sm font-bold text-app-text flex items-center gap-2">{player.name} <span className="bg-app-card-hover text-[10px] px-1.5 py-0.5 rounded text-app-text-muted">{player.team}</span></span>
-                                         <span className="text-xs font-bold text-green-500 mt-0.5">{player.points} Total Pts</span>
+                                <div key={player.id} className="bg-black/60 rounded-xl border border-slate-700 overflow-hidden transition-all hover:border-[#e5c158]/30">
+                                   <div className="flex justify-between items-center p-4">
+                                      <div className="flex flex-col gap-1.5">
+                                         <span className="text-sm font-bold text-slate-200 flex items-center gap-3">{player.name} <span className="bg-[#e5c158]/10 border border-[#e5c158]/20 text-[10px] uppercase font-black px-2 py-0.5 rounded text-[#e5c158] tracking-widest">{player.team}</span></span>
+                                         <span className="text-xs font-bold text-emerald-400 tracking-wide mt-1">{player.points} Total Pts</span>
                                       </div>
                                       <button 
                                         onClick={() => setAdminExpandedPlayerId(adminExpandedPlayerId === player.id ? null : player.id)}
-                                        className="bg-app-card-hover p-2 rounded-full hover:bg-slate-700 transition-colors active:scale-95 text-blue-400"
+                                        className="bg-black border border-slate-700 p-2 rounded-lg hover:border-[#e5c158]/50 hover:text-[#e5c158] transition-colors active:scale-95 text-slate-400"
                                       >
                                         {adminExpandedPlayerId === player.id ? <Minus size={18} /> : <PlusCircle size={18} />}
                                       </button>
                                    </div>
                                    
                                    {adminExpandedPlayerId === player.id && (
-                                      <div className="p-3 bg-app-card-alt border-t border-app-border">
-                                        <p className="text-[10px] font-bold text-app-text-muted uppercase mb-3">Award Points</p>
-                                        <div className="grid grid-cols-3 gap-2">
+                                      <div className="p-4 bg-black/80 border-t border-slate-700">
+                                        <p className="text-[10px] font-black tracking-widest text-[#e5c158]/70 uppercase mb-4 pl-1">Award Points</p>
+                                        <div className="grid grid-cols-3 gap-3">
                                            <button 
                                              onClick={() => setAppPlayers(appPlayers.map(p => p.id === player.id ? { ...p, points: p.points + 6 } : p))}
-                                             className="bg-app-card border border-app-border-hover hover:border-slate-500 hover:scale-[1.02] active:scale-95 transition-all rounded py-2 text-xs font-bold text-app-text flex flex-col items-center"
+                                             className="bg-black border border-slate-700 hover:border-blue-500/50 active:scale-95 transition-all rounded-xl py-3 text-[11px] uppercase font-bold text-slate-300 flex flex-col items-center gap-1 shadow-sm"
                                            >
-                                             <span className="text-blue-400 mb-0.5">+6</span> Six
+                                             <span className="text-blue-400 text-sm">+6</span> Six
                                            </button>
                                            <button 
                                              onClick={() => setAppPlayers(appPlayers.map(p => p.id === player.id ? { ...p, points: p.points + 4 } : p))}
-                                             className="bg-app-card border border-app-border-hover hover:border-slate-500 hover:scale-[1.02] active:scale-95 transition-all rounded py-2 text-xs font-bold text-app-text flex flex-col items-center"
+                                             className="bg-black border border-slate-700 hover:border-blue-500/50 active:scale-95 transition-all rounded-xl py-3 text-[11px] uppercase font-bold text-slate-300 flex flex-col items-center gap-1 shadow-sm"
                                            >
-                                             <span className="text-blue-400 mb-0.5">+4</span> Four
+                                             <span className="text-blue-400 text-sm">+4</span> Four
                                            </button>
                                            <button 
                                              onClick={() => setAppPlayers(appPlayers.map(p => p.id === player.id ? { ...p, points: p.points + 25 } : p))}
-                                             className="bg-app-card border border-app-border-hover hover:border-slate-500 hover:scale-[1.02] active:scale-95 transition-all rounded py-2 text-xs font-bold text-app-text flex flex-col items-center"
+                                             className="bg-black border border-slate-700 hover:border-red-500/50 active:scale-95 transition-all rounded-xl py-3 text-[11px] uppercase font-bold text-slate-300 flex flex-col items-center gap-1 shadow-sm"
                                            >
-                                             <span className="text-red-400 mb-0.5">+25</span> Wicket
+                                             <span className="text-red-500 text-sm shadow-[0_0_10px_rgba(239,68,68,0.2)] pb-0.5">+25</span> Wicket
                                            </button>
                                            <button 
                                              onClick={() => setAppPlayers(appPlayers.map(p => p.id === player.id ? { ...p, points: p.points + 1 } : p))}
-                                             className="bg-app-card border border-app-border-hover hover:border-slate-500 hover:scale-[1.02] active:scale-95 transition-all rounded py-2 text-xs font-bold text-app-text flex flex-col items-center"
+                                             className="bg-black border border-slate-700 hover:border-emerald-500/50 active:scale-95 transition-all rounded-xl py-3 text-[11px] uppercase font-bold text-slate-300 flex flex-col items-center gap-1 shadow-sm"
                                            >
-                                             <span className="text-emerald-400 mb-0.5">+1</span> 1 Run
+                                             <span className="text-emerald-400 text-sm">+1</span> 1 Run
                                            </button>
                                            <button 
                                              onClick={() => setAppPlayers(appPlayers.map(p => p.id === player.id ? { ...p, points: p.points + 2 } : p))}
-                                             className="bg-app-card border border-app-border-hover hover:border-slate-500 hover:scale-[1.02] active:scale-95 transition-all rounded py-2 text-xs font-bold text-app-text flex flex-col items-center"
+                                             className="bg-black border border-slate-700 hover:border-emerald-500/50 active:scale-95 transition-all rounded-xl py-3 text-[11px] uppercase font-bold text-slate-300 flex flex-col items-center gap-1 shadow-sm"
                                            >
-                                             <span className="text-emerald-400 mb-0.5">+2</span> 2 Run
+                                             <span className="text-emerald-400 text-sm">+2</span> 2 Run
                                            </button>
                                            <button 
                                              onClick={() => setAppPlayers(appPlayers.map(p => p.id === player.id ? { ...p, points: p.points + 12 } : p))}
-                                             className="bg-app-card border border-app-border-hover hover:border-slate-500 hover:scale-[1.02] active:scale-95 transition-all rounded py-2 text-xs font-bold text-app-text flex flex-col items-center"
+                                             className="bg-black border border-slate-700 hover:border-orange-500/50 active:scale-95 transition-all rounded-xl py-3 text-[11px] uppercase font-bold text-slate-300 flex flex-col items-center gap-1 shadow-sm"
                                            >
-                                             <span className="text-orange-400 mb-0.5">+12</span> Catch
+                                             <span className="text-orange-400 text-sm">+12</span> Catch
                                            </button>
                                         </div>
-                                        <div className="flex gap-2 items-center mt-3 pt-3 border-t border-app-border">
-                                           <span className="text-[10px] font-bold text-app-text-muted uppercase flex-1">Custom Add/Remove:</span>
-                                           <button onClick={() => setAppPlayers(appPlayers.map(p => p.id === player.id ? { ...p, points: Math.max(0, p.points - 1) } : p))} className="bg-red-950 text-app-accent px-3 py-1 rounded font-bold text-xs">-1</button>
-                                           <button onClick={() => setAppPlayers(appPlayers.map(p => p.id === player.id ? { ...p, points: p.points + 10 } : p))} className="bg-green-950 text-green-500 px-3 py-1 rounded font-bold text-xs">+10</button>
+                                        <div className="flex gap-3 items-center mt-4 pt-4 border-t border-slate-800">
+                                           <span className="text-[10px] font-black tracking-widest flex-1 text-slate-500 uppercase">Custom Manual:</span>
+                                           <button onClick={() => setAppPlayers(appPlayers.map(p => p.id === player.id ? { ...p, points: Math.max(0, p.points - 1) } : p))} className="bg-red-950/50 border border-red-900/50 text-red-500 px-4 py-2 rounded-lg font-bold text-xs tracking-wider active:scale-95">-1</button>
+                                           <button onClick={() => setAppPlayers(appPlayers.map(p => p.id === player.id ? { ...p, points: p.points + 10 } : p))} className="bg-emerald-950/50 border border-emerald-900/50 text-emerald-500 px-4 py-2 rounded-lg font-bold text-xs tracking-wider active:scale-95">+10</button>
                                         </div>
                                       </div>
                                    )}
@@ -3666,17 +5452,374 @@ export default function App() {
                          </>
                        );
                      })()}
-                   </>
+                   </div>
                  )}
                </div>
              )}
-          </div>
+
+             {/* Manage Upcoming Match Lineups */}
+             <button 
+      onClick={() => setShowManageLineups(!showManageLineups)}
+      className={`flex items-center justify-between w-full mt-4 bg-[#13151c] border ${showManageLineups ? 'border-[#e5c158]/30 rounded-t-xl border-b-0 mb-0 bg-gradient-to-b from-[#e5c158]/5 to-transparent' : 'border-slate-800 rounded-xl mb-3 hover:border-[#e5c158]/30'} p-4 shadow-lg transition-all relative group overflow-hidden`}
+    >
+                <div className="absolute inset-0 bg-gradient-to-r from-yellow-500/0 via-yellow-500/5 to-yellow-500/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000"></div>
+                <h3 className="font-bold text-slate-200 tracking-wide flex items-center justify-between z-10">App Settings: Upcoming Matches Lineups</h3>
+                <div className={`p-1.5 rounded-lg border transition-all z-10 ${showManageLineups ? 'text-black border-[#e5c158] bg-[#e5c158] shadow-[0_0_10px_rgba(229,193,88,0.5)]' : 'text-slate-500 border-slate-700 bg-black/40 group-hover:text-[#e5c158] group-hover:border-[#e5c158]/30'}`}>
+       {showManageLineups ? <ChevronUp size={16} strokeWidth={3} /> : <ChevronDown size={16} />}
+    </div>
+             </button>
+             
+             {showManageLineups && (
+               <div className="bg-[#13151c] rounded-b-2xl shadow-lg border border-[#e5c158]/50 border-t-0 p-5 mb-6 backdrop-blur-sm relative before:absolute before:inset-0 before:bg-gradient-to-b before:from-yellow-500/5 before:to-transparent before:pointer-events-none">
+                 {!adminUpcomingLineupMatchId ? (
+                   <>
+                     <p className="text-xs text-slate-400 mb-5 pl-1 relative z-10">Select an upcoming match to set player lineups.</p>
+                     <div className="space-y-4 relative z-10">
+                       {appMatches.filter(m => m.status === 'Upcoming').length > 0 ? appMatches.filter(m => m.status === 'Upcoming').map(match => (
+                         <div 
+                           key={match.id}
+                           onClick={() => setAdminUpcomingLineupMatchId(match.id)}
+                           className="bg-black/60 rounded-xl border border-slate-700 p-4 flex justify-between items-center cursor-pointer hover:border-[#e5c158]/50 transition-colors"
+                         >
+                           <div className="flex items-center gap-4">
+                             <div className="flex items-center gap-2">
+                               <div className="w-6 h-6 rounded-full border border-[#e5c158]/30 shadow-sm" style={{backgroundColor: match.team1.color}}></div>
+                               <span className="font-bold text-slate-200 text-sm tracking-wide">{match.team1.shortFrame}</span>
+                             </div>
+                             <span className="text-slate-500 text-xs font-black tracking-widest uppercase">vs</span>
+                             <div className="flex items-center gap-2">
+                               <span className="font-bold text-slate-200 text-sm tracking-wide">{match.team2.shortFrame}</span>
+                               <div className="w-6 h-6 rounded-full border border-[#e5c158]/30 shadow-sm" style={{backgroundColor: match.team2.color}}></div>
+                             </div>
+                           </div>
+                           <div className="flex items-center gap-4">
+                             <button
+                               onClick={(e) => {
+                                 e.stopPropagation();
+                                 const newMatchesList = appMatches.map(m => m.id === match.id ? { ...m, lineupStatus: m.lineupStatus === 'OUT' ? 'NOT_OUT' : 'OUT' as const } : m);
+                                 setAppMatches(newMatchesList);
+                                 setDoc(doc(db, 'gameData', 'main_state'), JSON.parse(JSON.stringify({ matches: newMatchesList, players: appPlayers })), { merge: true });
+                               }}
+                               className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${match.lineupStatus === 'OUT' ? 'bg-green-500/20 text-green-400 border border-green-500/50 shadow-[0_0_10px_rgba(34,197,94,0.2)]' : 'bg-red-500/10 text-red-500 border border-red-500/50'}`}
+                             >
+                               {match.lineupStatus === 'OUT' ? 'Lineups Out' : 'Lineups Not Out'}
+                             </button>
+                             <ArrowRight size={18} className="text-[#e5c158]/70" />
+                           </div>
+                         </div>
+                       )) : (
+                         <div className="text-center p-8 bg-black/40 rounded-xl border border-slate-800 relative z-10">
+                            <span className="text-slate-500 text-sm font-bold block tracking-wide">No Upcoming Matches</span>
+                         </div>
+                       )}
+                     </div>
+                   </>
+                 ) : (
+                   <div className="relative z-10">
+                     {(() => {
+                       const match = appMatches.find(m => m.id === adminUpcomingLineupMatchId);
+                       if (!match) return null;
+                       const matchPlayers = appPlayers.filter(p => p.team === match.team1.shortFrame || p.team === match.team2.shortFrame);
+                       return (
+                         <>
+                           <div className="flex items-center gap-3 mb-5 pb-4 border-b border-[#e5c158]/20">
+                             <button onClick={() => setAdminUpcomingLineupMatchId(null)} className="p-1.5 rounded-lg bg-black border border-slate-700 hover:border-[#e5c158]/50 hover:text-[#e5c158] transition-colors text-slate-300"><ArrowLeft size={16}/></button>
+                             <h4 className="font-bold text-slate-200 text-sm">{match.team1.shortFrame} vs {match.team2.shortFrame} - Lineups</h4>
+                           </div>
+                           <p className="text-xs text-slate-400 mb-5 pl-1">Select players that are playing. They will get a green tick. Unselected players will have a red dot.</p>
+                           
+                           <div className="space-y-3">
+                              {matchPlayers.map((player) => (
+                                <div 
+                                  key={player.id} 
+                                  onClick={() => setAppPlayers(appPlayers.map(p => p.id === player.id ? { ...p, isPlaying: !p.isPlaying } : p))}
+                                  className={`bg-black/60 rounded-xl border cursor-pointer hover:border-[#e5c158]/50 transition-colors overflow-hidden flex justify-between items-center p-4 ${player.isPlaying ? 'border-green-500/40 shadow-[0_0_10px_rgba(34,197,94,0.1)]' : 'border-slate-700'}`}
+                                >
+                                  <div className="flex flex-col gap-1">
+                                     <span className="text-sm font-bold text-slate-200 flex items-center gap-3">{player.name} <span className="bg-[#e5c158]/10 border border-[#e5c158]/20 text-[10px] uppercase font-black px-2 py-0.5 rounded text-[#e5c158] tracking-widest">{player.team}</span></span>
+                                  </div>
+                                  <div>
+                                    {player.isPlaying ? (
+                                        <div className="w-6 h-6 rounded-full bg-green-500/20 border border-green-500/50 shadow-[0_0_8px_rgba(34,197,94,0.3)] flex items-center justify-center text-green-400">
+                                           <Check size={14} />
+                                        </div>
+                                    ) : (
+                                        <div className="w-6 h-6 rounded-full border border-red-500/30 bg-red-500/10 flex items-center justify-center text-red-500/50">
+                                           <X size={14} />
+                                        </div>
+                                    )}
+                                  </div>
+                                </div>
+                              ))}
+                           </div>
+                         </>
+                       );
+                     })()}
+                   </div>
+                 )}
+               </div>
+             )}
+
+</>)}          </div>
        </div>
     );
   };
 
   return (
     <div className={`relative h-[100dvh] w-full max-w-md mx-auto bg-app-bg text-app-text font-sans shadow-2xl overflow-hidden border-x border-app-border ${themeMode === 'Light' ? 'theme-light' : ''} color-${themeColor.toLowerCase()}`}>
+<>
+        {showAddFlagModal && (
+            <div className="absolute inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 min-h-[100dvh]">
+                <div className="bg-[#13151c] border border-slate-700 w-full rounded-2xl p-6 shadow-2xl relative">
+                   <button onClick={() => { setShowAddFlagModal(null); setNewFlagUrl(''); setZoom(1); setCrop({x:0, y:0}); }} className="absolute top-4 right-4 text-slate-500 hover:text-white z-10"><X size={20}/></button>
+                   <h3 className="font-bold text-slate-200 text-lg mb-4">Set Team Flag/Image</h3>
+                   
+                   <div className="flex flex-col items-center gap-4 mb-4">
+                      {newFlagUrl ? (
+                         <div className="w-full flex flex-col gap-4">
+                             <div className="relative w-full h-64 rounded-xl overflow-hidden border-2 border-slate-700 bg-black bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyMCIgaGVpZ2h0PSIyMCI+Cgo8cmVjdCB3aWR0aD0iMTAiIGhlaWdodD0iMTAiIGZpbGw9IiMzMzMiIC8+Cgo8cmVjdCB4PSIxMCIgeT0iMTAiIHdpZHRoPSIxMCIgaGVpZ2h0PSIxMCIgZmlsbD0iIzMzMyIgLz4KPC9zdmc+')]">
+                                <Cropper
+                                  image={newFlagUrl}
+                                  crop={crop}
+                                  zoom={zoom}
+                                  aspect={1}
+                                  cropShape="round"
+                                  showGrid={false}
+                                  onCropChange={setCrop}
+                                  onCropComplete={(croppedArea, croppedAreaPixels) => {
+                                      setCroppedAreaPixels(croppedAreaPixels as any);
+                                  }}
+                                  onZoomChange={setZoom}
+                                />
+                             </div>
+                             <div className="flex items-center gap-3 w-full px-2">
+                                 <ZoomIn size={16} className="text-slate-500 shrink-0" />
+                                 <input
+                                   type="range"
+                                   value={zoom}
+                                   min={1}
+                                   max={3}
+                                   step={0.1}
+                                   aria-labelledby="Zoom"
+                                   onChange={(e) => {
+                                     setZoom(Number(e.target.value))
+                                   }}
+                                   className="w-full accent-[#e5c158]"
+                                 />
+                             </div>
+                             <button onClick={() => document.getElementById('flag-upload')?.click()} className="text-xs text-[#e5c158] font-bold self-center hover:underline">Change Image</button>
+                         </div>
+                      ) : (
+                         <div 
+                            className="w-24 h-24 rounded-full border-2 border-dashed border-slate-700 relative flex flex-col items-center justify-center cursor-pointer hover:border-[#e5c158]/50 hover:text-[#e5c158] text-slate-500 transition-colors bg-black/50"
+                            onClick={() => document.getElementById('flag-upload')?.click()}
+                         >
+                            <ImageIcon size={24} className="mb-2" />
+                            <span className="text-[10px] font-bold uppercase tracking-wider">Upload</span>
+                         </div>
+                      )}
+                      
+                      <input 
+                         id="flag-upload"
+                         type="file" 
+                         accept="image/*" 
+                         className="hidden" 
+                         onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) {
+                               const reader = new FileReader();
+                               reader.onloadend = () => {
+                                  setNewFlagUrl(reader.result as string);
+                                  setZoom(1);
+                                  setCrop({x:0, y:0});
+                               };
+                               reader.readAsDataURL(file);
+                            }
+                         }} 
+                      />
+                   </div>
+
+                   <button 
+                       onClick={async () => {
+                           if (newFlagUrl && croppedAreaPixels) {
+                               try {
+                                   const finalCroppedImageBase64 = await getCroppedImg(newFlagUrl, croppedAreaPixels);
+                                   setAppTeamsList(prev => prev.map(t => t.id === showAddFlagModal ? { ...t, flagUrl: finalCroppedImageBase64, flagFit: 'cover' } : t));
+                                   setShowAddFlagModal(null);
+                                   setNewFlagUrl('');
+                                   setZoom(1);
+                                   setCrop({x:0, y:0});
+                               } catch (e) {
+                                   console.error(e);
+                                   alert('Failed to crop image');
+                               }
+                           }
+                       }} 
+                       className={`w-full py-3 rounded-xl font-bold uppercase tracking-widest text-sm transition-all active:scale-95 ${newFlagUrl ? 'bg-[#e5c158] text-black shadow-[0_0_15px_rgba(229,193,88,0.4)]' : 'bg-slate-800 text-slate-500 cursor-not-allowed'}`}
+                       disabled={!newFlagUrl || !croppedAreaPixels}
+                   >
+                       Save Processed Image
+                   </button>
+                </div>
+            </div>
+        )}
+        {showAddFormatModal && (
+            <div className="absolute inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 min-h-[100dvh]">
+                <div className="bg-[#13151c] border border-slate-700 w-full rounded-2xl p-6 shadow-2xl relative">
+                   <button onClick={() => setShowAddFormatModal(false)} className="absolute top-4 right-4 text-slate-500 hover:text-white"><X size={20}/></button>
+                   <h3 className="font-bold text-slate-200 text-lg mb-4">Add Format/League</h3>
+                   <input value={newFormatName} onChange={e=>setNewFormatName(e.target.value)} placeholder="Format Name (e.g. BBL or The Hundred)" className="w-full bg-black border border-slate-700 rounded-xl px-4 py-3 text-slate-200 outline-none text-sm mb-4" />
+                   <button onClick={() => {
+                       if (newFormatName.trim() && !appFormats.includes(newFormatName.trim())) {
+                           setAppFormats([...appFormats, newFormatName.trim()]);
+                           setNewFormatName('');
+                           setShowAddFormatModal(false);
+                           setSelectedFormat(newFormatName.trim());
+                       }
+                   }} className="w-full py-3 bg-[#e5c158] text-black rounded-xl font-bold uppercase tracking-widest text-sm shadow-[0_0_15px_rgba(229,193,88,0.4)] transition-all active:scale-95">Add Format</button>
+                </div>
+            </div>
+        )}
+        {showAddTeamModal && (
+            <div className="absolute inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 min-h-[100dvh]">
+                <div className="bg-[#13151c] border border-slate-700 w-full rounded-2xl p-6 shadow-2xl relative">
+                   <button onClick={() => setShowAddTeamModal(false)} className="absolute top-4 right-4 text-slate-500 hover:text-white"><X size={20}/></button>
+                   <h3 className="font-bold text-slate-200 text-lg mb-4">Add Team to {selectedFormat}</h3>
+                   <input value={newTeamName} onChange={e=>setNewTeamName(e.target.value)} placeholder="Team Name (e.g. India)" className="w-full bg-black border border-slate-700 rounded-xl px-4 py-3 text-slate-200 outline-none text-sm mb-3 focus:border-[#e5c158]/50 transition-colors" />
+                   <input value={newTeamShort} onChange={e=>setNewTeamShort(e.target.value)} placeholder="Short Name (e.g. IND, max 4)" maxLength={4} className="w-full bg-black border border-slate-700 rounded-xl px-4 py-3 text-slate-200 outline-none text-sm mb-3 uppercase focus:border-[#e5c158]/50 transition-colors" />
+                   
+                   <div className="flex gap-2 mb-6 justify-between border-t border-slate-800 pt-3">
+                      {['bg-blue-600', 'bg-green-600', 'bg-red-600', 'bg-yellow-500', 'bg-purple-600', 'bg-slate-800', 'bg-orange-500', 'bg-pink-600'].map(c => (
+                         <button key={c} onClick={() => setNewTeamColor(c)} className={`w-8 h-8 rounded-full ${c} ${newTeamColor === c ? 'ring-2 ring-white ring-offset-2 ring-offset-[#13151c]' : ''} hover:scale-110 transition-transform`}></button>
+                      ))}
+                   </div>
+                   <button onClick={() => {
+                       if (newTeamName.trim() && newTeamShort.trim()) {
+                           const t: any = {
+                               id: 't' + Date.now() + Math.random().toString(36).substring(2,6),
+                               name: newTeamName.trim(),
+                               shortName: newTeamShort.trim().toUpperCase(),
+                               color: newTeamColor,
+                               format: selectedFormat
+                           };
+                           setAppTeamsList([...appTeamsList, t]);
+                           setNewTeamName('');
+                           setNewTeamShort('');
+                           setShowAddTeamModal(false);
+                       }
+                   }} className="w-full py-3 bg-[#e5c158] text-black rounded-xl font-bold uppercase tracking-widest text-sm shadow-[0_0_15px_rgba(229,193,88,0.4)] transition-all active:scale-95 border border-[#e5c158]/50">Save Team</button>
+                </div>
+            </div>
+        )}
+        {showTeamAddPlayerModal && (
+            <div className="absolute inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 min-h-[100dvh]">
+                <div className="bg-[#13151c] border border-slate-700 w-full rounded-2xl p-6 shadow-2xl relative">
+                   <button onClick={() => { setShowTeamAddPlayerModal(false); setEditingPlayerId(null); }} className="absolute top-4 right-4 text-slate-500 hover:text-white"><X size={20}/></button>
+                   <h3 className="font-bold text-slate-200 text-lg mb-1">{editingPlayerId ? 'Edit Player' : 'Add Player'}</h3>
+                   <p className="text-xs text-slate-500 mb-4 uppercase tracking-widest font-semibold flex items-center gap-1.5">{editingPlayerId ? 'Updating in' : 'Adding to'} <span className="bg-white/10 text-white px-1.5 py-0.5 rounded text-[10px]">{newPlayerTeamShort}</span></p>
+                   
+                   <input value={newPlayerName} onChange={e=>setNewPlayerName(e.target.value)} placeholder="Player Name" className="w-full bg-black border border-slate-700 rounded-xl px-4 py-3 text-slate-200 outline-none text-sm mb-3 focus:border-[#e5c158]/50 transition-colors" />
+                   
+                   <div className="grid grid-cols-4 gap-2 mb-3">
+                      {(['BAT', 'BOWL', 'AR', 'WK'] as const).map(r => (
+                         <button key={r} onClick={() => setNewPlayerRole(r)} className={`py-2 text-xs font-bold rounded-lg transition-all ${newPlayerRole === r ? 'bg-slate-700 text-[#e5c158] border border-[#e5c158]/50 shadow-[0_0_10px_rgba(229,193,88,0.15)]' : 'bg-black text-slate-500 border border-slate-800'}`}>{r}</button>
+                      ))}
+                   </div>
+                   
+                   <input type="number" step="0.5" value={newPlayerCredits} onChange={e=>setNewPlayerCredits(e.target.value)} placeholder="Credits (e.g. 9.0)" className="w-full bg-black border border-slate-700 rounded-xl px-4 py-3 text-slate-200 outline-none text-sm mb-6 focus:border-[#e5c158]/50 transition-colors" />
+                   
+                   <button onClick={() => {
+                       if (newPlayerName.trim() && newPlayerCredits.trim()) {
+                           if (editingPlayerId) {
+                               setAppPlayers(prev => prev.map(p => p.id === editingPlayerId ? {
+                                   ...p,
+                                   name: newPlayerName.trim(),
+                                   role: newPlayerRole,
+                                   credits: parseFloat(newPlayerCredits.trim()) || 8.0,
+                               } : p));
+                           } else {
+                               const newP = {
+                                   id: 'p' + Date.now(),
+                                   name: newPlayerName.trim(),
+                                   role: newPlayerRole,
+                                   credits: parseFloat(newPlayerCredits.trim()) || 8.0,
+                                   points: 0,
+                                   team: newPlayerTeamShort,
+                                   isPlaying: false
+                               };
+                               setAppPlayers([...appPlayers, newP]);
+                           }
+                           setNewPlayerName('');
+                           setNewPlayerCredits('9.0');
+                           setEditingPlayerId(null);
+                           setShowTeamAddPlayerModal(false);
+                       }
+                   }} className="w-full py-3 bg-[#e5c158] text-black shadow-lg rounded-xl font-bold tracking-widest text-sm text-center transition-all active:scale-95 uppercase">{editingPlayerId ? 'Save Changes' : 'Save Player'}</button>
+                </div>
+            </div>
+        )}
+        {showCreateMatchFromTeamsModal && selectedTeamsForMatch.length === 2 && (
+            <div className="absolute inset-0 z-50 bg-black/80 backdrop-blur-sm flex flex-col justify-end min-h-[100dvh]">
+                <div className="bg-[#13151c] border-t border-slate-700 w-full rounded-t-3xl p-6 pt-5 shadow-[0_-10px_40px_rgba(34,197,94,0.1)] relative pb-10 mt-auto shadow-[0_-10px_40px_rgba(0,0,0,0.8)]">
+                   <div className="w-12 h-1 bg-slate-800 rounded-full mx-auto mb-6"></div>
+                   <h3 className="font-bold text-slate-200 text-xl tracking-tight text-center mb-1 drop-shadow-sm flex justify-center items-center gap-2"><Trophy size={20} className="text-green-500" /> Create Match</h3>
+                   <div className="flex items-center justify-center gap-3 font-black text-2xl mb-6 text-white drop-shadow-md">
+                      <span className={selectedTeamsForMatch[0].color === 'bg-blue-600' ? 'text-blue-400' : 'text-slate-200'}>{selectedTeamsForMatch[0].shortName}</span>
+                      <span className="text-sm font-normal text-slate-500 italic flex items-center justify-center w-6 h-6 rounded-full bg-slate-800 border border-slate-700 pt-0.5">V</span>
+                      <span className={selectedTeamsForMatch[1].color === 'bg-green-600' ? 'text-green-400' : 'text-slate-200'}>{selectedTeamsForMatch[1].shortName}</span>
+                   </div>
+                   
+                   <div className="space-y-4 mb-8">
+                     <div>
+                       <label className="text-xs font-bold text-slate-500 uppercase tracking-widest ml-1 mb-1 block">Match Time</label>
+                       <input value={newMatchTimeForm} onChange={e=>setNewMatchTimeForm(e.target.value)} type="datetime-local" className="w-full bg-black border border-slate-700 rounded-xl px-4 py-3 text-slate-200 outline-none focus:border-green-500 focus:shadow-[0_0_10px_rgba(34,197,94,0.15)] transition-all text-sm" />
+                     </div>
+                   </div>
+                   
+                   <div className="flex gap-3">
+                      <button onClick={() => setShowCreateMatchFromTeamsModal(false)} className="flex-1 py-4 bg-slate-800 border border-slate-700 text-slate-300 rounded-xl font-bold uppercase tracking-widest text-sm active:scale-95 transition-transform hover:bg-slate-700">Cancel</button>
+                      <button onClick={() => {
+                          if (newMatchTimeForm) {
+                              const dateFormat = new Date(newMatchTimeForm);
+                              let formattedLabel = dateFormat.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+                              
+                              const dt = new Date(dateFormat);
+                              dt.setHours(0,0,0,0);
+                              const today = new Date();
+                              today.setHours(0,0,0,0);
+                              if (dt.getTime() === today.getTime()) {
+                                 formattedLabel = "Today, " + formattedLabel;
+                              } else {
+                                 formattedLabel = dateFormat.toLocaleDateString([], {month: 'short', day: 'numeric'}) + " " + formattedLabel;
+                              }
+                              
+                              const newMatchObj: Match = {
+                                  id: 'm' + Date.now(),
+                                  team1: { name: selectedTeamsForMatch[0].name, shortFrame: selectedTeamsForMatch[0].shortName, color: selectedTeamsForMatch[0].color.replace('bg-', 'text-'), flagUrl: selectedTeamsForMatch[0].flagUrl, flagFit: selectedTeamsForMatch[0].flagFit },
+                                  team2: { name: selectedTeamsForMatch[1].name, shortFrame: selectedTeamsForMatch[1].shortName, color: selectedTeamsForMatch[1].color.replace('bg-', 'text-'), flagUrl: selectedTeamsForMatch[1].flagUrl, flagFit: selectedTeamsForMatch[1].flagFit },
+                                  time: formattedLabel,
+                                  series: selectedFormat + ' Series',
+                                  status: 'Upcoming' as const,
+                                  totalPrize: '₹0',
+                                  matchDateISO: dateFormat.toISOString()
+                              };
+                              const newMatchesList = [...appMatches, newMatchObj];
+                              setAppMatches(newMatchesList);
+                              setDoc(doc(db, 'gameData', 'main_state'), JSON.parse(JSON.stringify({ matches: newMatchesList, players: appPlayers })), { merge: true });
+                              
+                              setSelectedTeamsForMatch([]);
+                              setNewMatchTimeForm('');
+                              setShowCreateMatchFromTeamsModal(false);
+                              alert('Match Created Successfully! You can find it in the matches list.');
+                          } else {
+                              alert('Please select match time');
+                          }
+                      }} className="flex-1 py-4 bg-green-500 border border-green-400 text-white shadow-[0_0_20px_rgba(34,197,94,0.4)] rounded-xl font-black uppercase tracking-widest text-sm active:scale-95 transition-transform hover:bg-green-400">CREATE</button>
+                   </div>
+                </div>
+            </div>
+        )}
+</>
       {view === 'HOME' && renderHome()}
       {view === 'MATCH' && renderContests()}
       {view === 'CREATE_TEAM' && renderCreateTeam()}
@@ -3691,6 +5834,18 @@ export default function App() {
             contest={activeContestDetails}
             savedTeams={savedTeams}
             appPlayers={appPlayers}
+            currentUser={user}
+            isAdmin={isAdmin}
+            onMakeBotsWin={() => {
+                if (window.confirm("Are you sure you want to force all bots to win this contest? This will recalculate rankings immediately.")) {
+                    setSavedTeams(prev => prev.map(t => 
+                        (t.userId === 'admin_bot' || t.userId === 'admin_bot_boot') && t.match?.id === activeMatch.id && t.contestName === activeContestDetails.name
+                        ? { ...t, isWinnerBot: true } 
+                        : t
+                    ));
+                    alert("Bots in this contest are now set as winners!");
+                }
+            }}
             winningPercentage={winningPercentage}
             onBack={() => { setActiveContestDetails(null); setView('MATCH'); }}
             balance={balance}

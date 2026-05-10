@@ -1,0 +1,1118 @@
+<div className="flex-1 p-4 overflow-y-auto">
+             {adminTab === 'DASHBOARD' && (
+                <div className="space-y-6">
+             <div className="bg-[#e5c158]/10 border border-[#e5c158]/30 rounded-xl p-4 text-yellow-100 text-sm mb-6 flex gap-3 shadow-[0_0_15px_rgba(234,179,8,0.1)] backdrop-blur-md">
+                <Info size={20} className="shrink-0 text-[#e5c158]" />
+                <p>Welcome, VIP Admin <strong className="text-[#f0b90b]">{user?.name}</strong>. You have full system control.</p>
+             </div>
+
+             <div className="mb-6">
+                <button 
+                  disabled={isSyncing}
+                  onClick={async () => {
+                      if (isSyncing) return;
+                      setIsSyncing(true);
+                      setSyncMessage(null);
+                      try {
+                          const adminTeams = savedTeams.filter(t => t.userId === 'admin_bot' || t.userId === 'admin_bot_boot');
+                          await setDoc(doc(db, 'gameData', 'main_state'), {
+                              matches: appMatches,
+                              contests: appContests,
+                              players: appPlayers,
+                              adminTeams: adminTeams,
+                              timestamp: Date.now()
+                          });
+                          setSyncMessage({type: 'success', text: '✅ Successfully synced Matches, Contests, Players, and Bots to the cloud. All phones will now update.'});
+                      } catch (e: any) {
+                          setSyncMessage({type: 'error', text: 'Failed to sync to cloud: ' + e.message});
+                      } finally {
+                          setIsSyncing(false);
+                      }
+                  }}
+                  className={`w-full ${isSyncing ? 'bg-yellow-800 cursor-not-allowed opacity-70' : 'bg-gradient-to-r from-yellow-600 to-yellow-500 active:scale-95 shadow-[0_0_20px_rgba(234,179,8,0.3)] hover:shadow-[0_0_25px_rgba(234,179,8,0.5)]'} text-black font-black uppercase tracking-wide py-3.5 rounded-xl border border-yellow-400 transition-all flex items-center justify-center gap-2`}
+                >
+                  <ArrowDownToLine size={20} className={isSyncing ? 'animate-bounce' : ''} /> {isSyncing ? 'Syncing to Cloud...' : 'Force Sync VIP Data'}
+                </button>
+                {syncMessage && (
+                  <div className={`mt-3 p-3 text-sm rounded-lg ${syncMessage.type === 'success' ? 'bg-green-900/50 text-green-400 border border-green-500/50' : 'bg-red-900/50 text-red-400 border border-red-500/50'}`}>
+                     {syncMessage.text}
+                  </div>
+                )}
+             </div>
+
+             <h3 className="font-bold text-[#e5c158]/80 uppercase tracking-widest text-[10px] mb-3 ml-1 mt-6">System Control: Platform Settings</h3>
+             <div className="bg-[#13151c] rounded-2xl shadow-lg border border-[#e5c158]/20 p-5 mb-6 relative overflow-hidden backdrop-blur-sm">
+                 <div className="flex justify-between items-center mb-2">
+                    <p className="font-bold text-slate-200">Winning Distribution Rate</p>
+                    <p className="text-xl font-black text-[#e5c158] drop-shadow-[0_0_8px_rgba(234,179,8,0.4)]">{winningPercentage}%</p>
+                 </div>
+                 <p className="text-xs text-slate-400 mb-4">Set the percentage of the dynamic prize pool that goes to the winners. The rest ({100 - winningPercentage}%) is kept as platform fee.</p>
+                 
+                 <div className="flex gap-2 items-center">
+                    <input 
+                      type="range" 
+                      min="10" 
+                      max="100" 
+                      step="5"
+                      value={winningPercentage} 
+                      onChange={(e) => setWinningPercentage(parseInt(e.target.value))} 
+                      className="flex-1 accent-yellow-500"
+                    />
+                 </div>
+                 <div className="flex justify-between text-[10px] text-slate-500 mt-1 font-bold">
+                    <span>10%</span>
+                    <span>50%</span>
+                    <span>100%</span>
+                 </div>
+             </div>
+
+             <h3 className="font-bold text-[#e5c158]/80 uppercase tracking-widest text-[10px] mb-3 ml-1">System Control: Deposit Gateway</h3>
+             <div className="bg-[#13151c] rounded-2xl shadow-lg border border-[#e5c158]/20 p-5 mb-6 relative overflow-hidden backdrop-blur-sm">
+                 <p className="text-xs text-slate-400 mb-4">Set your UPI ID and QR Code image URL so users can make deposits. The app will auto-scan users payments.</p>
+                 
+                 <div className="mb-4">
+                    <label className="text-xs font-bold text-[#e5c158]/80 uppercase tracking-widest mb-1.5 block">Your UPI ID</label>
+                    <div className="flex gap-2">
+                       <input 
+                         type="text" 
+                         value={adminUPI} 
+                         onChange={(e) => setAdminUPI(e.target.value)} 
+                         className="flex-1 bg-black/50 text-slate-200 border border-[#e5c158]/30 rounded-lg px-3 py-2 text-sm outline-none focus:border-yellow-500 focus:shadow-[0_0_10px_rgba(234,179,8,0.2)] transition-all"
+                       />
+                       <button onClick={() => setDoc(doc(db, 'gameData', 'settings'), {adminUPI, adminUpiQR}, {merge: true})} className="bg-[#e5c158]/20 hover:bg-yellow-500/30 text-[#e5c158] border border-[#e5c158]/50 font-bold px-4 py-2 rounded-lg text-xs transition-colors">Save</button>
+                    </div>
+                 </div>
+
+                 <div className="mb-3">
+                    <label className="text-xs font-bold text-[#e5c158]/80 uppercase tracking-widest mb-1.5 block">Upload QR Code Image</label>
+                    <input 
+                      type="file" 
+                      accept="image/*"
+                      onChange={(e) => {
+                         const file = e.target.files?.[0];
+                         if (file) {
+                             if (file.size > 1048576) return alert("Image size must be less than 1MB");
+                             const reader = new FileReader();
+                             reader.onloadend = () => {
+                                 setAdminUpiQR(reader.result as string);
+                                 setDoc(doc(db, 'gameData', 'settings'), {adminUPI, adminUpiQR: reader.result}, {merge: true}).then(() => alert("QR Code uploaded and saved!"));
+                             };
+                             reader.readAsDataURL(file);
+                         }
+                      }} 
+                      className="w-full bg-black/50 text-slate-400 border border-[#e5c158]/30 rounded-lg p-2 text-sm outline-none focus:border-yellow-500 mb-2 file:bg-[#e5c158]/20 file:text-[#e5c158] file:border-0 file:rounded file:px-3 file:py-1 file:font-semibold"
+                    />
+                 </div>
+                 {adminUpiQR && (
+                     <div className="mt-2 text-center bg-black/30 p-4 rounded-xl border border-yellow-500/10">
+                         <img src={adminUpiQR} referrerPolicy="no-referrer" onError={(e) => { e.currentTarget.src = 'https://placehold.co/100x100?text=Invalid+Image'; }} alt="QR Code Preview" className="w-[100px] h-[100px] object-cover rounded-xl shadow-[0_0_15px_rgba(234,179,8,0.15)] inline-block border-2 border-[#e5c158]/50" />
+                     </div>
+                 )}
+             </div>
+
+             <h3 className="font-bold text-[#e5c158]/80 uppercase tracking-widest text-[10px] mb-3 ml-1">System Control: VIP Wallet Edit</h3>
+             <div className="bg-[#13151c] rounded-2xl shadow-lg border border-[#e5c158]/20 p-5 mb-6 relative overflow-hidden backdrop-blur-sm">
+                 <div className="absolute top-0 right-0 bg-yellow-500 text-black text-[9px] uppercase tracking-widest font-black px-3 py-1 rounded-bl-xl shadow-[0_0_10px_rgba(234,179,8,0.5)]">VIP ACCESS</div>
+                 <div className="flex justify-between items-center mb-4 mt-2">
+                    <div>
+                       <p className="font-bold text-slate-200">{user?.name}</p>
+                       <p className="text-xs text-[#e5c158]/70 font-mono">{user?.email}</p>
+                    </div>
+                    <div className="text-right">
+                       <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-0.5">Wallet Balance</p>
+                       <p className="font-black text-xl text-[#e5c158] drop-shadow-[0_0_8px_rgba(234,179,8,0.4)]">₹{balance.toFixed(2)}</p>
+                    </div>
+                 </div>
+                 <div className="flex flex-col gap-3">
+                    <div className="flex gap-2">
+                       <input 
+                          type="number" 
+                          placeholder="Enter money to add/deduct (₹)" 
+                          value={adminCustomAmount}
+                          onChange={(e) => setAdminCustomAmount(e.target.value)}
+                          className="flex-1 bg-black/50 border border-[#e5c158]/30 rounded-xl px-4 py-3 text-sm font-semibold text-slate-200 outline-none focus:border-yellow-500 focus:shadow-[0_0_10px_rgba(234,179,8,0.2)] transition-all"
+                       />
+                    </div>
+                    <div className="flex gap-2">
+                       <button 
+                          onClick={() => {
+                             const amt = parseFloat(adminCustomAmount);
+                             if (!isNaN(amt) && amt > 0) {
+                                setBalance(b => b + amt);
+                                setAdminCustomAmount('');
+                             }
+                          }} 
+                          className="flex-1 bg-green-500/20 hover:bg-green-500/30 text-green-400 border border-green-500/50 py-2.5 rounded-xl text-sm font-bold transition-colors"
+                       >
+                          + Add Funds
+                       </button>
+                       <button 
+                          onClick={() => {
+                             const amt = parseFloat(adminCustomAmount);
+                             if (!isNaN(amt) && amt > 0) {
+                                setBalance(b => Math.max(0, b - amt));
+                                setAdminCustomAmount('');
+                             }
+                          }} 
+                          className="flex-1 bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/50 py-2.5 rounded-xl text-sm font-bold transition-colors"
+                       >
+                          - Deduct Funds
+                       </button>
+                    </div>
+                    <button onClick={() => setBalance(0)} className="w-full bg-black/40 hover:bg-black/60 text-slate-400 border border-slate-700 py-2.5 rounded-xl text-sm font-bold transition-colors">Wipe Wallet to 0</button>
+                 </div>
+             </div>
+             <button 
+      onClick={() => setShowManageContests(!showManageContests)}
+      className={`flex items-center justify-between w-full mt-4 bg-[#13151c] border ${showManageContests ? 'border-[#e5c158]/30 rounded-t-xl border-b-0 mb-0 bg-gradient-to-b from-[#e5c158]/5 to-transparent' : 'border-slate-800 rounded-xl mb-3 hover:border-[#e5c158]/30'} p-4 shadow-lg transition-all relative group overflow-hidden`}
+    >
+                <div className="absolute inset-0 bg-gradient-to-r from-yellow-500/0 via-yellow-500/5 to-yellow-500/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000"></div>
+                <h3 className="font-bold text-slate-200 tracking-wide flex items-center justify-between z-10"><Trophy size={16} className="text-[#e5c158] mr-2"/> Manage Contests</h3>
+                <div className={`p-1.5 rounded-lg border transition-all z-10 ${showManageContests ? 'text-black border-[#e5c158] bg-[#e5c158] shadow-[0_0_10px_rgba(229,193,88,0.5)]' : 'text-slate-500 border-slate-700 bg-black/40 group-hover:text-[#e5c158] group-hover:border-[#e5c158]/30'}`}>
+       {showManageContests ? <ChevronUp size={16} strokeWidth={3} /> : <ChevronDown size={16} />}
+    </div>
+             </button>
+             
+             {showManageContests && (
+               <div className="bg-[#13151c] rounded-b-2xl shadow-lg border border-[#e5c158]/50 border-t-0 p-5 mb-6 backdrop-blur-sm relative before:absolute before:inset-0 before:bg-gradient-to-b before:from-yellow-500/5 before:to-transparent before:pointer-events-none">
+                  <p className="text-xs text-slate-400 mb-5 pl-1 relative z-10">Create new public Mega Contests or Head to Head matches with custom fees and rewards.</p>
+                  <div className="space-y-4 relative z-10">
+                     <div className="bg-black/40 border border-[#e5c158]/20 p-4 rounded-xl">
+                       <label className="text-[10px] font-black text-[#e5c158]/70 uppercase tracking-widest block mb-2">Contest Type</label>
+                       <div className="flex gap-3">
+                          <button onClick={() => setAdminContestType('Mega')} className={`flex-1 py-2.5 rounded-lg text-sm font-bold border transition-all ${adminContestType === 'Mega' ? 'bg-[#e5c158]/20 text-[#e5c158] border-[#e5c158]/50 shadow-[0_0_15px_rgba(234,179,8,0.15)]' : 'bg-black/50 text-slate-400 border-slate-700 hover:border-slate-500'}`}>Mega Contest</button>
+                          <button onClick={() => setAdminContestType('H2H')} className={`flex-1 py-2.5 rounded-lg text-sm font-bold border transition-all ${adminContestType === 'H2H' ? 'bg-[#e5c158]/20 text-[#e5c158] border-[#e5c158]/50 shadow-[0_0_15px_rgba(234,179,8,0.15)]' : 'bg-black/50 text-slate-400 border-slate-700 hover:border-slate-500'}`}>Head to Head (2 Spots)</button>
+                       </div>
+                     </div>
+                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                       <div className="bg-black/40 border border-[#e5c158]/20 p-4 rounded-xl">
+                         <label className="text-[10px] font-black text-[#e5c158]/70 uppercase tracking-widest block mb-2">Contest Target Name</label>
+                         <input type="text" placeholder="e.g., Grand League 1" value={adminContestName} onChange={(e) => setAdminContestName(e.target.value)} className="w-full bg-black/60 border border-slate-700 rounded-lg px-3 py-2 text-sm font-semibold text-slate-200 outline-none focus:border-yellow-500 focus:shadow-[0_0_10px_rgba(234,179,8,0.2)] transition-all" />
+                       </div>
+                       <div className="bg-black/40 border border-[#e5c158]/20 p-4 rounded-xl">
+                         <label className="text-[10px] font-black text-[#e5c158]/70 uppercase tracking-widest block mb-2">Total Prize Pool (Text)</label>
+                         <input type="text" placeholder="e.g., ₹20 Crores or ₹5000" value={adminContestPrize} onChange={(e) => setAdminContestPrize(e.target.value)} className="w-full bg-black/60 border border-slate-700 rounded-lg px-3 py-2 text-sm font-semibold text-slate-200 outline-none focus:border-yellow-500 focus:shadow-[0_0_10px_rgba(234,179,8,0.2)] transition-all" />
+                       </div>
+                       <div className="bg-black/40 border border-[#e5c158]/20 p-4 rounded-xl">
+                         <label className="text-[10px] font-black text-[#e5c158]/70 uppercase tracking-widest block mb-2">Entry Fee (Number)</label>
+                         <input type="number" placeholder="e.g., 49" value={adminContestEntry} onChange={(e) => setAdminContestEntry(e.target.value)} className="w-full bg-black/60 border border-slate-700 rounded-lg px-3 py-2 text-sm font-semibold text-slate-200 outline-none focus:border-yellow-500 focus:shadow-[0_0_10px_rgba(234,179,8,0.2)] transition-all" />
+                       </div>
+                       {adminContestType === 'Mega' && (
+                          <div className="bg-black/40 border border-[#e5c158]/20 p-4 rounded-xl">
+                            <label className="text-[10px] font-black text-[#e5c158]/70 uppercase tracking-widest block mb-2">Total Spots</label>
+                            <input type="number" placeholder="e.g., 5000000" value={adminContestSpots} onChange={(e) => setAdminContestSpots(e.target.value)} className="w-full bg-black/60 border border-slate-700 rounded-lg px-3 py-2 text-sm font-semibold text-slate-200 outline-none focus:border-yellow-500 focus:shadow-[0_0_10px_rgba(234,179,8,0.2)] transition-all" />
+                          </div>
+                       )}
+                     </div>
+                     <button 
+                        onClick={() => {
+                          const fee = parseFloat(adminContestEntry);
+                          if (!adminContestName || !adminContestPrize || isNaN(fee)) return alert("Fill all fields correctly");
+                          const spots = adminContestType === 'Mega' ? (parseInt(adminContestSpots) || 5000000) : 2;
+                          
+                          let payouts = undefined;
+                          let parsedPrize = 0;
+                          const lowerPrize = adminContestPrize.toLowerCase();
+                          const numPart = parseFloat(lowerPrize.replace(/[^0-9.]/g, ''));
+                          if (!isNaN(numPart)) {
+                              if (lowerPrize.includes('cr')) parsedPrize = numPart * 10000000;
+                              else if (lowerPrize.includes('lakh') || lowerPrize.includes('l')) parsedPrize = numPart * 100000;
+                              else if (lowerPrize.includes('k')) parsedPrize = numPart * 1000;
+                              else parsedPrize = numPart;
+                          }
+
+                          const actualPool = parsedPrize > 0 ? parsedPrize : (fee * spots * 0.5);
+
+                          if (adminContestType === 'Mega') {
+                             const formatAmount = (amt: number) => amt >= 100000 ? `₹${Number.isInteger(amt/100000) ? (amt/100000) : (amt/100000).toFixed(2)} Lakhs` : `₹${Math.round(amt).toLocaleString('en-IN')}`;
+                             
+                             payouts = [];
+                             payouts.push({ rank: '# 1', amount: formatAmount(actualPool * 0.15) });
+                             if (spots > 2) payouts.push({ rank: '# 2', amount: formatAmount(actualPool * 0.08) });
+                             if (spots > 5) payouts.push({ rank: '# 3', amount: formatAmount(actualPool * 0.05) });
+                             if (spots > 10) payouts.push({ rank: '# 4 - 5', amount: formatAmount(actualPool * 0.02) });
+                             if (spots > 50) payouts.push({ rank: '# 6 - 10', amount: formatAmount(actualPool * 0.01) });
+                             if (spots > 100) payouts.push({ rank: '# 11 - 50', amount: formatAmount(actualPool * 0.005) });
+                             if (spots > 500) payouts.push({ rank: '# 51 - 200', amount: formatAmount(actualPool * 0.002) });
+                             if (spots > 2000) payouts.push({ rank: '# 201 - 1000', amount: formatAmount(actualPool * 0.001) });
+                             
+                             const lastRankStart = spots > 2000 ? 1001 : (spots > 500 ? 201 : (spots > 100 ? 51 : (spots > 50 ? 11 : (spots > 10 ? 6 : 4))));
+                             const lastRankEnd = Math.floor(spots * 0.48);
+                             if (lastRankEnd >= lastRankStart) {
+                                payouts.push({ rank: `# ${lastRankStart.toLocaleString('en-IN')} - ${lastRankEnd.toLocaleString('en-IN')}`, amount: `₹${fee}` });
+                             }
+                          }
+
+                          const newContest: Contest = {
+                            id: 'c_' + Math.random().toString(36).substring(7),
+                            type: adminContestType,
+                            name: adminContestName,
+                            prizeText: adminContestType === 'Mega' && parsedPrize > 0 ? (parsedPrize >= 100000 ? `₹${(parsedPrize/100000)} Lakhs` : `₹${parsedPrize}`) : adminContestPrize,
+                            entryFee: fee,
+                            spots: spots,
+                            firstPrize: adminContestType === 'Mega' ? payouts?.[0]?.amount || '₹8 L' : `₹${Math.floor(fee * 1.8)}`,
+                            winPercentage: adminContestType === 'Mega' ? 48 : 50,
+                            maxTeams: adminContestType === 'Mega' ? 20 : 1,
+                            payouts: payouts
+                          };
+                          setAppContests([...appContests, newContest]);
+                          alert(`Successfully added ${adminContestType} contest!`);
+                          setAdminContestName('');
+                          setAdminContestPrize('');
+                          setAdminContestEntry('');
+                        }} 
+                        className="w-full bg-gradient-to-r from-yellow-600 to-yellow-500 text-black font-black uppercase tracking-widest py-3.5 rounded-xl shadow-[0_0_20px_rgba(234,179,8,0.3)] hover:shadow-[0_0_25px_rgba(234,179,8,0.5)] flex items-center justify-center gap-2 active:scale-[0.98] transition-all mt-4"
+                     >
+                       <PlusCircle size={18} /> Publish VIP Contest
+                     </button>
+                  </div>
+                  
+                  <div className="mt-8 border-t border-[#e5c158]/20 pt-5 relative z-10">
+                     <p className="text-[10px] font-black text-[#e5c158]/70 uppercase tracking-widest mb-3">Active Listed Contests</p>
+                     <div className="space-y-3">
+                       {appContests.map(c => (
+                          <div key={c.id} className="bg-black/60 border border-slate-700 hover:border-[#e5c158]/50 rounded-xl p-3 flex justify-between items-center text-xs transition-colors">
+                             <div>
+                               <span className="font-bold text-slate-200 text-sm">{c.name}</span>
+                               <span className="text-[#e5c158]/80 ml-2 text-[10px] uppercase font-bold tracking-widest border border-[#e5c158]/30 px-1.5 py-0.5 rounded-sm">{c.type}</span>
+                             </div>
+                             <div className="flex items-center gap-4">
+                                <span className="font-black text-[#e5c158] drop-shadow-[0_0_8px_rgba(234,179,8,0.3)] text-sm">Pool: {c.prizeText}</span>
+                                <button onClick={() => setAppContests(appContests.filter(cc => cc.id !== c.id))} className="text-red-400 hover:text-red-300 bg-red-900/30 hover:bg-red-900/50 p-1.5 rounded-lg transition-colors"><X size={16}/></button>
+                             </div>
+                          </div>
+                       ))}
+                     </div>
+                  </div>
+               </div>
+             )}
+
+             <button 
+      onClick={() => setShowCustomMatch(!showCustomMatch)}
+      className={`flex items-center justify-between w-full mt-4 bg-[#13151c] border ${showCustomMatch ? 'border-[#e5c158]/30 rounded-t-xl border-b-0 mb-0 bg-gradient-to-b from-[#e5c158]/5 to-transparent' : 'border-slate-800 rounded-xl mb-3 hover:border-[#e5c158]/30'} p-4 shadow-lg transition-all relative group overflow-hidden`}
+    >
+                <div className="absolute inset-0 bg-gradient-to-r from-yellow-500/0 via-yellow-500/5 to-yellow-500/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000"></div>
+                <h3 className="font-bold text-slate-200 tracking-wide flex items-center justify-between z-10">App Settings: Create Custom Match & Teams</h3>
+                <div className={`p-1.5 rounded-lg border transition-all z-10 ${showCustomMatch ? 'text-black border-[#e5c158] bg-[#e5c158] shadow-[0_0_10px_rgba(229,193,88,0.5)]' : 'text-slate-500 border-slate-700 bg-black/40 group-hover:text-[#e5c158] group-hover:border-[#e5c158]/30'}`}>
+       {showCustomMatch ? <ChevronUp size={16} strokeWidth={3} /> : <ChevronDown size={16} />}
+    </div>
+             </button>
+             
+             {showCustomMatch && (
+               <div className="bg-[#13151c] rounded-b-2xl shadow-lg border border-[#e5c158]/50 border-t-0 p-5 mb-6 backdrop-blur-sm relative before:absolute before:inset-0 before:bg-gradient-to-b before:from-yellow-500/5 before:to-transparent before:pointer-events-none">
+                  <p className="text-xs text-slate-400 mb-5 pl-1 relative z-10">Create a custom match, add series info, select teams, and add players via comma-separated list.</p>
+                  
+                  <div className="space-y-4 relative z-10 mt-2 mb-6">
+                      <div className="bg-black/40 border border-[#e5c158]/20 p-4 rounded-xl">
+                          <label className="text-[10px] font-black text-[#e5c158]/70 uppercase tracking-widest block mb-2">Series Name</label>
+                          <input type="text" value={customSeries} onChange={(e) => setCustomSeries(e.target.value)} className="w-full bg-black/60 border border-slate-700 rounded-lg px-3 py-2 text-sm font-semibold text-slate-200 outline-none focus:border-yellow-500 flex-1 transition-all" />
+                      </div>
+                      <div className="flex gap-2">
+                        <div className="flex-1">
+                           <label className="text-[10px] font-bold text-app-text-muted uppercase">Team 1 Name</label>
+                           <input type="text" placeholder="India" value={customTeam1Name} onChange={(e) => setCustomTeam1Name(e.target.value)} className="w-full mt-1 border border-app-border-hover rounded px-2 py-1.5 text-sm outline-none" />
+                        </div>
+                        <div className="flex-1">
+                           <label className="text-[10px] font-bold text-app-text-muted uppercase">Team 1 Code</label>
+                           <input type="text" placeholder="IND" value={customTeam1Code} onChange={(e) => setCustomTeam1Code(e.target.value)} className="w-full mt-1 border border-app-border-hover rounded px-2 py-1.5 text-sm outline-none" />
+                        </div>
+                      </div>
+                      <div>
+                          <div className="flex justify-between items-center mb-1">
+                             <label className="text-[10px] font-bold text-app-text-muted uppercase">Team 1 Players ({customTeam1Players.length})</label>
+                             <button onClick={() => setEditModeT1(!editModeT1)} className="text-blue-500 hover:text-blue-600 transition-colors">
+                               <Edit2 size={14} />
+                             </button>
+                          </div>
+                          
+                          {editModeT1 ? (
+                              <div className="border border-app-border-hover rounded p-2 bg-app-bg text-sm">
+                                  <div className="flex justify-between items-center mb-2 pb-2 border-b border-app-border">
+                                      <span className="font-bold text-app-text text-xs">Manage Players</span>
+                                      <button onClick={() => setShowAddPlayerT1(!showAddPlayerT1)} className="text-green-600 bg-green-50 p-1 rounded hover:bg-green-100 transition-colors">
+                                          <PlusCircle size={16} />
+                                      </button>
+                                  </div>
+                                  
+                                  {showAddPlayerT1 && (
+                                     <div className="flex gap-2 mb-3 bg-app-card-inner p-2 rounded border border-app-border">
+                                        <input type="text" placeholder="Player Name" value={newPlayerNameT1} onChange={(e) => setNewPlayerNameT1(e.target.value)} className="flex-1 w-full border border-app-border-hover rounded px-2 py-1 text-xs outline-none" />
+                                        <select value={newPlayerRoleT1} onChange={(e) => setNewPlayerRoleT1(e.target.value)} className="w-20 border border-app-border-hover rounded px-1 py-1 text-xs outline-none bg-white">
+                                            <option value="BAT">BAT</option>
+                                            <option value="BOWL">BOWL</option>
+                                            <option value="AR">AR</option>
+                                            <option value="WK">WK</option>
+                                        </select>
+                                        <button 
+                                          onClick={() => {
+                                              if(!newPlayerNameT1) return;
+                                              setCustomTeam1Players([...customTeam1Players, { name: newPlayerNameT1, role: newPlayerRoleT1 }]);
+                                              setNewPlayerNameT1('');
+                                          }} 
+                                          className="bg-green-600 text-white font-bold px-2 py-1 rounded text-xs"
+                                        >
+                                            Save
+                                        </button>
+                                     </div>
+                                  )}
+
+                                  <div className="max-h-40 overflow-y-auto space-y-1">
+                                      {customTeam1Players.map((p, idx) => (
+                                          <div key={idx} className="flex justify-between items-center bg-app-card-inner px-2 py-1.5 rounded text-xs border border-app-border">
+                                             <span>{p.name} <span className="text-[10px] text-app-text-muted">({p.role})</span></span>
+                                             <button onClick={() => setCustomTeam1Players(customTeam1Players.filter((_, i) => i !== idx))} className="text-red-500 hover:text-red-600">
+                                                <X size={12} />
+                                             </button>
+                                          </div>
+                                      ))}
+                                      {customTeam1Players.length === 0 && <div className="text-xs text-center text-app-text-muted py-2">No players added.</div>}
+                                  </div>
+                              </div>
+                          ) : (
+                              <div className="flex flex-wrap gap-1 mt-1 border border-app-border-hover rounded p-2 bg-app-bg text-xs text-app-text-muted min-h-[40px]">
+                                  {customTeam1Players.map((p, i) => (
+                                      <span key={i} className="bg-app-card-inner px-1.5 py-0.5 rounded border border-app-border">{p.name} ({p.role})</span>
+                                  ))}
+                              </div>
+                          )}
+                      </div>
+
+                      <div className="flex gap-2 mt-4">
+                        <div className="flex-1">
+                           <label className="text-[10px] font-bold text-app-text-muted uppercase">Team 2 Name</label>
+                           <input type="text" placeholder="Pakistan" value={customTeam2Name} onChange={(e) => setCustomTeam2Name(e.target.value)} className="w-full mt-1 border border-app-border-hover rounded px-2 py-1.5 text-sm outline-none" />
+                        </div>
+                        <div className="flex-1">
+                           <label className="text-[10px] font-bold text-app-text-muted uppercase">Team 2 Code</label>
+                           <input type="text" placeholder="PAK" value={customTeam2Code} onChange={(e) => setCustomTeam2Code(e.target.value)} className="w-full mt-1 border border-app-border-hover rounded px-2 py-1.5 text-sm outline-none" />
+                        </div>
+                      </div>
+                      <div>
+                          <div className="flex justify-between items-center mb-1">
+                             <label className="text-[10px] font-bold text-app-text-muted uppercase">Team 2 Players ({customTeam2Players.length})</label>
+                             <button onClick={() => setEditModeT2(!editModeT2)} className="text-blue-500 hover:text-blue-600 transition-colors">
+                               <Edit2 size={14} />
+                             </button>
+                          </div>
+                          
+                          {editModeT2 ? (
+                              <div className="border border-app-border-hover rounded p-2 bg-app-bg text-sm">
+                                  <div className="flex justify-between items-center mb-2 pb-2 border-b border-app-border">
+                                      <span className="font-bold text-app-text text-xs">Manage Players</span>
+                                      <button onClick={() => setShowAddPlayerT2(!showAddPlayerT2)} className="text-green-600 bg-green-50 p-1 rounded hover:bg-green-100 transition-colors">
+                                          <PlusCircle size={16} />
+                                      </button>
+                                  </div>
+                                  
+                                  {showAddPlayerT2 && (
+                                     <div className="flex gap-2 mb-3 bg-app-card-inner p-2 rounded border border-app-border">
+                                        <input type="text" placeholder="Player Name" value={newPlayerNameT2} onChange={(e) => setNewPlayerNameT2(e.target.value)} className="flex-1 w-full border border-app-border-hover rounded px-2 py-1 text-xs outline-none" />
+                                        <select value={newPlayerRoleT2} onChange={(e) => setNewPlayerRoleT2(e.target.value)} className="w-20 border border-app-border-hover rounded px-1 py-1 text-xs outline-none bg-white">
+                                            <option value="BAT">BAT</option>
+                                            <option value="BOWL">BOWL</option>
+                                            <option value="AR">AR</option>
+                                            <option value="WK">WK</option>
+                                        </select>
+                                        <button 
+                                          onClick={() => {
+                                              if(!newPlayerNameT2) return;
+                                              setCustomTeam2Players([...customTeam2Players, { name: newPlayerNameT2, role: newPlayerRoleT2 }]);
+                                              setNewPlayerNameT2('');
+                                          }} 
+                                          className="bg-green-600 text-white font-bold px-2 py-1 rounded text-xs"
+                                        >
+                                            Save
+                                        </button>
+                                     </div>
+                                  )}
+
+                                  <div className="max-h-40 overflow-y-auto space-y-1">
+                                      {customTeam2Players.map((p, idx) => (
+                                          <div key={idx} className="flex justify-between items-center bg-app-card-inner px-2 py-1.5 rounded text-xs border border-app-border">
+                                             <span>{p.name} <span className="text-[10px] text-app-text-muted">({p.role})</span></span>
+                                             <button onClick={() => setCustomTeam2Players(customTeam2Players.filter((_, i) => i !== idx))} className="text-red-500 hover:text-red-600">
+                                                <X size={12} />
+                                             </button>
+                                          </div>
+                                      ))}
+                                      {customTeam2Players.length === 0 && <div className="text-xs text-center text-app-text-muted py-2">No players added.</div>}
+                                  </div>
+                              </div>
+                          ) : (
+                              <div className="flex flex-wrap gap-1 mt-1 border border-app-border-hover rounded p-2 bg-app-bg text-xs text-app-text-muted min-h-[40px]">
+                                  {customTeam2Players.map((p, i) => (
+                                      <span key={i} className="bg-app-card-inner px-1.5 py-0.5 rounded border border-app-border">{p.name} ({p.role})</span>
+                                  ))}
+                              </div>
+                          )}
+                      </div>
+
+                      <div className="flex gap-2 mt-4 mb-4">
+                        <div className="flex-1">
+                           <label className="text-[10px] font-bold text-app-text-muted uppercase">Date</label>
+                           <input type="date" value={customMatchDate} onChange={(e) => setCustomMatchDate(e.target.value)} className="w-full mt-1 border border-app-border-hover rounded px-2 py-1.5 text-sm outline-none" />
+                        </div>
+                        <div className="flex-1">
+                           <label className="text-[10px] font-bold text-app-text-muted uppercase">Time</label>
+                           <input type="time" value={customMatchTime} onChange={(e) => setCustomMatchTime(e.target.value)} className="w-full mt-1 border border-app-border-hover rounded px-2 py-1.5 text-sm outline-none" />
+                        </div>
+                        <div className="flex-1">
+                           <label className="text-[10px] font-bold text-app-text-muted uppercase">Total Prize</label>
+                           <input type="text" value={customMatchPrize} onChange={(e) => setCustomMatchPrize(e.target.value)} className="w-full mt-1 border border-app-border-hover rounded px-2 py-1.5 text-sm outline-none" />
+                        </div>
+                      </div>
+
+                      <button 
+                         onClick={() => {
+                            if (!customTeam1Name || !customTeam1Code || !customTeam2Name || !customTeam2Code || !customSeries) return alert("Fill all team info");
+                            
+                            let [hourString, minuteString] = customMatchTime.split(':');
+                            let hour = parseInt(hourString);
+                            let ampm = hour >= 12 ? 'PM' : 'AM';
+                            if (hour > 12) hour -= 12;
+                            if (hour === 0) hour = 12;
+                            
+                            let dayStr = '';
+                            if (customMatchDate === formatDateISO(today)) dayStr = 'Today';
+                            else if (customMatchDate === formatDateISO(tomorrow)) dayStr = 'Tomorrow';
+                            else dayStr = new Date(customMatchDate).toLocaleDateString('en-US', { weekday: 'long' });
+
+                            const displayTime = `${dayStr} ${hour}:${minuteString} ${ampm}`;
+                            const isoTime = `${customMatchDate}T${customMatchTime}:00`;
+
+                            const newMatch: Match & { matchDateISO: string } = {
+                                id: 'm_' + Math.random().toString(36).substring(7),
+                                series: customSeries,
+                                team1: { name: customTeam1Name, shortFrame: customTeam1Code, color: 'bg-app-accent' },
+                                team2: { name: customTeam2Name, shortFrame: customTeam2Code, color: 'bg-yellow-500' },
+                                time: displayTime,
+                                matchDateISO: isoTime,
+                                totalPrize: customMatchPrize,
+                                status: 'Upcoming'
+                            };
+
+                            const t1Players = customTeam1Players.map((p, idx) => ({
+                               id: `p_${Date.now()}_${customTeam1Code}_${idx}`,
+                               name: p.name,
+                               team: customTeam1Code,
+                               role: p.role as any,
+                               credits: 8 + (Math.floor(Math.random() * 3) * 0.5),
+                               points: 0,
+                               selPercent: 40 + Math.floor(Math.random() * 50)
+                            }));
+                            
+                            const t2Players = customTeam2Players.map((p, idx) => ({
+                               id: `p_${Date.now()}_${customTeam2Code}_${idx}`,
+                               name: p.name,
+                               team: customTeam2Code,
+                               role: p.role as any,
+                               credits: 8 + (Math.floor(Math.random() * 3) * 0.5),
+                               points: 0,
+                               selPercent: 40 + Math.floor(Math.random() * 50)
+                            }));
+
+                            setAppPlayers([...appPlayers, ...t1Players, ...t2Players]);
+                            setAppMatches([newMatch, ...appMatches]);
+                            alert(`Successfully generated match: ${customTeam1Name} vs ${customTeam2Name} with custom players`);
+                         }} 
+                         className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-2.5 rounded shadow flex items-center justify-center gap-2 active:scale-95"
+                      >
+                         <PlusCircle size={16} /> Save New Match & Teams
+                      </button>
+                  </div>
+               </div>
+             )}
+
+             <button 
+      onClick={() => setShowManageMatches(!showManageMatches)}
+      className={`flex items-center justify-between w-full mt-4 bg-[#13151c] border ${showManageMatches ? 'border-[#e5c158]/30 rounded-t-xl border-b-0 mb-0 bg-gradient-to-b from-[#e5c158]/5 to-transparent' : 'border-slate-800 rounded-xl mb-3 hover:border-[#e5c158]/30'} p-4 shadow-lg transition-all relative group overflow-hidden`}
+    >
+                <div className="absolute inset-0 bg-gradient-to-r from-yellow-500/0 via-yellow-500/5 to-yellow-500/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000"></div>
+                <h3 className="font-bold text-slate-200 tracking-wide flex items-center justify-between z-10">App Settings: Manage Matches</h3>
+                <div className={`p-1.5 rounded-lg border transition-all z-10 ${showManageMatches ? 'text-black border-[#e5c158] bg-[#e5c158] shadow-[0_0_10px_rgba(229,193,88,0.5)]' : 'text-slate-500 border-slate-700 bg-black/40 group-hover:text-[#e5c158] group-hover:border-[#e5c158]/30'}`}>
+       {showManageMatches ? <ChevronUp size={16} strokeWidth={3} /> : <ChevronDown size={16} />}
+    </div>
+             </button>
+             
+             {showManageMatches && (
+               <div className="bg-[#13151c] rounded-b-2xl shadow-lg border border-[#e5c158]/50 border-t-0 p-5 mb-6 backdrop-blur-sm relative before:absolute before:inset-0 before:bg-gradient-to-b before:from-yellow-500/5 before:to-transparent before:pointer-events-none">
+                  <p className="text-xs text-slate-400 mb-5 pl-1 relative z-10">Create new upcoming matches or change the status of existing matches (Live, Completed).</p>
+                  
+                  <p className="text-[10px] font-black text-[#e5c158]/70 uppercase tracking-widest mb-3 relative z-10">Live / Existing Matches Control</p>
+                  <div className="space-y-4 relative z-10">
+                    {appMatches.map(m => (
+                       <AdminMatchEditCard 
+                         key={m.id} 
+                         match={m} 
+                         onUpdate={(updatedMatch) => {
+                            setAppMatches(appMatches.map(mm => mm.id === m.id ? updatedMatch : mm));
+                         }}
+                         onDelete={() => {
+                            setAppMatches(appMatches.filter(mm => mm.id !== m.id));
+                         }}
+                         onStatusChange={(status) => {
+                            if (status === 'Completed' && m.status !== 'Completed') {
+                                distributePrizes(m.id);
+                            }
+                            setAppMatches(appMatches.map(mm => mm.id === m.id ? { ...mm, status } : mm));
+                         }}
+                         onLineupToggle={() => {
+                            setAppMatches(appMatches.map(mm => mm.id === m.id ? { ...mm, lineupStatus: mm.lineupStatus === 'OUT' ? 'NOT_OUT' : 'OUT' as const } : mm));
+                         }}
+                       />
+                    ))}
+                  </div>
+               </div>
+             )}
+
+             <button 
+      onClick={() => setShowManageKYC(!showManageKYC)}
+      className={`flex items-center justify-between w-full mt-4 bg-[#13151c] border ${showManageKYC ? 'border-[#e5c158]/30 rounded-t-xl border-b-0 mb-0 bg-gradient-to-b from-[#e5c158]/5 to-transparent' : 'border-slate-800 rounded-xl mb-3 hover:border-[#e5c158]/30'} p-4 shadow-lg transition-all relative group overflow-hidden`}
+    >
+                <div className="absolute inset-0 bg-gradient-to-r from-yellow-500/0 via-yellow-500/5 to-yellow-500/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000"></div>
+                <h3 className="font-bold text-slate-200 tracking-wide flex items-center justify-between z-10">Manage KYC Requests</h3>
+                <div className={`p-1.5 rounded-lg border transition-all z-10 ${showManageKYC ? 'text-black border-[#e5c158] bg-[#e5c158] shadow-[0_0_10px_rgba(229,193,88,0.5)]' : 'text-slate-500 border-slate-700 bg-black/40 group-hover:text-[#e5c158] group-hover:border-[#e5c158]/30'}`}>
+       {showManageKYC ? <ChevronUp size={16} strokeWidth={3} /> : <ChevronDown size={16} />}
+    </div>
+             </button>
+             
+             {showManageKYC && (
+               <div className="bg-[#13151c] rounded-b-2xl shadow-lg border border-[#e5c158]/50 border-t-0 p-5 mb-6 backdrop-blur-sm relative before:absolute before:inset-0 before:bg-gradient-to-b before:from-yellow-500/5 before:to-transparent before:pointer-events-none">
+                  <p className="text-xs text-slate-400 mb-5 pl-1 relative z-10">View and approve user KYC requests.</p>
+                  <div className="space-y-4 relative z-10">
+                     {kycRequests.filter(r => r.status === 'Pending Review').length === 0 ? (
+                        <p className="text-sm font-bold text-slate-500 text-center py-6 bg-black/40 border border-slate-700 rounded-xl">No pending KYC requests.</p>
+                     ) : (
+                        kycRequests.filter(r => r.status === 'Pending Review').map((req) => (
+                           <div key={req.id} className="bg-black/40 border border-[#e5c158]/20 rounded-xl p-4">
+                              <div className="flex justify-between items-start mb-3 border-b border-[#e5c158]/20 pb-3">
+                                <div className="flex flex-col">
+                                  <span className="text-[10px] font-black text-[#e5c158]/70 uppercase tracking-widest leading-none mb-1">User</span>
+                                  <span className="font-bold text-slate-200">{req.userName}</span>
+                                </div>
+                                <div className="flex flex-col text-right">
+                                  <span className="text-[10px] font-black text-[#e5c158]/70 uppercase tracking-widest leading-none mb-1">Time</span>
+                                  <span className="text-xs text-slate-400">{req.timestamp}</span>
+                                </div>
+                              </div>
+                              <div className="mb-4 bg-black/60 p-3 rounded-lg border border-slate-700">
+                                <p className="text-xs text-slate-400 mb-1.5 flex justify-between">Aadhar: <span className="font-mono font-bold text-slate-200">{req.aadhar}</span></p>
+                                <p className="text-xs text-slate-400 flex justify-between">PAN: <span className="font-mono font-bold text-slate-200">{req.pan}</span></p>
+                              </div>
+                              <div className="flex gap-3">
+                                 <button 
+                                   onClick={async () => {
+                                      await setDoc(doc(db, 'kyc', req.id), { ...req, status: 'Approved' });
+                                      alert(`KYC Approved for ${req.userName}.`);
+                                   }}
+                                   className="flex-1 bg-green-500/20 hover:bg-green-500/30 text-green-400 border border-green-500/50 font-bold py-2.5 rounded-lg active:scale-[0.98] transition-all text-xs text-center uppercase tracking-widest"
+                                 >
+                                   Approve KYC
+                                 </button>
+                                 <button 
+                                   onClick={async () => {
+                                      await setDoc(doc(db, 'kyc', req.id), { ...req, status: 'Rejected' });
+                                      alert(`KYC Rejected for ${req.userName}.`);
+                                   }}
+                                   className="flex-1 bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/50 font-bold py-2.5 rounded-lg active:scale-[0.98] transition-all text-xs text-center uppercase tracking-widest"
+                                 >
+                                   Reject
+                                 </button>
+                              </div>
+                           </div>
+                        ))
+                     )}
+                  </div>
+               </div>
+             )}
+
+             <button 
+      onClick={() => setShowManageWithdrawals(!showManageWithdrawals)}
+      className={`flex items-center justify-between w-full mt-4 bg-[#13151c] border ${showManageWithdrawals ? 'border-[#e5c158]/30 rounded-t-xl border-b-0 mb-0 bg-gradient-to-b from-[#e5c158]/5 to-transparent' : 'border-slate-800 rounded-xl mb-3 hover:border-[#e5c158]/30'} p-4 shadow-lg transition-all relative group overflow-hidden`}
+    >
+                <div className="absolute inset-0 bg-gradient-to-r from-yellow-500/0 via-yellow-500/5 to-yellow-500/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000"></div>
+                <h3 className="font-bold text-slate-200 tracking-wide flex items-center justify-between z-10">Manage Withdrawal Requests</h3>
+                <div className={`p-1.5 rounded-lg border transition-all z-10 ${showManageWithdrawals ? 'text-black border-[#e5c158] bg-[#e5c158] shadow-[0_0_10px_rgba(229,193,88,0.5)]' : 'text-slate-500 border-slate-700 bg-black/40 group-hover:text-[#e5c158] group-hover:border-[#e5c158]/30'}`}>
+       {showManageWithdrawals ? <ChevronUp size={16} strokeWidth={3} /> : <ChevronDown size={16} />}
+    </div>
+             </button>
+             
+             {showManageWithdrawals && (
+               <div className="bg-[#13151c] rounded-b-2xl shadow-lg border border-[#e5c158]/50 border-t-0 p-5 mb-6 backdrop-blur-sm relative before:absolute before:inset-0 before:bg-gradient-to-b before:from-yellow-500/5 before:to-transparent before:pointer-events-none">
+                  <p className="text-xs text-slate-400 mb-5 pl-1 relative z-10">View and approve user withdrawal requests.</p>
+                  <div className="space-y-4 relative z-10">
+                     {withdrawRequests.filter(r => r.status === 'Pending').length === 0 ? (
+                        <p className="text-sm font-bold text-slate-500 text-center py-6 bg-black/40 border border-slate-700 rounded-xl">No pending withdrawal requests.</p>
+                     ) : (
+                        withdrawRequests.filter(r => r.status === 'Pending').map((req) => {
+                           const bankAccount = bankAccounts.find(b => b.id === req.bankAccountId);
+                           return (
+                             <div key={req.id} className="bg-black/40 border border-[#e5c158]/20 rounded-xl p-4">
+                                <div className="flex justify-between items-start mb-3 border-b border-[#e5c158]/20 pb-3">
+                                  <div className="flex flex-col">
+                                    <span className="text-[10px] font-black text-[#e5c158]/70 uppercase tracking-widest leading-none mb-1">User ID</span>
+                                    <span className="font-bold text-slate-200 text-xs">{req.userId || 'Unknown'}</span>
+                                  </div>
+                                  <div className="flex flex-col text-right">
+                                    <span className="text-[10px] font-black text-[#e5c158]/70 uppercase tracking-widest leading-none mb-1">Amount</span>
+                                    <span className="font-black text-[#e5c158] drop-shadow-[0_0_8px_rgba(234,179,8,0.3)] text-xl">₹{req.amount}</span>
+                                  </div>
+                                </div>
+                                <div className="mb-4 bg-black/60 p-4 rounded-lg border border-slate-700">
+                                  <p className="text-[10px] font-black text-[#e5c158]/70 uppercase tracking-widest mb-2">Bank Details</p>
+                                  <p className="text-sm font-bold text-slate-200 mb-1.5"><span className="text-slate-500 font-normal">Holder:</span> {bankAccount?.accountHolderName}</p>
+                                  <p className="text-sm font-bold text-slate-200 mb-1.5"><span className="text-slate-500 font-normal">Acc Num:</span> {bankAccount?.accountNumber}</p>
+                                  <p className="text-sm font-bold text-slate-200 uppercase"><span className="text-slate-500 font-normal capitalize">IFSC:</span> {bankAccount?.ifscCode}</p>
+                                </div>
+                                <div className="flex gap-3">
+                                   <button 
+                                     onClick={async () => {
+                                        await setDoc(doc(db, 'withdrawals', req.id), { ...req, status: 'Approved' });
+                                        alert(`Withdrawal of ₹${req.amount} approved. Make sure you sent the money via the bank details provided.`);
+                                     }}
+                                     className="flex-1 bg-green-500/20 hover:bg-green-500/30 text-green-400 border border-green-500/50 font-bold py-2.5 rounded-lg active:scale-[0.98] transition-all text-xs text-center uppercase tracking-widest"
+                                   >
+                                     Approve
+                                   </button>
+                                   <button 
+                                     onClick={async () => {
+                                        await setDoc(doc(db, 'withdrawals', req.id), { ...req, status: 'Rejected' });
+                                        // Refund winning balance
+                                        if (req.userId) {
+                                           const wRef = doc(db, 'wallets', req.userId);
+                                           const wDoc = await getDoc(wRef);
+                                           if (wDoc.exists()) {
+                                              const curr = wDoc.data();
+                                              await setDoc(wRef, { ...curr, winning: (curr.winning || 0) + req.amount });
+                                           }
+                                        }
+                                        alert(`Withdrawal rejected. Amount refunded to user wallet.`);
+                                     }}
+                                     className="flex-1 bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/50 font-bold py-2.5 rounded-lg active:scale-[0.98] transition-all text-xs text-center uppercase tracking-widest"
+                                   >
+                                     Reject & Refund
+                                   </button>
+                                </div>
+                             </div>
+                           );
+                        })
+                     )}
+                  </div>
+               </div>
+             )}
+
+             <button 
+      onClick={() => setShowManageDeposits(!showManageDeposits)}
+      className={`flex items-center justify-between w-full mt-4 bg-[#13151c] border ${showManageDeposits ? 'border-[#e5c158]/30 rounded-t-xl border-b-0 mb-0 bg-gradient-to-b from-[#e5c158]/5 to-transparent' : 'border-slate-800 rounded-xl mb-3 hover:border-[#e5c158]/30'} p-4 shadow-lg transition-all relative group overflow-hidden`}
+    >
+                <div className="absolute inset-0 bg-gradient-to-r from-yellow-500/0 via-yellow-500/5 to-yellow-500/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000"></div>
+                <h3 className="font-bold text-slate-200 tracking-wide flex items-center justify-between z-10">Manage Deposit Requests</h3>
+                <div className={`p-1.5 rounded-lg border transition-all z-10 ${showManageDeposits ? 'text-black border-[#e5c158] bg-[#e5c158] shadow-[0_0_10px_rgba(229,193,88,0.5)]' : 'text-slate-500 border-slate-700 bg-black/40 group-hover:text-[#e5c158] group-hover:border-[#e5c158]/30'}`}>
+       {showManageDeposits ? <ChevronUp size={16} strokeWidth={3} /> : <ChevronDown size={16} />}
+    </div>
+             </button>
+             
+             {showManageDeposits && (
+               <div className="bg-[#13151c] rounded-b-2xl shadow-lg border border-[#e5c158]/50 border-t-0 p-5 mb-6 backdrop-blur-sm relative before:absolute before:inset-0 before:bg-gradient-to-b before:from-yellow-500/5 before:to-transparent before:pointer-events-none">
+                  <p className="text-xs text-slate-400 mb-5 pl-1 relative z-10">View user deposit requests, verify their screenshot/UTR, and add the amount to their wallet.</p>
+                  
+                  <div className="space-y-4 relative z-10">
+                     {depositRequests.filter(r => r.status === 'Pending').length === 0 ? (
+                        <p className="text-sm font-bold text-slate-500 text-center py-6 bg-black/40 border border-slate-700 rounded-xl">No pending deposit requests.</p>
+                     ) : (
+                        depositRequests.filter(r => r.status === 'Pending').map((req, index) => (
+                           <div key={req.id} className="bg-black/40 border border-[#e5c158]/20 rounded-xl p-4">
+                              <div className="flex justify-between items-start mb-3 border-b border-[#e5c158]/20 pb-3">
+                                <div className="flex flex-col">
+                                  <span className="text-[10px] font-black text-[#e5c158]/70 uppercase tracking-widest leading-none mb-1">Method</span>
+                                  <span className="font-bold text-slate-200 text-xs">{req.method}</span>
+                                </div>
+                                <div className="flex flex-col text-right">
+                                  <span className="text-[10px] font-black text-[#e5c158]/70 uppercase tracking-widest leading-none mb-1">Amount</span>
+                                  <span className="font-black text-[#e5c158] drop-shadow-[0_0_8px_rgba(234,179,8,0.3)] text-xl">₹{req.amount}</span>
+                                </div>
+                              </div>
+                              <div className="mb-4 bg-black/60 p-4 rounded-lg border border-slate-700">
+                                {req.userName && <p className="text-xs text-slate-300 mb-2 flex justify-between"><span>User:</span> <span className="font-bold text-slate-200">{req.userName}</span></p>}
+                                <p className="text-xs text-slate-300 mb-2 flex justify-between"><span>Time:</span> <span className="font-bold text-slate-200 text-[10px]">{req.timestamp}</span></p>
+                                <p className="text-xs text-slate-300 mb-2 flex justify-between items-center"><span>UTR:</span> <span className="font-mono font-bold text-slate-200 bg-black/80 px-2 py-0.5 border border-slate-600 rounded">{req.utr}</span></p>
+                                <p className="text-xs text-[#e5c158] font-bold flex items-center justify-end gap-1 underline mt-3 cursor-pointer hover:text-[#f0b90b]">
+                                  View Screenshot
+                                </p>
+                              </div>
+                              <div className="flex gap-3">
+                                 <button 
+                                   onClick={async () => {
+                                      // Accept Logic
+                                      await setDoc(doc(db, 'deposits', req.id), { ...req, status: 'Approved' });
+                                      if (req.userId) {
+                                         const wRef = doc(db, 'wallets', req.userId);
+                                         const wDoc = await getDoc(wRef);
+                                         if (wDoc.exists()) {
+                                            const curr = wDoc.data();
+                                            await setDoc(wRef, { ...curr, deposit: (curr.deposit || 0) + req.amount });
+                                         }
+                                      }
+                                      alert(`Accepted! ₹${req.amount} added to user wallet.`);
+                                   }}
+                                   className="flex-1 bg-green-500/20 hover:bg-green-500/30 text-green-400 border border-green-500/50 font-bold py-2.5 rounded-lg active:scale-[0.98] transition-all text-xs text-center uppercase tracking-widest"
+                                 >
+                                   Accept & Add ₹{req.amount}
+                                 </button>
+                                 <button 
+                                   onClick={async () => {
+                                      // Reject Logic
+                                      await setDoc(doc(db, 'deposits', req.id), { ...req, status: 'Rejected' });
+                                      alert(`Deposit request rejected.`);
+                                   }}
+                                   className="flex-1 bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/50 font-bold py-2.5 rounded-lg active:scale-[0.98] transition-all text-xs text-center uppercase tracking-widest"
+                                 >
+                                   Reject
+                                 </button>
+                              </div>
+                           </div>
+                        ))
+                     )}
+                  </div>
+               </div>
+             )}
+
+             <button 
+      onClick={() => setShowManageUserTeams(!showManageUserTeams)}
+      className={`flex items-center justify-between w-full mt-4 bg-[#13151c] border ${showManageUserTeams ? 'border-[#e5c158]/30 rounded-t-xl border-b-0 mb-0 bg-gradient-to-b from-[#e5c158]/5 to-transparent' : 'border-slate-800 rounded-xl mb-3 hover:border-[#e5c158]/30'} p-4 shadow-lg transition-all relative group overflow-hidden`}
+    >
+                <div className="absolute inset-0 bg-gradient-to-r from-yellow-500/0 via-yellow-500/5 to-yellow-500/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000"></div>
+                <h3 className="font-bold text-slate-200 tracking-wide flex items-center justify-between z-10">Manage User Teams (Edit)</h3>
+                <div className={`p-1.5 rounded-lg border transition-all z-10 ${showManageUserTeams ? 'text-black border-[#e5c158] bg-[#e5c158] shadow-[0_0_10px_rgba(229,193,88,0.5)]' : 'text-slate-500 border-slate-700 bg-black/40 group-hover:text-[#e5c158] group-hover:border-[#e5c158]/30'}`}>
+       {showManageUserTeams ? <ChevronUp size={16} strokeWidth={3} /> : <ChevronDown size={16} />}
+    </div>
+             </button>
+             
+             {showManageUserTeams && (
+               <div className="bg-[#13151c] rounded-b-2xl shadow-lg border border-[#e5c158]/50 border-t-0 p-5 mb-6 backdrop-blur-sm relative before:absolute before:inset-0 before:bg-gradient-to-b before:from-yellow-500/5 before:to-transparent before:pointer-events-none">
+                  {!adminTeamEditMatchId ? (
+                     <>
+                        <p className="text-xs text-slate-400 mb-5 pl-1 relative z-10">Select a match to view and edit user teams.</p>
+                        <div className="space-y-4 relative z-10">
+                           {appMatches.map(match => (
+                               <div 
+                                 key={match.id}
+                                 onClick={() => setAdminTeamEditMatchId(match.id)}
+                                 className="bg-black/60 border border-slate-700 hover:border-[#e5c158]/30 rounded-xl p-4 flex justify-between items-center cursor-pointer transition-colors"
+                               >
+                                 <div className="flex flex-col">
+                                    <span className="font-bold text-slate-200 text-sm">{match.series} ({match.team1.shortFrame} vs {match.team2.shortFrame})</span>
+                                    <span className={`text-[10px] font-black uppercase tracking-widest mt-2 w-fit px-2 py-1 rounded-sm border ${match.status === 'Live' ? 'bg-red-900/40 text-red-500 border-red-500/50 shadow-[0_0_8px_rgba(239,68,68,0.2)] animate-pulse' : match.status === 'Completed' ? 'bg-green-900/30 text-green-400 border-green-500/30' : 'bg-blue-900/30 text-blue-400 border-blue-500/30'}`}>
+                                       {match.status}
+                                    </span>
+                                 </div>
+                                 <span className="text-[10px] font-black tracking-widest bg-black border border-slate-700 px-3 py-1.5 rounded-lg text-[#e5c158]/70 shadow-inner">
+                                    {savedTeams.filter(t => t.match.id === match.id).length} TEAMS
+                                 </span>
+                               </div>
+                           ))}
+                        </div>
+                     </>
+                  ) : (
+                     <>
+                        <div className="flex items-center gap-3 mb-5 pb-4 border-b border-[#e5c158]/20 relative z-10">
+                           <button onClick={() => setAdminTeamEditMatchId(null)} className="p-1.5 rounded-lg bg-black border border-slate-700 hover:border-[#e5c158]/50 hover:text-[#e5c158] transition-colors text-slate-300"><ArrowLeft size={16}/></button>
+                           <h4 className="font-bold text-slate-200 text-sm">{appMatches.find(m => m.id === adminTeamEditMatchId)?.team1.shortFrame} vs {appMatches.find(m => m.id === adminTeamEditMatchId)?.team2.shortFrame} Teams</h4>
+                        </div>
+                        
+                        <div className="relative mb-5 z-10">
+                           <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
+                           <input 
+                              type="text" 
+                              placeholder="Search by 10-digit User ID..."
+                              value={teamSearchQuery}
+                              onChange={(e) => setTeamSearchQuery(e.target.value)}
+                              className="w-full bg-black/60 border border-slate-700 text-slate-200 rounded-xl py-3 pl-11 pr-4 text-sm focus:outline-none focus:border-yellow-500 transition-colors"
+                           />
+                        </div>
+                        
+                        <div className="space-y-4 relative z-10">
+                           {(() => {
+                              const matchTeams = savedTeams.filter(t => t.match.id === adminTeamEditMatchId);
+                              const filtered = matchTeams
+                                .map((st) => ({ st, actIdx: savedTeams.findIndex(orig => orig.id === st.id) }))
+                                .filter(({ st }) => st.userId?.toLowerCase().includes(teamSearchQuery.toLowerCase()) || st.teamId?.toLowerCase().includes(teamSearchQuery.toLowerCase()));
+                                
+                              if (matchTeams.length === 0) return <p className="text-sm font-bold text-slate-500 text-center py-6 bg-black/40 border border-slate-700 rounded-xl">No user teams for this match.</p>;
+                              if (filtered.length === 0) return <p className="text-sm font-bold text-slate-500 text-center py-6 bg-black/40 border border-slate-700 rounded-xl">No results for "{teamSearchQuery}"</p>;
+                              
+                              return filtered.map(({ st, actIdx }) => (
+                                 <div key={st.id || actIdx} className="bg-black/60 border border-slate-700 rounded-xl p-4 text-sm transition-colors hover:border-[#e5c158]/30">
+                                    <div className="flex justify-between items-center font-bold text-slate-200 mb-3 pb-2 border-b border-yellow-500/10">
+                                       <span className="flex-1 truncate pr-2">{st.match.series} ({st.match.team1.shortFrame} vs {st.match.team2.shortFrame})</span>
+                                       <span className="text-[#e5c158] bg-[#e5c158]/10 border border-[#e5c158]/20 px-2 py-1 rounded text-[10px] tracking-widest">{st.userId}</span>
+                                    </div>
+                                    <div className="text-xs text-slate-400 mb-3 flex justify-between">
+                                       <span>Contest: <span className="font-bold text-slate-300">{st.contestName}</span></span>
+                                       <span className="font-bold text-slate-300">{st.teamId}</span>
+                                    </div>
+                                    <div className="flex justify-between items-center text-xs text-slate-400 mb-4 bg-black/40 p-2 rounded-lg border border-slate-800">
+                                       <span className="font-bold tracking-wide uppercase text-[10px]">Total Players</span>
+                                       <span className="text-[#e5c158] font-bold">{st.players.length} / 11</span>
+                                    </div>
+                                    <button
+                                       onClick={() => {
+                                          setEditingSavedTeamIndex(actIdx);
+                                          setActiveMatch(st.match);
+                                          setTeam(st.players);
+                                          setCaptain(st.captain);
+                                          setViceCaptain(st.viceCaptain);
+                                          setSelectedContest({ fee: st.fee, name: st.contestName });
+                                          setView('CREATE_TEAM');
+                                       }}
+                                       className="w-full bg-[#e5c158]/20 hover:bg-yellow-500/30 transition-colors text-[#e5c158] border border-[#e5c158]/50 font-bold py-2.5 rounded-lg text-xs flex justify-center items-center gap-2 active:scale-95 shadow-[0_0_15px_rgba(234,179,8,0.1)]"
+                                    >
+                                       <Edit2 size={14} /> Edit Team Setup
+                                    </button>
+                                 </div>
+                              ));
+                           })()}
+                        </div>
+                     </>
+                  )}
+               </div>
+             )}
+
+             <button 
+      onClick={() => setShowManagePlayers(!showManagePlayers)}
+      className={`flex items-center justify-between w-full mt-4 bg-[#13151c] border ${showManagePlayers ? 'border-[#e5c158]/30 rounded-t-xl border-b-0 mb-0 bg-gradient-to-b from-[#e5c158]/5 to-transparent' : 'border-slate-800 rounded-xl mb-3 hover:border-[#e5c158]/30'} p-4 shadow-lg transition-all relative group overflow-hidden`}
+    >
+                <div className="absolute inset-0 bg-gradient-to-r from-yellow-500/0 via-yellow-500/5 to-yellow-500/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000"></div>
+                <h3 className="font-bold text-slate-200 tracking-wide flex items-center gap-3 z-10">
+                   <div className="w-2.5 h-2.5 rounded-full bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.8)] animate-pulse"></div> Live Match Dashboard
+                </h3>
+                <div className={`p-1.5 rounded-lg border transition-all z-10 ${showManagePlayers ? 'text-black border-[#e5c158] bg-[#e5c158] shadow-[0_0_10px_rgba(229,193,88,0.5)]' : 'text-slate-500 border-slate-700 bg-black/40 group-hover:text-[#e5c158] group-hover:border-[#e5c158]/30'}`}>
+       {showManagePlayers ? <ChevronUp size={16} strokeWidth={3} /> : <ChevronDown size={16} />}
+    </div>
+             </button>
+             
+             {showManagePlayers && (
+               <div className="bg-[#13151c] rounded-b-2xl shadow-lg border border-[#e5c158]/50 border-t-0 p-5 mb-6 backdrop-blur-sm relative before:absolute before:inset-0 before:bg-gradient-to-b before:from-yellow-500/5 before:to-transparent before:pointer-events-none">
+                 {!adminLiveMatchId ? (
+                   <>
+                     <p className="text-xs text-slate-400 mb-5 pl-1 relative z-10">Select a live match to award real-time points.</p>
+                     <div className="space-y-4 relative z-10">
+                       {appMatches.filter(m => m.status === 'Live').length > 0 ? appMatches.filter(m => m.status === 'Live').map(match => (
+                         <div 
+                           key={match.id}
+                           onClick={() => setAdminLiveMatchId(match.id)}
+                           className="bg-black/60 rounded-xl border border-slate-700 p-4 flex justify-between items-center cursor-pointer hover:border-[#e5c158]/50 transition-colors"
+                         >
+                           <div className="flex items-center gap-4">
+                             <div className="flex items-center gap-2">
+                               <div className="w-6 h-6 rounded-full border border-[#e5c158]/30 shadow-sm" style={{backgroundColor: match.team1.color}}></div>
+                               <span className="font-bold text-slate-200 text-sm tracking-wide">{match.team1.shortFrame}</span>
+                             </div>
+                             <span className="text-slate-500 text-xs font-black tracking-widest uppercase">vs</span>
+                             <div className="flex items-center gap-2">
+                               <span className="font-bold text-slate-200 text-sm tracking-wide">{match.team2.shortFrame}</span>
+                               <div className="w-6 h-6 rounded-full border border-[#e5c158]/30 shadow-sm" style={{backgroundColor: match.team2.color}}></div>
+                             </div>
+                           </div>
+                           <ArrowRight size={18} className="text-[#e5c158]/70" />
+                         </div>
+                       )) : (
+                         <div className="text-center p-8 bg-black/40 rounded-xl border border-slate-800 relative z-10">
+                            <div className="inline-flex w-12 h-12 rounded-full bg-slate-800 items-center justify-center mb-3">
+                               <Trophy className="text-slate-600" size={20} />
+                            </div>
+                            <span className="text-slate-500 text-sm font-bold block mb-1 tracking-wide">No Live Matches</span>
+                            <p className="text-xs text-slate-600">Start a match to see the dashboard.</p>
+                         </div>
+                       )}
+                     </div>
+                   </>
+                 ) : (
+                   <div className="relative z-10">
+                     {(() => {
+                       const match = appMatches.find(m => m.id === adminLiveMatchId);
+                       if (!match) return null;
+                       const matchPlayers = appPlayers.filter(p => p.team === match.team1.shortFrame || p.team === match.team2.shortFrame);
+                       return (
+                         <>
+                           <div className="flex items-center gap-3 mb-5 pb-4 border-b border-[#e5c158]/20">
+                             <button onClick={() => setAdminLiveMatchId(null)} className="p-1.5 rounded-lg bg-black border border-slate-700 hover:border-[#e5c158]/50 hover:text-[#e5c158] transition-colors text-slate-300"><ArrowLeft size={16}/></button>
+                             <h4 className="font-bold text-slate-200 text-sm">{match.team1.shortFrame} vs {match.team2.shortFrame} Control</h4>
+                           </div>
+                           <p className="text-xs text-slate-400 mb-5 pl-1">Award real-time points. Leaderboards and user dashboards will update instantly.</p>
+                           
+                           <div className="space-y-4">
+                              {matchPlayers.map((player) => (
+                                <div key={player.id} className="bg-black/60 rounded-xl border border-slate-700 overflow-hidden transition-all hover:border-[#e5c158]/30">
+                                   <div className="flex justify-between items-center p-4">
+                                      <div className="flex flex-col gap-1.5">
+                                         <span className="text-sm font-bold text-slate-200 flex items-center gap-3">{player.name} <span className="bg-[#e5c158]/10 border border-[#e5c158]/20 text-[10px] uppercase font-black px-2 py-0.5 rounded text-[#e5c158] tracking-widest">{player.team}</span></span>
+                                         <span className="text-xs font-bold text-emerald-400 tracking-wide mt-1">{player.points} Total Pts</span>
+                                      </div>
+                                      <button 
+                                        onClick={() => setAdminExpandedPlayerId(adminExpandedPlayerId === player.id ? null : player.id)}
+                                        className="bg-black border border-slate-700 p-2 rounded-lg hover:border-[#e5c158]/50 hover:text-[#e5c158] transition-colors active:scale-95 text-slate-400"
+                                      >
+                                        {adminExpandedPlayerId === player.id ? <Minus size={18} /> : <PlusCircle size={18} />}
+                                      </button>
+                                   </div>
+                                   
+                                   {adminExpandedPlayerId === player.id && (
+                                      <div className="p-4 bg-black/80 border-t border-slate-700">
+                                        <p className="text-[10px] font-black tracking-widest text-[#e5c158]/70 uppercase mb-4 pl-1">Award Points</p>
+                                        <div className="grid grid-cols-3 gap-3">
+                                           <button 
+                                             onClick={() => setAppPlayers(appPlayers.map(p => p.id === player.id ? { ...p, points: p.points + 6 } : p))}
+                                             className="bg-black border border-slate-700 hover:border-blue-500/50 active:scale-95 transition-all rounded-xl py-3 text-[11px] uppercase font-bold text-slate-300 flex flex-col items-center gap-1 shadow-sm"
+                                           >
+                                             <span className="text-blue-400 text-sm">+6</span> Six
+                                           </button>
+                                           <button 
+                                             onClick={() => setAppPlayers(appPlayers.map(p => p.id === player.id ? { ...p, points: p.points + 4 } : p))}
+                                             className="bg-black border border-slate-700 hover:border-blue-500/50 active:scale-95 transition-all rounded-xl py-3 text-[11px] uppercase font-bold text-slate-300 flex flex-col items-center gap-1 shadow-sm"
+                                           >
+                                             <span className="text-blue-400 text-sm">+4</span> Four
+                                           </button>
+                                           <button 
+                                             onClick={() => setAppPlayers(appPlayers.map(p => p.id === player.id ? { ...p, points: p.points + 25 } : p))}
+                                             className="bg-black border border-slate-700 hover:border-red-500/50 active:scale-95 transition-all rounded-xl py-3 text-[11px] uppercase font-bold text-slate-300 flex flex-col items-center gap-1 shadow-sm"
+                                           >
+                                             <span className="text-red-500 text-sm shadow-[0_0_10px_rgba(239,68,68,0.2)] pb-0.5">+25</span> Wicket
+                                           </button>
+                                           <button 
+                                             onClick={() => setAppPlayers(appPlayers.map(p => p.id === player.id ? { ...p, points: p.points + 1 } : p))}
+                                             className="bg-black border border-slate-700 hover:border-emerald-500/50 active:scale-95 transition-all rounded-xl py-3 text-[11px] uppercase font-bold text-slate-300 flex flex-col items-center gap-1 shadow-sm"
+                                           >
+                                             <span className="text-emerald-400 text-sm">+1</span> 1 Run
+                                           </button>
+                                           <button 
+                                             onClick={() => setAppPlayers(appPlayers.map(p => p.id === player.id ? { ...p, points: p.points + 2 } : p))}
+                                             className="bg-black border border-slate-700 hover:border-emerald-500/50 active:scale-95 transition-all rounded-xl py-3 text-[11px] uppercase font-bold text-slate-300 flex flex-col items-center gap-1 shadow-sm"
+                                           >
+                                             <span className="text-emerald-400 text-sm">+2</span> 2 Run
+                                           </button>
+                                           <button 
+                                             onClick={() => setAppPlayers(appPlayers.map(p => p.id === player.id ? { ...p, points: p.points + 12 } : p))}
+                                             className="bg-black border border-slate-700 hover:border-orange-500/50 active:scale-95 transition-all rounded-xl py-3 text-[11px] uppercase font-bold text-slate-300 flex flex-col items-center gap-1 shadow-sm"
+                                           >
+                                             <span className="text-orange-400 text-sm">+12</span> Catch
+                                           </button>
+                                        </div>
+                                        <div className="flex gap-3 items-center mt-4 pt-4 border-t border-slate-800">
+                                           <span className="text-[10px] font-black tracking-widest flex-1 text-slate-500 uppercase">Custom Manual:</span>
+                                           <button onClick={() => setAppPlayers(appPlayers.map(p => p.id === player.id ? { ...p, points: Math.max(0, p.points - 1) } : p))} className="bg-red-950/50 border border-red-900/50 text-red-500 px-4 py-2 rounded-lg font-bold text-xs tracking-wider active:scale-95">-1</button>
+                                           <button onClick={() => setAppPlayers(appPlayers.map(p => p.id === player.id ? { ...p, points: p.points + 10 } : p))} className="bg-emerald-950/50 border border-emerald-900/50 text-emerald-500 px-4 py-2 rounded-lg font-bold text-xs tracking-wider active:scale-95">+10</button>
+                                        </div>
+                                      </div>
+                                   )}
+                                </div>
+                              ))}
+                           </div>
+                         </>
+                       );
+                     })()}
+                   </div>
+                 )}
+               </div>
+             )}
+
+             {/* Manage Upcoming Match Lineups */}
+             <button 
+      onClick={() => setShowManageLineups(!showManageLineups)}
+      className={`flex items-center justify-between w-full mt-4 bg-[#13151c] border ${showManageLineups ? 'border-[#e5c158]/30 rounded-t-xl border-b-0 mb-0 bg-gradient-to-b from-[#e5c158]/5 to-transparent' : 'border-slate-800 rounded-xl mb-3 hover:border-[#e5c158]/30'} p-4 shadow-lg transition-all relative group overflow-hidden`}
+    >
+                <div className="absolute inset-0 bg-gradient-to-r from-yellow-500/0 via-yellow-500/5 to-yellow-500/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000"></div>
+                <h3 className="font-bold text-slate-200 tracking-wide flex items-center justify-between z-10">App Settings: Upcoming Matches Lineups</h3>
+                <div className={`p-1.5 rounded-lg border transition-all z-10 ${showManageLineups ? 'text-black border-[#e5c158] bg-[#e5c158] shadow-[0_0_10px_rgba(229,193,88,0.5)]' : 'text-slate-500 border-slate-700 bg-black/40 group-hover:text-[#e5c158] group-hover:border-[#e5c158]/30'}`}>
+       {showManageLineups ? <ChevronUp size={16} strokeWidth={3} /> : <ChevronDown size={16} />}
+    </div>
+             </button>
+             
+             {showManageLineups && (
+               <div className="bg-[#13151c] rounded-b-2xl shadow-lg border border-[#e5c158]/50 border-t-0 p-5 mb-6 backdrop-blur-sm relative before:absolute before:inset-0 before:bg-gradient-to-b before:from-yellow-500/5 before:to-transparent before:pointer-events-none">
+                 {!adminUpcomingLineupMatchId ? (
+                   <>
+                     <p className="text-xs text-slate-400 mb-5 pl-1 relative z-10">Select an upcoming match to set player lineups.</p>
+                     <div className="space-y-4 relative z-10">
+                       {appMatches.filter(m => m.status === 'Upcoming').length > 0 ? appMatches.filter(m => m.status === 'Upcoming').map(match => (
+                         <div 
+                           key={match.id}
+                           onClick={() => setAdminUpcomingLineupMatchId(match.id)}
+                           className="bg-black/60 rounded-xl border border-slate-700 p-4 flex justify-between items-center cursor-pointer hover:border-[#e5c158]/50 transition-colors"
+                         >
+                           <div className="flex items-center gap-4">
+                             <div className="flex items-center gap-2">
+                               <div className="w-6 h-6 rounded-full border border-[#e5c158]/30 shadow-sm" style={{backgroundColor: match.team1.color}}></div>
+                               <span className="font-bold text-slate-200 text-sm tracking-wide">{match.team1.shortFrame}</span>
+                             </div>
+                             <span className="text-slate-500 text-xs font-black tracking-widest uppercase">vs</span>
+                             <div className="flex items-center gap-2">
+                               <span className="font-bold text-slate-200 text-sm tracking-wide">{match.team2.shortFrame}</span>
+                               <div className="w-6 h-6 rounded-full border border-[#e5c158]/30 shadow-sm" style={{backgroundColor: match.team2.color}}></div>
+                             </div>
+                           </div>
+                           <div className="flex items-center gap-4">
+                             <button
+                               onClick={(e) => {
+                                 e.stopPropagation();
+                                 setAppMatches(appMatches.map(m => m.id === match.id ? { ...m, lineupStatus: m.lineupStatus === 'OUT' ? 'NOT_OUT' : 'OUT' } : m));
+                               }}
+                               className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${match.lineupStatus === 'OUT' ? 'bg-green-500/20 text-green-400 border border-green-500/50 shadow-[0_0_10px_rgba(34,197,94,0.2)]' : 'bg-red-500/10 text-red-500 border border-red-500/50'}`}
+                             >
+                               {match.lineupStatus === 'OUT' ? 'Lineups Out' : 'Lineups Not Out'}
+                             </button>
+                             <ArrowRight size={18} className="text-[#e5c158]/70" />
+                           </div>
+                         </div>
+                       )) : (
+                         <div className="text-center p-8 bg-black/40 rounded-xl border border-slate-800 relative z-10">
+                            <span className="text-slate-500 text-sm font-bold block tracking-wide">No Upcoming Matches</span>
+                         </div>
+                       )}
+                     </div>
+                   </>
+                 ) : (
+                   <div className="relative z-10">
+                     {(() => {
+                       const match = appMatches.find(m => m.id === adminUpcomingLineupMatchId);
+                       if (!match) return null;
+                       const matchPlayers = appPlayers.filter(p => p.team === match.team1.shortFrame || p.team === match.team2.shortFrame);
+                       return (
+                         <>
+                           <div className="flex items-center gap-3 mb-5 pb-4 border-b border-[#e5c158]/20">
+                             <button onClick={() => setAdminUpcomingLineupMatchId(null)} className="p-1.5 rounded-lg bg-black border border-slate-700 hover:border-[#e5c158]/50 hover:text-[#e5c158] transition-colors text-slate-300"><ArrowLeft size={16}/></button>
+                             <h4 className="font-bold text-slate-200 text-sm">{match.team1.shortFrame} vs {match.team2.shortFrame} - Lineups</h4>
+                           </div>
+                           <p className="text-xs text-slate-400 mb-5 pl-1">Select players that are playing. They will get a green tick. Unselected players will have a red dot.</p>
+                           
+                           <div className="space-y-3">
+                              {matchPlayers.map((player) => (
+                                <div 
+                                  key={player.id} 
+                                  onClick={() => setAppPlayers(appPlayers.map(p => p.id === player.id ? { ...p, isPlaying: !p.isPlaying } : p))}
+                                  className={`bg-black/60 rounded-xl border cursor-pointer hover:border-[#e5c158]/50 transition-colors overflow-hidden flex justify-between items-center p-4 ${player.isPlaying ? 'border-green-500/40 shadow-[0_0_10px_rgba(34,197,94,0.1)]' : 'border-slate-700'}`}
+                                >
+                                  <div className="flex flex-col gap-1">
+                                     <span className="text-sm font-bold text-slate-200 flex items-center gap-3">{player.name} <span className="bg-[#e5c158]/10 border border-[#e5c158]/20 text-[10px] uppercase font-black px-2 py-0.5 rounded text-[#e5c158] tracking-widest">{player.team}</span></span>
+                                  </div>
+                                  <div>
+                                    {player.isPlaying ? (
+                                        <div className="w-6 h-6 rounded-full bg-green-500/20 border border-green-500/50 shadow-[0_0_8px_rgba(34,197,94,0.3)] flex items-center justify-center text-green-400">
+                                           <Check size={14} />
+                                        </div>
+                                    ) : (
+                                        <div className="w-6 h-6 rounded-full border border-red-500/30 bg-red-500/10 flex items-center justify-center text-red-500/50">
+                                           <X size={14} />
+                                        </div>
+                                    )}
+                                  </div>
+                                </div>
+                              ))}
+                           </div>
+                         </>
+                       );
+                     })()}
+                   </div>
+                 )}
+               </div>
+             )}
