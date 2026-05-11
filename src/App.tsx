@@ -57,6 +57,7 @@ interface BankAccount {
 interface WithdrawRequest {
   id: string;
   userId?: string;
+  userNumericId?: string;
   amount: number;
   bankAccountId: string;
   status: 'Pending' | 'Approved' | 'Rejected';
@@ -91,6 +92,7 @@ interface Match {
 interface DepositRequest {
   id: string;
   userId?: string;
+  userNumericId?: string;
   userName?: string;
   amount: number;
   method: string;
@@ -412,7 +414,8 @@ const ContestDetailsView = ({
   onParticipantClick,
   currentUser,
   isAdmin,
-  onMakeBotsWin
+  onMakeBotsWin,
+  instanceId
 }: {
   activeMatch: Match;
   contest: Contest;
@@ -427,12 +430,17 @@ const ContestDetailsView = ({
   currentUser?: any;
   isAdmin?: boolean;
   onMakeBotsWin?: () => void;
+  instanceId?: number | null;
 }) => {
   const [activeTab, setActiveTab] = useState<'WINNINGS' | 'LEADERBOARD'>('WINNINGS');
   
   const contestTeams = useMemo(() => {
-     return savedTeams.filter(t => t.match?.id === activeMatch.id && t.contestName === contest.name);
-  }, [savedTeams, activeMatch.id, contest.name]);
+     let filtered = savedTeams.filter(t => t.match?.id === activeMatch.id && t.contestName === contest.name);
+     if (instanceId != null) {
+        filtered = filtered.filter(t => typeof t.instanceId === 'number' ? t.instanceId === instanceId : true);
+     }
+     return filtered;
+  }, [savedTeams, activeMatch.id, contest.name, instanceId]);
   
   // Real-time calculation based on joined teams
   const currentCollected = contestTeams.length * contest.entryFee;
@@ -472,6 +480,10 @@ const ContestDetailsView = ({
   const getPayouts = () => {
     if (contest.payouts && contest.payouts.length > 0) {
       return contest.payouts;
+    }
+
+    if (contest.type !== 'Mega') {
+       return [{ rank: '1', amount: contest.firstPrize || contest.prizeText }];
     }
 
     const payouts = [];
@@ -517,7 +529,7 @@ const ContestDetailsView = ({
            <div>
              <p className="text-xs text-app-text-muted font-semibold uppercase">Prize Pool</p>
              <p className="text-xl font-black text-app-text">
-               {currentCollected > 0 ? `₹${totalPrizePool.toFixed(2)}` : contest.prizeText}
+               {currentCollected > 0 && contest.type === 'Mega' ? `₹${totalPrizePool.toFixed(2)}` : contest.prizeText}
              </p>
            </div>
            <div className="text-right">
@@ -558,7 +570,7 @@ const ContestDetailsView = ({
       <div className="flex-1 overflow-y-auto pb-20 bg-app-bg text-app-text">
         {activeTab === 'WINNINGS' ? (
            <div className="space-y-4 p-4">
-              {(!contest.payouts || contest.payouts.length === 0) && (
+              {(!contest.payouts || contest.payouts.length === 0) && contest.type === 'Mega' && (
                 <div className="bg-blue-50 border border-blue-100 text-blue-800 text-xs p-3 rounded-lg text-center font-medium shadow-sm">
                   <b>Dynamic Prize Pool:</b> Users receive {winningPercentage}% of total entry fees collected. The remaining {100 - winningPercentage}% is kept as platform fee. As more teams join, the winning amounts automatically increase!
                 </div>
@@ -661,23 +673,6 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('dreamApp_players', JSON.stringify(appPlayers));
 
-    if (appPlayers && appPlayers.length > 0) {
-       const hasMissingDefault = !appPlayers.some(p => p.id === 'ind_1') || !appPlayers.some(p => p.id === 'pak_1');
-       
-       if (hasMissingDefault) {
-           const missingPlayers = MOCK_PLAYERS.filter(mp => {
-               return (mp.id.startsWith('ind_') || mp.id.startsWith('pak_') || mp.id.startsWith('aus_') || mp.id.startsWith('eng_') || mp.id.startsWith('nz_') || mp.id.startsWith('wi_')) && !appPlayers.some(p => p.id === mp.id);
-           });
-           
-           if (missingPlayers.length > 0) {
-              const merged = [...appPlayers, ...missingPlayers];
-              setAppPlayers(merged);
-              setDoc(doc(db, 'gameData', 'main_state'), JSON.parse(JSON.stringify({ players: merged })), { merge: true }).catch(console.error);
-              return; 
-           }
-       }
-    }
-    
     // Prevent immediate overwrite when checking snapshot first time
     if (!isFirstPlayersLoad) {
          setDoc(doc(db, 'gameData', 'main_state'), JSON.parse(JSON.stringify({ players: appPlayers })), { merge: true }).catch(console.error);
@@ -709,8 +704,10 @@ export default function App() {
 
   const [view, setView] = useState<ViewType>('HOME');
   const [activeMatch, setActiveMatch] = useState<Match | null>(null);
-  const [selectedContest, setSelectedContest] = useState<{fee: number; name: string} | null>(null);
+  const [liveScore, setLiveScore] = useState<string | null>(null);
+  const [selectedContest, setSelectedContest] = useState<{fee: number; name: string, id?: string, spots?: number} | null>(null);
   const [activeContestDetails, setActiveContestDetails] = useState<Contest | null>(null);
+  const [activeContestInstanceId, setActiveContestInstanceId] = useState<number | null>(null);
   
   const [authMode, setAuthMode] = useState<'LOGIN' | 'SIGNUP'>('LOGIN');
   const [authInput, setAuthInput] = useState('');
@@ -727,7 +724,7 @@ export default function App() {
   }, [winningPercentage]);
 
   // Real App States with Local Storage persistence
-  const [user, setUser] = useState<{email: string, id: string, name: string} | null>(() => {
+  const [user, setUser] = useState<{email: string, id: string, name: string, numericId?: string} | null>(() => {
     const saved = localStorage.getItem('dreamApp_user');
     return saved ? JSON.parse(saved) : null;
   });
@@ -793,18 +790,21 @@ export default function App() {
         }
 
         localStorage.setItem('dreamApp_hasSignedUp', 'true');
-        setUser({
+        const newUser = {
           email: firebaseUser.email || '',
           name: firebaseUser.displayName || 'Fantasy Player',
-          id: numericId
-        });
+          id: firebaseUser.uid,
+          numericId: numericId
+        };
+        localStorage.setItem('dreamApp_user', JSON.stringify(newUser));
+        setUser(newUser);
       } else {
         setUser(null);
       }
     });
     return () => unsubscribe();
   }, []);
-  const [wallet, setWallet] = useState<{deposit: number, winning: number, bonus: number}>({ deposit: 0, winning: 0, bonus: 0 });
+  const [wallet, setWallet] = useState<{deposit: number, winning: number, bonus: number, blocked?: boolean}>({ deposit: 0, winning: 0, bonus: 0 });
   const [walletLoadedUser, setWalletLoadedUser] = useState<string | null>(null);
 
   useEffect(() => {
@@ -859,6 +859,24 @@ export default function App() {
         if (isSubscribed) setBankAccounts(snap.docs.map(d => d.data() as BankAccount));
     });
 
+    const unsubUserTeams = onSnapshot(collection(db, 'userTeams'), (snap) => {
+        if (!isSubscribed) return;
+        const uTeams = snap.docs.map(d => d.data() as any);
+        setSavedTeams(prev => {
+            const newTeams = [...prev];
+            const idMap = new Map(newTeams.map((t, i) => [t.id, i]));
+            uTeams.forEach(ut => {
+                if (idMap.has(ut.id)) {
+                    newTeams[idMap.get(ut.id)!] = ut;
+                } else {
+                    newTeams.push(ut);
+                    idMap.set(ut.id, newTeams.length - 1);
+                }
+            });
+            return newTeams;
+        });
+    });
+
     return () => { 
         isSubscribed = false;
         unsubWallet(); 
@@ -866,6 +884,7 @@ export default function App() {
         unsubWd(); 
         unsubKyc(); 
         unsubBank();
+        unsubUserTeams();
     };
   }, [user?.id, isAdmin]);
 
@@ -1120,6 +1139,7 @@ export default function App() {
               const newReq: WithdrawRequest = {
                 id: 'wd_' + Date.now(),
                 userId: user?.id,
+                userNumericId: user?.numericId,
                 amount: withdrawAmount,
                 bankAccountId: withdrawAccountId,
                 status: 'Pending',
@@ -1322,20 +1342,24 @@ export default function App() {
             // Generate payouts
             let payouts = contest.payouts && contest.payouts.length > 0 ? [...contest.payouts] : [];
             if (payouts.length === 0 && contestTeams.length > 0) {
-               if (contestTeams.length === 1) {
-                  payouts.push({ rank: '1', amount: totalPrizePool });
-               } else if (contestTeams.length === 2) {
-                  payouts.push({ rank: '1', amount: totalPrizePool * 0.7 });
-                  payouts.push({ rank: '2', amount: totalPrizePool * 0.3 });
-               } else if (contestTeams.length <= 5) {
-                  payouts.push({ rank: '1', amount: totalPrizePool * 0.5 });
-                  payouts.push({ rank: '2', amount: totalPrizePool * 0.3 });
-                  payouts.push({ rank: '3', amount: totalPrizePool * 0.2 });
+               if (contest.type !== 'Mega') {
+                  payouts = [{ rank: '1', amount: contest.firstPrize || contest.prizeText }];
                } else {
-                  payouts.push({ rank: '1', amount: totalPrizePool * 0.4 });
-                  payouts.push({ rank: '2', amount: totalPrizePool * 0.25 });
-                  payouts.push({ rank: '3', amount: totalPrizePool * 0.15 });
-                  payouts.push({ rank: '4 - 5', amount: totalPrizePool * 0.1 });
+                 if (contestTeams.length === 1) {
+                    payouts.push({ rank: '1', amount: totalPrizePool });
+                 } else if (contestTeams.length === 2) {
+                    payouts.push({ rank: '1', amount: totalPrizePool * 0.7 });
+                    payouts.push({ rank: '2', amount: totalPrizePool * 0.3 });
+                 } else if (contestTeams.length <= 5) {
+                    payouts.push({ rank: '1', amount: totalPrizePool * 0.5 });
+                    payouts.push({ rank: '2', amount: totalPrizePool * 0.3 });
+                    payouts.push({ rank: '3', amount: totalPrizePool * 0.2 });
+                 } else {
+                    payouts.push({ rank: '1', amount: totalPrizePool * 0.4 });
+                    payouts.push({ rank: '2', amount: totalPrizePool * 0.25 });
+                    payouts.push({ rank: '3', amount: totalPrizePool * 0.15 });
+                    payouts.push({ rank: '4 - 5', amount: totalPrizePool * 0.1 });
+                 }
                }
             }
 
@@ -1418,7 +1442,7 @@ export default function App() {
   
   // Admin Contest Creation State
   const [adminContestType, setAdminContestType] = useState<'Mega' | 'H2H' | 'H2H_3' | 'H2H_4' | 'H2H_5'>('Mega');
-  const [adminTab, setAdminTab] = useState<'DASHBOARD' | 'MATCHES' | 'CONTESTS' | 'USERS' | 'SETTINGS' | 'FINANCIALS' | 'TEAMS' | 'BANNERS'>('DASHBOARD');
+  const [adminTab, setAdminTab] = useState<'DASHBOARD' | 'MATCHES' | 'CONTESTS' | 'USERS' | 'SETTINGS' | 'TEAMS' | 'BANNERS' | 'ENTRY FEES' | 'FINANCIALS'>('DASHBOARD');
   const [adminContestName, setAdminContestName] = useState<string>('');
   const [adminContestPrize, setAdminContestPrize] = useState<string>('');
   const [adminContestEntry, setAdminContestEntry] = useState<string>('');
@@ -1516,9 +1540,13 @@ export default function App() {
   const [showManageMatches, setShowManageMatches] = useState<boolean>(false);
   const [showManageContests, setShowManageContests] = useState<boolean>(false);
   const [showManageUserTeams, setShowManageUserTeams] = useState<boolean>(false);
+  const [showApiSync, setShowApiSync] = useState<boolean>(false);
+  const [apiMatches, setApiMatches] = useState<any[]>([]);
+  const [isFetchingApi, setIsFetchingApi] = useState<boolean>(false);
+  const [cricApiKey, setCricApiKey] = useState<string>(() => localStorage.getItem('cricApiKey') || '0a3d33c0-9c55-48ea-9d6e-a23081246556');
   const [adminTeamEditMatchId, setAdminTeamEditMatchId] = useState<string | null>(null);
   const [teamSearchQuery, setTeamSearchQuery] = useState<string>('');
-  const [matchTab, setMatchTab] = useState<'Contests' | 'My Teams'>('Contests');
+  const [matchTab, setMatchTab] = useState<'Contests' | 'My Contests' | 'My Teams'>('Contests');
   const [showManagePlayers, setShowManagePlayers] = useState<boolean>(false);
   const [adminExpandedPlayerId, setAdminExpandedPlayerId] = useState<string | null>(null);
   const [adminLiveMatchId, setAdminLiveMatchId] = useState<string | null>(null);
@@ -1543,6 +1571,12 @@ export default function App() {
   const [showManageDeposits, setShowManageDeposits] = useState<boolean>(false);
   const [showManageWithdrawals, setShowManageWithdrawals] = useState<boolean>(false);
   const [showManageKYC, setShowManageKYC] = useState<boolean>(false);
+  
+  const [showManageUsers, setShowManageUsers] = useState<boolean>(false);
+  const [searchUserId, setSearchUserId] = useState<string>('');
+  const [searchedUserWallet, setSearchedUserWallet] = useState<any>(null);
+  const [walletSaveStatus, setWalletSaveStatus] = useState<{[key: string]: 'idle' | 'saving' | 'success'}>({});
+  const [isSearchingUser, setIsSearchingUser] = useState<boolean>(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncMessage, setSyncMessage] = useState<{type: 'success' | 'error', text: string} | null>(null);
   
@@ -1621,7 +1655,7 @@ export default function App() {
     setViceCaptain(null);
     setSelectedContest(null);
     setPreviewSource('CREATE_TEAM');
-    setMatchTab(match.status === 'Upcoming' || isAdmin ? 'Contests' : 'My Teams');
+    setMatchTab(match.status === 'Upcoming' || isAdmin ? 'Contests' : 'My Contests');
     setView('MATCH');
   };
 
@@ -1647,6 +1681,41 @@ export default function App() {
     }, 1000);
     return () => clearInterval(timer);
   }, []);
+
+  useEffect(() => {
+     let intervalId: any;
+     if (activeMatch && activeMatch.status === 'Live') {
+         const fetchLiveScore = async () => {
+             if (!cricApiKey) return;
+             try {
+                // Determine raw ID from API prefix if exists
+                const rawId = activeMatch.id.replace('api_', '');
+                const res = await fetch(`https://api.cricapi.com/v1/match_info?apikey=${cricApiKey}&id=${rawId}`);
+                const data = await res.json();
+                if (data && data.status === 'success' && data.data) {
+                    const matchInfo = data.data;
+                    const liveScores = matchInfo.score || [];
+                    if (liveScores.length > 0) {
+                        const scoreStrings = liveScores.map((s: any) => `${s.inning}: ${s.r}/${s.w} (${s.o} ov)`).join(' | ');
+                        setLiveScore(scoreStrings);
+                    } else if (matchInfo.status) {
+                        setLiveScore(matchInfo.status);
+                    }
+                }
+             } catch (e) {
+                 console.error("Live Score Fetch Error:", e);
+             }
+         };
+         fetchLiveScore();
+         intervalId = setInterval(fetchLiveScore, 30000); // 30 sec polling
+     } else {
+         setLiveScore(null); // Reset when not live
+     }
+     
+     return () => {
+         if (intervalId) clearInterval(intervalId);
+     }
+  }, [activeMatch, cricApiKey]);
 
   const getFormattedTimer = (match: Match) => {
     let ts = match.time?.trim() || '';
@@ -1763,13 +1832,17 @@ export default function App() {
     // If editing existing user team
     if (editingSavedTeamIndex !== null) {
       const updatedTeams = [...savedTeams];
-      updatedTeams[editingSavedTeamIndex] = {
+      const editedTeamMeta = {
         ...updatedTeams[editingSavedTeamIndex],
         players: team,
         captain,
         viceCaptain
       };
+      updatedTeams[editingSavedTeamIndex] = editedTeamMeta;
       setSavedTeams(updatedTeams);
+      if (editedTeamMeta.userId && editedTeamMeta.userId !== 'guest') {
+         setDoc(doc(db, 'userTeams', editedTeamMeta.id), editedTeamMeta, { merge: true }).catch(console.error);
+      }
       setEditingSavedTeamIndex(null);
       alert("✅ Team updated successfully!");
       setView(editReturnView);
@@ -1779,19 +1852,41 @@ export default function App() {
     const fee = selectedContest ? selectedContest.fee : 59;
     const contestName = selectedContest ? selectedContest.name : 'Mega Contest (₹55 Crore)';
 
-    // Save the created team to "My Matches"
-    setSavedTeams([...savedTeams, {
-      id: Date.now().toString(),
+    const teamIdStr = `T${savedTeams.length + 1}`;
+    const newId = Date.now().toString();
+    const contestDef = appContests.find(c => c.name === contestName) || DEFAULT_CONTESTS[0];
+    const instanceSpots = contestDef.spots > 0 ? contestDef.spots : 2;
+    const sameContestTeams = savedTeams.filter(t => t.match?.id === activeMatch?.id && t.contestName === contestName);
+
+    const userTeamsInSameContest = sameContestTeams.filter(t => t.userId === (user?.id || 'guest'));
+    if (contestDef && contestDef.maxTeams && userTeamsInSameContest.length >= contestDef.maxTeams) {
+        alert(`You can only join this contest a maximum of ${contestDef.maxTeams} times.`);
+        return;
+    }
+
+    const instanceId = Math.floor(sameContestTeams.length / instanceSpots);
+    
+    const newTeamMeta = {
+      id: newId,
       match: activeMatch,
-      teamId: `T${savedTeams.length + 1}`,
+      teamId: teamIdStr,
       players: team,
       captain,
       viceCaptain,
       contestName: contestName,
       fee: fee,
       userId: user?.id || 'guest',
-      userName: user?.name || user?.email?.split('@')[0] || 'Guest Player'
-    }]);
+      userNumericId: user?.numericId,
+      userName: user?.name || user?.email?.split('@')[0] || 'Guest Player',
+      prizeDistributed: false,
+      instanceId: instanceId
+    };
+
+    // Save the created team to "My Matches"
+    setSavedTeams(prev => [...prev, newTeamMeta]);
+    if (user?.id) {
+       setDoc(doc(db, 'userTeams', newId), newTeamMeta).catch(e => console.error("Could not sync user team:", e));
+    }
 
     // Optional: Deduct balance for Mega Contest
     if (balance >= fee) {
@@ -2010,10 +2105,17 @@ export default function App() {
     // Instead of activeMatch with all players, use a lightweight match object payload to save JS memory
     const liteMatch = { id: activeMatch.id, status: activeMatch.status, team1: activeMatch.team1, team2: activeMatch.team2 };
     
+    // figure out initial instance id offset based on current teams
+    const sameContestTeams = savedTeams.filter(t => t.match?.id === activeMatch?.id && t.contestName === contest.name);
+    const instanceSpots = contest.spots > 0 ? contest.spots : 2;
+    let baseCount = sameContestTeams.length;
+
     const newBots = [];
     for(let i=0; i<safeAmount; i++) {
         const randomName = BOT_NAMES[Math.floor(Math.random() * BOT_NAMES.length)] + Math.floor(Math.random() * 9999).toString();
         const bp = variations[Math.floor(Math.random() * variations.length)];
+        const currentInstanceId = Math.floor(baseCount / instanceSpots);
+        baseCount++;
         
         newBots.push({
            id: Date.now().toString() + Math.random().toString(36).substring(2, 5) + i,
@@ -2026,7 +2128,8 @@ export default function App() {
            contestName: contest.name,
            fee: contest.entryFee,
            userId: type === 'BOOT' ? 'admin_bot_boot' : 'admin_bot',
-           userName: type === 'BOOT' ? `BOOT ${Date.now().toString().slice(-3)}${i}` : randomName
+           userName: type === 'BOOT' ? `BOOT ${Date.now().toString().slice(-3)}${i}` : randomName,
+           instanceId: currentInstanceId
         });
     }
     
@@ -2113,6 +2216,19 @@ export default function App() {
     const megaContests = appContests.filter(c => c.type === 'Mega');
     const h2hContests = appContests.filter(c => c.type === 'H2H' || c.type === '3 Spots' || c.type === '4 Spots' || c.type === '5 Spots');
 
+    const userTeamsInMatch = savedTeams.filter(t => t.match?.id === activeMatch.id && t.userId === (user?.id || 'guest'));
+    const myTeamsCount = userTeamsInMatch.length;
+    
+    // Calculate unique contests joined by user
+    const distinctMyContests: { contestName: string, instanceId: number }[] = [];
+    userTeamsInMatch.forEach(t => {
+       const iId = t.instanceId || 0;
+       if (!distinctMyContests.find(existing => existing.contestName === t.contestName && existing.instanceId === iId)) {
+          distinctMyContests.push({ contestName: t.contestName, instanceId: iId });
+       }
+    });
+    const myContestsCount = distinctMyContests.length;
+
     return (
       <div className="flex flex-col h-full bg-app-bg">
         <header className="bg-app-bg text-app-text p-4 flex items-center justify-between shadow-sm z-10 shrink-0">
@@ -2135,9 +2251,14 @@ export default function App() {
              </div>
              <span className="text-xs text-app-text mt-1 font-bold">{activeMatch.team1.shortFrame}</span>
            </div>
-           <div className="flex flex-col items-center text-center">
-              {activeMatch.status === 'Live' ? <span className="text-app-accent font-bold text-base tracking-widest">LIVE</span> : <span className="text-[#FFD700] font-bold text-sm">{activeMatch.status.toUpperCase()}</span>}
-              <span className="text-xs text-app-text-muted mt-1">{activeMatch.time}</span>
+           <div className="flex flex-col items-center text-center px-2">
+              {activeMatch.status === 'Live' ? (
+                  <div className="flex flex-col items-center">
+                     <span className="text-app-accent font-bold text-base tracking-widest flex items-center gap-1 mb-1"><div className="w-2 h-2 rounded-full bg-app-accent animate-pulse"></div>LIVE</span>
+                     {liveScore && <span className="text-yellow-400 font-black text-xs text-center border-t border-app-border-hover pt-1 mt-1 break-words">{liveScore}</span>}
+                  </div>
+              ) : <span className="text-[#FFD700] font-bold text-sm block">{activeMatch.status.toUpperCase()}</span>}
+              <span className="text-[10px] text-app-text-muted mt-1">{activeMatch.time}</span>
               <span className="text-[10px] text-app-text-muted mt-0.5">Stadium</span>
            </div>
            <div className="flex flex-col items-center">
@@ -2154,15 +2275,23 @@ export default function App() {
                Contests
              </button>
            )}
-           <button className={`flex-1 py-3 ${matchTab === 'My Teams' || (activeMatch.status !== 'Upcoming' && !isAdmin) ? 'text-app-accent border-b-2 border-app-accent' : 'text-app-text-muted'}`} onClick={() => setMatchTab('My Teams')}>
-             My Teams
+           <button className={`flex-1 py-3 ${matchTab === 'My Contests' ? 'text-app-accent border-b-2 border-app-accent' : 'text-app-text-muted'}`} onClick={() => setMatchTab('My Contests')}>
+             {`My Contests (${myContestsCount})`}
+           </button>
+           <button className={`flex-1 py-3 ${matchTab === 'My Teams' || (activeMatch.status !== 'Upcoming' && !isAdmin && matchTab !== 'My Contests') ? 'text-app-accent border-b-2 border-app-accent' : 'text-app-text-muted'}`} onClick={() => setMatchTab('My Teams')}>
+             {`My Teams (${myTeamsCount})`}
            </button>
         </div>
 
         <div className="flex-1 overflow-y-auto p-4 space-y-4 pb-20">
-          {(matchTab === 'Contests' && (activeMatch.status === 'Upcoming' || isAdmin)) ? (
+          {(matchTab === 'Contests' && (activeMatch.status === 'Upcoming' || isAdmin)) && (
              <>
-              {megaContests.map(c => (
+              {megaContests.map(c => {
+                const totalTeamsCount = savedTeams.filter(t => t.match?.id === activeMatch.id && t.contestName === c.name).length;
+                const spotsLeft = Math.max(0, c.spots - totalTeamsCount);
+                const fillPercent = Math.min(100, (totalTeamsCount / c.spots) * 100);
+                
+                return (
                 <div key={c.id} onClick={() => { setActiveContestDetails(c); setView('CONTEST_DETAILS'); }} className="bg-app-card rounded-xl shadow-sm border border-app-border overflow-hidden mb-4 cursor-pointer active:scale-[0.99] transition-transform relative">
                   <div className="p-4 border-b border-app-border">
                     <div className="flex justify-between items-center mb-1">
@@ -2177,7 +2306,7 @@ export default function App() {
                           if(activeMatch.status !== 'Upcoming') {
                              alert("Match is already live or completed!"); return;
                           }
-                          setSelectedContest({fee: c.entryFee, name: c.name});
+                          setSelectedContest({fee: c.entryFee, name: c.name, id: c.id, spots: c.spots});
                           setView('CREATE_TEAM');
                         }}
                         className={`${activeMatch.status === 'Upcoming' ? 'bg-green-600 active:scale-95 hover:bg-green-700' : 'bg-slate-700'} transition-all text-white font-bold py-1.5 px-6 rounded text-lg shadow-sm`}
@@ -2186,10 +2315,10 @@ export default function App() {
                       </button>
                     </div>
                     <div className="bg-app-bg h-1.5 rounded-full mb-2 overflow-hidden">
-                      <div className="bg-app-accent h-full" style={{width:'65%'}}></div>
+                      <div className="bg-app-accent h-full" style={{width:`${fillPercent}%`}}></div>
                     </div>
                     <div className="flex justify-between text-[10px] text-app-text-muted font-semibold">
-                      <span className="text-red-400">{Math.floor(c.spots * 0.35).toLocaleString('en-IN')} spots left</span>
+                      <span className="text-red-400">{spotsLeft.toLocaleString('en-IN')} spots left</span>
                       <span>{c.spots.toLocaleString('en-IN')} spots</span>
                     </div>
                   </div>
@@ -2200,10 +2329,17 @@ export default function App() {
                     <span className="flex items-center gap-1.5"><div className="w-4 h-4 border border-slate-500 rounded flex items-center justify-center text-[8px] font-bold text-app-text-muted">M</div> {c.maxTeams || 20}</span>
                   </div>
                 </div>
-              ))}
+              )})}
 
-              {h2hContests.map(c => (
-                <div key={c.id} onClick={() => { setActiveContestDetails(c); setView('CONTEST_DETAILS'); }} className="bg-app-card rounded-xl shadow-sm border border-app-border overflow-hidden mb-4 cursor-pointer active:scale-[0.99] transition-transform relative">
+              {h2hContests.map(c => {
+                const totalTeamsCount = savedTeams.filter(t => t.match?.id === activeMatch.id && t.contestName === c.name).length;
+                const cspots = c.spots > 0 ? c.spots : 2;
+                const teamsInCurrentInstance = totalTeamsCount % cspots;
+                const spotsLeft = cspots - teamsInCurrentInstance;
+                const fillPercent = (teamsInCurrentInstance / cspots) * 100;
+                
+                return (
+                <div key={c.id} onClick={() => { setActiveContestInstanceId(Math.floor(totalTeamsCount / cspots)); setActiveContestDetails(c); setView('CONTEST_DETAILS'); }} className="bg-app-card rounded-xl shadow-sm border border-app-border overflow-hidden mb-4 cursor-pointer active:scale-[0.99] transition-transform relative">
                   <div className="p-4 border-b border-app-border">
                     <div className="flex justify-between items-center mb-1">
                        <p className="text-xs text-app-text-muted font-semibold">Prize Pool</p>
@@ -2217,7 +2353,7 @@ export default function App() {
                             if(activeMatch.status !== 'Upcoming') {
                                alert("Match is already live or completed!"); return;
                             }
-                            setSelectedContest({fee: c.entryFee, name: c.name});
+                            setSelectedContest({fee: c.entryFee, name: c.name, id: c.id, spots: c.spots});
                             setView('CREATE_TEAM');
                           }}
                           className={`${activeMatch.status === 'Upcoming' ? 'bg-green-600 active:scale-95 hover:bg-green-700' : 'bg-slate-700'} transition-all text-white font-bold py-1.5 px-6 rounded text-lg shadow-sm border-b-2 border-green-800`}
@@ -2226,11 +2362,11 @@ export default function App() {
                         </button>
                     </div>
                     <div className="bg-app-bg h-1.5 rounded-full mb-2 overflow-hidden">
-                      <div className="bg-app-accent h-full w-[50%]"></div>
+                      <div className="bg-app-accent h-full" style={{width: `${fillPercent}%`}}></div>
                     </div>
                     <div className="flex justify-between text-[10px] text-app-text-muted font-semibold">
-                      <span className="text-red-400">{c.spots - 1} spots left</span>
-                      <span>{c.spots} spots</span>
+                      <span className="text-red-400">{spotsLeft} spots left</span>
+                      <span>{cspots} spots</span>
                     </div>
                   </div>
                   <div className="p-3 bg-slate-50/5 dark:bg-app-card-inner flex shrink-0 items-center justify-start gap-6 text-[11px] font-semibold text-app-text-muted">
@@ -2239,9 +2375,82 @@ export default function App() {
                     <span className="flex items-center gap-1.5"><div className="w-4 h-4 border border-slate-500 rounded flex items-center justify-center text-[8px] font-bold text-app-text-muted">M</div> {c.maxTeams || 1}</span>
                   </div>
                 </div>
-              ))}
+              )})}
              </>
-          ) : (
+          )}
+
+          {matchTab === 'My Contests' && (
+             <>
+                {distinctMyContests.length === 0 ? (
+                     <div className="flex flex-col items-center justify-center h-full opacity-60 mt-10">
+                        <Trophy size={60} className="text-app-text-muted mb-4" />
+                        <p className="font-bold text-app-text-muted">No contests joined!</p>
+                        <p className="text-sm text-app-text-muted">Join a contest to see it here.</p>
+                     </div>
+                ) : (
+                    distinctMyContests.map((dc, i) => {
+                        const c = appContests.find(cc => cc.name === dc.contestName);
+                        if (!c) return null;
+                        const totalTeamsCount = savedTeams.filter(t => t.match?.id === activeMatch.id && t.contestName === c.name).length;
+                        const cspots = c.spots > 0 ? c.spots : 2;
+                        
+                        let spotsLeft = 0;
+                        let fillPercent = 0;
+                        
+                        if (c.type === 'Mega') {
+                            spotsLeft = Math.max(0, c.spots - totalTeamsCount);
+                            fillPercent = Math.min(100, (totalTeamsCount / c.spots) * 100);
+                        } else {
+                            // Find all teams in this specific instance
+                            const teamsInThisInstance = savedTeams.filter(t => t.match?.id === activeMatch.id && t.contestName === c.name && t.instanceId === dc.instanceId).length;
+                            spotsLeft = cspots - teamsInThisInstance;
+                            fillPercent = (teamsInThisInstance / cspots) * 100;
+                        }
+                        
+                        return (
+                         <div key={i} onClick={() => { setActiveContestInstanceId(dc.instanceId); setActiveContestDetails(c); setView('CONTEST_DETAILS'); }} className="bg-app-card rounded-xl shadow-sm border border-app-border overflow-hidden mb-4 cursor-pointer active:scale-[0.99] transition-transform relative">
+                           <div className="p-4 border-b border-app-border">
+                             <div className="flex justify-between items-center mb-1">
+                                <p className="text-xs text-app-text-muted font-semibold">Prize Pool</p>
+                                {renderBotControls(c)}
+                             </div>
+                             <div className="flex justify-between items-center mb-4">
+                                 <p className="text-3xl font-black text-app-text">{c.prizeText}</p>
+                                 <button 
+                                 onClick={(e) => {
+                                     e.stopPropagation();
+                                     if(activeMatch.status !== 'Upcoming') {
+                                        alert("Match is already live or completed!"); return;
+                                     }
+                                     setSelectedContest({fee: c.entryFee, name: c.name, id: c.id, spots: c.spots});
+                                     setView('CREATE_TEAM');
+                                   }}
+                                   className={`${activeMatch.status === 'Upcoming' ? 'bg-green-600 active:scale-95 hover:bg-green-700' : 'bg-slate-700'} transition-all text-white font-bold py-1.5 px-6 rounded text-lg shadow-sm border-b-2 border-green-800`}
+                                 >
+                                   ₹{c.entryFee}
+                                 </button>
+                             </div>
+                             <div className="bg-app-bg h-1.5 rounded-full mb-2 overflow-hidden">
+                               <div className="bg-app-accent h-full" style={{width: `${fillPercent}%`}}></div>
+                             </div>
+                             <div className="flex justify-between text-[10px] text-app-text-muted font-semibold">
+                               <span className="text-red-400">{spotsLeft} spots left</span>
+                               <span>{c.type === 'Mega' ? c.spots : cspots} spots</span>
+                             </div>
+                           </div>
+                           <div className="p-3 bg-slate-50/5 dark:bg-app-card-inner flex shrink-0 items-center justify-start gap-6 text-[11px] font-semibold text-app-text-muted">
+                             <span className="flex items-center gap-1.5"><div className="w-4 h-4 rounded-full border border-yellow-500 text-[#e5c158] flex items-center justify-center text-[8px] font-bold bg-[#e5c158]/10">1st</div> {c.firstPrize || c.prizeText}</span>
+                             <span className="flex items-center gap-1.5"><Trophy size={11} className="text-app-text-muted"/> {c.winPercentage || (c.type === 'Mega' ? 48 : 50)}%</span>
+                             <span className="flex items-center gap-1.5"><div className="w-4 h-4 border border-slate-500 rounded flex items-center justify-center text-[8px] font-bold text-app-text-muted">M</div> {c.maxTeams || (c.type === 'Mega' ? 20 : 1)}</span>
+                           </div>
+                         </div>
+                        )
+                    })
+                )}
+             </>
+          )}
+
+          {matchTab === 'My Teams' && (
              <>
                 {savedTeams.filter(t => t.match.id === activeMatch.id && t.userId === (user?.id || 'guest')).length === 0 ? (
                      <div className="flex flex-col items-center justify-center h-full opacity-60 mt-10">
@@ -2285,6 +2494,7 @@ export default function App() {
                                      onClick={() => {
                                          setSelectedContest({ fee: st.fee, name: st.contestName });
                                          const c = appContests.find(c => c.name === st.contestName) || appContests[0];
+                                         setActiveContestInstanceId(st.instanceId);
                                          setActiveContestDetails(c);
                                          setView('CONTEST_DETAILS');
                                      }} 
@@ -2306,7 +2516,8 @@ export default function App() {
 
   const renderCreateTeam = () => {
     if (!activeMatch) return null;
-    const displayedPlayers = appPlayers.filter(p => p.role === activeRole);
+    const liveTeams = [activeMatch.team1.shortFrame, activeMatch.team2.shortFrame];
+    const displayedPlayers = appPlayers.filter(p => p.role === activeRole && liveTeams.includes(p.team));
 
     return (
       <div className="flex flex-col h-full bg-app-card relative">
@@ -2764,6 +2975,7 @@ export default function App() {
                                            setActiveMatch(latestMatch);
                                            setSelectedContest({ fee: st.fee, name: st.contestName });
                                            const c = appContests.find(c => c.name === st.contestName) || appContests[0];
+                                           setActiveContestInstanceId(st.instanceId);
                                            setActiveContestDetails(c);
                                            setView('CONTEST_DETAILS');
                                        } else {
@@ -2854,11 +3066,11 @@ export default function App() {
                      <div key={req.id} className="bg-app-card rounded-xl p-4 border border-app-border flex justify-between items-center">
                         <div className="flex items-center gap-4">
                            <div className={`p-2 rounded-full ${req.status === 'Approved' ? (req.t === 'd' ? 'bg-[#153B25] text-[#4ADE80]' : 'bg-red-900/30 text-app-accent') : req.status === 'Rejected' ? 'bg-red-900/30 text-app-accent' : 'bg-orange-900/30 text-orange-500'}`}>
-                              {req.status === 'Approved' ? (req.t === 'd' ? <ArrowDownLeft size={20} /> : <Minus size={20} />) : req.status === 'Rejected' ? <Minus size={20} /> : <Clock size={20} />}
+                              {req.status === 'Approved' ? <Check size={20} /> : req.status === 'Rejected' ? <X size={20} /> : <Clock size={20} />}
                            </div>
                            <div className="flex flex-col">
                               <p className="font-bold text-sm text-app-text">
-                                  {req.status === 'Rejected' ? 'Payment Failed' : (req.t === 'd' ? 'Added to wallet' : 'Withdrawn')}
+                                  {req.status === 'Rejected' ? 'Payment Failed' : req.status === 'Pending' ? `Pending ${req.t === 'd' ? 'Deposit' : 'Withdrawal'}` : (req.t === 'd' ? 'Added to wallet' : 'Withdrawn')}
                               </p>
                               <p className="text-xs text-app-text-muted mt-0.5">{req.timestamp}</p>
                            </div>
@@ -2974,56 +3186,29 @@ export default function App() {
                               
                               setIsScanningPayment(true);
                               
-                              // Simulatiing AI Scanning of Screenshot and Details
-                              setTimeout(() => {
-                                setIsScanningPayment(false);
-                                
-                                // Mock Validation Logic
-                                if (paymentUtr.length !== 12 || isNaN(Number(paymentUtr))) {
-                                   alert("Scanner Detected: Invalid UTR length or format in screenshot. Payment failed/rejected.");
-                                   
-                                   const failedReq: DepositRequest = {
-                                     id: 'dep_' + Date.now(),
-                                     userId: user?.id,
-                                     userName: user?.name,
-                                     amount: amt,
-                                     method: paymentMethod,
-                                     utr: paymentUtr,
-                                     status: 'Rejected',
-                                     timestamp: new Date().toLocaleTimeString()
-                                   };
-                                   setDoc(doc(db, 'deposits', failedReq.id), failedReq);
-                                   
-                                   setShowPaymentModal(false);
-                                   setPaymentMethod('');
-                                   setPaymentUtr('');
-                                   return;
-                                }
-                                
-                                // Success flow
-                                const newReq: DepositRequest = {
-                                   id: 'dep_' + Date.now(),
-                                   userId: user?.id,
-                                   userName: user?.name,
-                                   amount: amt,
-                                   method: paymentMethod,
-                                   utr: paymentUtr,
-                                   status: 'Approved', // Auto match
-                                   timestamp: new Date().toLocaleTimeString()
-                                };
+                              const newReq: DepositRequest = {
+                                 id: 'dep_' + Date.now(),
+                                 userId: user?.id,
+                                 userNumericId: user?.numericId,
+                                 userName: user?.name,
+                                 amount: amt,
+                                 method: paymentMethod,
+                                 utr: paymentUtr,
+                                 status: 'Pending',
+                                 timestamp: new Date().toLocaleTimeString()
+                              };
 
-                                setDoc(doc(db, 'deposits', newReq.id), newReq).then(() => {
-                                   setBalance(prev => prev + amt);
-                                   alert("Scanner Detected: Valid Payment! Cash added to your wallet automatically.");
-                                   setShowPaymentModal(false);
-                                   setPaymentMethod('');
-                                   setPaymentUtr('');
-                                });
-                              }, 3500);
+                              setDoc(doc(db, 'deposits', newReq.id), newReq).then(() => {
+                                 setIsScanningPayment(false);
+                                 alert("Deposit submitted successfully!");
+                                 setShowPaymentModal(false);
+                                 setPaymentMethod('');
+                                 setPaymentUtr('');
+                              });
                            }}
-                           className={`flex-[2] ${isScanningPayment ? 'bg-blue-600 animate-pulse' : 'bg-green-600 hover:bg-green-700'} text-app-text font-bold py-3 rounded-xl active:bg-green-800 shadow-sm transition-all`}
+                           className={`flex-[2] ${isScanningPayment ? 'bg-green-500' : 'bg-green-600 hover:bg-green-700'} text-app-text font-bold py-3 rounded-xl active:bg-green-800 shadow-sm transition-all flex justify-center items-center gap-2`}
                         >
-                           {isScanningPayment ? 'Scanning Image & UTR...' : 'Submit Proof'}
+                           {isScanningPayment ? <><Check size={20}/> Submitted</> : 'Submit Proof'}
                         </button>
                      </div>
                   </div>
@@ -3095,7 +3280,7 @@ export default function App() {
                 </div>
                 <div className="flex flex-col text-app-text">
                    <h2 className="text-xl font-bold uppercase">{user?.name}</h2>
-                   <p className="text-sm opacity-90 mb-2 font-mono">ID: {user?.id || '1234567890'}</p>
+                   <p className="text-sm opacity-90 mb-2 font-mono">ID: {user?.numericId || user?.id || '1234567890'}</p>
                    <div className="flex flex-col gap-1 w-full">
                      <div className="flex gap-2 items-center">
                        <span className="bg-yellow-500 text-black text-[10px] px-2 py-0.5 rounded flex items-center font-bold w-fit">⚡ Level {userLevel}</span>
@@ -3222,6 +3407,7 @@ export default function App() {
       const newReq = {
         id: `KYC${Date.now()}`,
         userId: user?.id || 'guest',
+        userNumericId: user?.numericId,
         userName: user?.name || user?.email?.split('@')[0] || 'Guest Player',
         aadhar: aadharInput,
         pan: panInput,
@@ -3484,7 +3670,7 @@ export default function App() {
              </div>
              
              <div className="flex gap-1 mt-6 overflow-x-auto no-scrollbar relative z-10">
-                 {(['DASHBOARD', 'TEAMS', 'USERS', 'CONTESTS', 'MATCHES', 'FINANCIALS', 'BANNERS', 'SETTINGS'] as const).map(tab => (
+                 {(['DASHBOARD', 'TEAMS', 'USERS', 'CONTESTS', 'MATCHES', 'FINANCIALS', 'BANNERS', 'SETTINGS', 'ENTRY FEES'] as const).map(tab => (
                     <button 
                       key={tab}
                       onClick={() => setAdminTab(tab)}
@@ -4095,7 +4281,7 @@ export default function App() {
                           let parsedPrize = 0;
                           const lowerPrize = adminContestPrize.toLowerCase();
                           const numPart = parseFloat(lowerPrize.replace(/[^0-9.]/g, ''));
-                          if (!isNaN(numPart) && numPart > 0 && adminContestType === 'Mega') {
+                          if (!isNaN(numPart) && numPart > 0) {
                               if (lowerPrize.includes('cr')) parsedPrize = numPart * 10000000;
                               else if (lowerPrize.includes('lakh') || lowerPrize.includes('l')) parsedPrize = numPart * 100000;
                               else if (lowerPrize.includes('k')) parsedPrize = numPart * 1000;
@@ -4268,7 +4454,7 @@ export default function App() {
                           else if (adminContestType === 'Mega') displayType = 'Mega';
 
                           let calculatedWinPercentage = adminContestType === 'Mega' ? winSpotsPerc : (adminContestType === 'H2H' ? 50 : Math.floor(100/spots));
-                          let calculatedFirstPrize = adminContestType === 'Mega' ? (payouts?.[0]?.amount || '₹8 L') : `₹${Math.floor(actualPool)}`;
+                          let calculatedFirstPrize = adminContestType === 'Mega' ? (payouts?.[0]?.amount || '₹8 L') : (parsedPrize > 0 ? (adminContestPrize.toString().includes('₹') ? adminContestPrize : `₹${adminContestPrize}`) : `₹${Math.floor(actualPool)}`);
                           
                           if (adminContestType === 'Mega' && !adminContestAutoPayouts) {
                              if (payouts && payouts.length > 0) {
@@ -4286,7 +4472,7 @@ export default function App() {
                             id: 'c_' + Math.random().toString(36).substring(7),
                             type: displayType,
                             name: adminContestName,
-                            prizeText: adminContestType === 'Mega' && parsedPrize > 0 ? (parsedPrize >= 100000 ? `₹${(parsedPrize/100000)} Lakhs` : `₹${parsedPrize}`) : adminContestPrize,
+                            prizeText: parsedPrize > 0 ? (parsedPrize >= 100000 ? `₹${Number.isInteger(parsedPrize/100000) ? parsedPrize/100000 : (parsedPrize/100000).toFixed(2)} Lakhs` : `₹${parsedPrize}`) : adminContestPrize,
                             entryFee: fee,
                             spots: spots,
                             firstPrize: calculatedFirstPrize,
@@ -4514,6 +4700,149 @@ export default function App() {
    </div>
 </>)}
 {adminTab === 'MATCHES' && (<>
+<button
+   onClick={() => setShowApiSync(!showApiSync)}
+   className={`flex items-center justify-between w-full mt-4 bg-[#13151c] border ${showApiSync ? 'border-blue-500/50 rounded-t-xl border-b-0 mb-0 bg-gradient-to-b from-blue-500/10 to-transparent' : 'border-blue-500/30 rounded-xl mb-3 hover:border-blue-500/50'} p-4 shadow-lg transition-all relative group overflow-hidden`}
+>
+  <div className="absolute inset-0 bg-gradient-to-r from-blue-500/0 via-blue-500/10 to-blue-500/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000"></div>
+  <h3 className="font-bold text-slate-200 tracking-wide flex items-center justify-between z-10 gap-2">
+     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2v4"/><path d="M12 18v4"/><path d="M4.93 4.93l2.83 2.83"/><path d="M16.24 16.24l2.83 2.83"/><path d="M2 12h4"/><path d="M18 12h4"/><path d="M4.93 19.07l2.83-2.83"/><path d="M16.24 7.76l2.83-2.83"/></svg>
+     Live Match Sync (API)
+  </h3>
+  <div className={`p-1.5 rounded-lg border transition-all z-10 ${showApiSync ? 'text-white border-blue-500 bg-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.5)]' : 'text-blue-500 border-blue-500/50 bg-black/40 group-hover:text-blue-400 group-hover:border-blue-400'}`}>
+     {showApiSync ? <ChevronUp size={16} strokeWidth={3} /> : <ChevronDown size={16} />}
+  </div>
+</button>
+
+{showApiSync && (
+  <div className="bg-[#13151c] rounded-b-2xl shadow-lg border border-blue-500/50 border-t-0 p-5 mb-6 backdrop-blur-sm relative before:absolute before:inset-0 before:bg-gradient-to-b before:from-blue-500/5 before:to-transparent before:pointer-events-none">
+     <p className="text-xs text-slate-400 mb-5 pl-1 relative z-10">Automatically fetch Live and Upcoming matches from Cricket API. Accept to import them into the app.</p>
+     
+     <div className="flex flex-col gap-3 relative z-10 border border-slate-700/50 p-4 rounded-xl bg-black/40">
+       <div className="flex justify-between items-center">
+         <div className="text-xs text-slate-300">
+           <span className="font-bold text-white block mb-1">Cricket Data Source</span>
+           <span className="text-slate-400">cricapi.com (Signup for free key)</span>
+         </div>
+       </div>
+       <div className="flex gap-2">
+         <input
+           type="text"
+           value={cricApiKey}
+           onChange={(e) => {
+             setCricApiKey(e.target.value);
+             localStorage.setItem('cricApiKey', e.target.value);
+           }}
+           placeholder="Enter CricAPI Key..."
+           className="w-full bg-black/50 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
+         />
+         <button 
+           onClick={async () => {
+             if (!cricApiKey) {
+               alert('Please enter a valid CricAPI Key to fetch real matches.');
+               return;
+             }
+             setIsFetchingApi(true);
+             setApiMatches([]);
+             
+             try {
+               const response = await fetch(`https://api.cricapi.com/v1/currentMatches?apikey=${cricApiKey}&offset=0`);
+               const data = await response.json();
+               
+               if (data.status !== 'success') {
+                 throw new Error(data.reason || 'Failed to fetch matches.');
+               }
+               
+               const matches = data.data.map((m: any) => ({
+                 id: m.id,
+                 series: m.name,
+                 status: m.matchStarted ? 'Live' : 'Upcoming',
+                 matchDateISO: m.dateTimeGMT ? new Date(m.dateTimeGMT).toISOString() : undefined,
+                 time: m.dateTimeGMT ? new Date(m.dateTimeGMT).toLocaleString() : 'TBA',
+                 team1: { 
+                   name: m.teamInfo?.[0]?.name || 'TBA', 
+                   shortFrame: m.teamInfo?.[0]?.shortname || 'TBA', 
+                   color: '#1E3A8A', 
+                   flagUrl: m.teamInfo?.[0]?.img || '' 
+                 },
+                 team2: { 
+                   name: m.teamInfo?.[1]?.name || 'TBA', 
+                   shortFrame: m.teamInfo?.[1]?.shortname || 'TBA', 
+                   color: '#eab308', 
+                   flagUrl: m.teamInfo?.[1]?.img || '' 
+                 }
+               }));
+               
+               setApiMatches(matches);
+             } catch (error: any) {
+               console.error("API Error:", error);
+               alert("API Error: " + error.message);
+             } finally {
+               setIsFetchingApi(false);
+             }
+           }}
+           className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap active:scale-95 shadow-[0_0_10px_rgba(59,130,246,0.4)]"
+         >
+            {isFetchingApi ? 'Fetching...' : 'Fetch Matches'}
+         </button>
+       </div>
+     </div>
+     
+     {apiMatches.length > 0 && (
+        <div className="mt-4 space-y-3 relative z-10">
+           <h4 className="text-[10px] uppercase font-black tracking-widest text-slate-400 mb-2">Available Matches from API</h4>
+           {apiMatches.map(m => {
+              const alreadyExists = appMatches.find(am => am.series === m.series && am.team1.shortFrame === m.team1.shortFrame && am.team2.shortFrame === m.team2.shortFrame);
+              
+              return (
+               <div key={m.id} className="bg-black/60 border border-slate-700/50 p-3 rounded-xl flex items-center justify-between">
+                  <div>
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className={`px-2 py-0.5 text-[8px] font-black uppercase rounded ${m.status === 'Live' ? 'bg-red-500/20 text-red-500' : 'bg-slate-700 text-slate-300'}`}>{m.status}</span>
+                      <span className="text-[10px] text-slate-400">{m.series} • {m.time}</span>
+                    </div>
+                    <div className="font-bold text-sm text-white">
+                      {m.team1.shortFrame} <span className="text-slate-500 mx-1">vs</span> {m.team2.shortFrame}
+                    </div>
+                  </div>
+                  
+                  {alreadyExists ? (
+                     <span className="text-[10px] text-green-500 font-bold border border-green-500/30 px-3 py-1.5 rounded-lg bg-green-500/10 opacity-70">IMPORTED ✓</span>
+                  ) : (
+                     <button
+                       onClick={() => {
+                          const newAppMatch = {
+                            id: m.id,
+                            series: m.series,
+                            time: m.time,
+                            matchDateISO: m.matchDateISO,
+                            status: m.status,
+                            format: 'T20',
+                            type: 'Mega',
+                            prize: '₹200 Crore',
+                            lineupStatus: 'OUT' as const,
+                            team1: m.team1,
+                            team2: m.team2
+                          };
+                          const newMatches = [newAppMatch, ...appMatches];
+                          setAppMatches(newMatches);
+                          setDoc(doc(db, 'gameData', 'main_state'), JSON.parse(JSON.stringify({ matches: newMatches, players: appPlayers })), { merge: true });
+                          // Force re-render of this button
+                          setApiMatches([...apiMatches]);
+                       }}
+                       className="bg-[#e5c158] hover:bg-[#f0b90b] text-black px-4 py-1.5 rounded-lg font-bold text-xs uppercase tracking-wider transition-all active:scale-95 shadow-[0_0_10px_rgba(229,193,88,0.4)]"
+                     >
+                       Accept & Import
+                     </button>
+                  )}
+               </div>
+              );
+           })}
+        </div>
+     )}
+  </div>
+)}
+
 <button
    onClick={() => setShowMatchList(!showMatchList)}
    className={`flex items-center justify-between w-full mt-4 bg-[#13151c] border ${showMatchList ? 'border-red-500/50 rounded-t-xl border-b-0 mb-0 bg-gradient-to-b from-red-500/10 to-transparent' : 'border-red-500/30 rounded-xl mb-3 hover:border-red-500/50'} p-4 shadow-lg transition-all relative group overflow-hidden`}
@@ -4927,6 +5256,153 @@ export default function App() {
 
              </>)}
 {adminTab === 'USERS' && (<>
+
+<button 
+      onClick={() => setShowManageUsers(!showManageUsers)}
+      className={`flex items-center justify-between w-full mt-4 bg-[#13151c] border ${showManageUsers ? 'border-[#e5c158]/30 rounded-t-xl border-b-0 mb-0 bg-gradient-to-b from-[#e5c158]/5 to-transparent' : 'border-slate-800 rounded-xl mb-3 hover:border-[#e5c158]/30'} p-4 shadow-lg transition-all relative group overflow-hidden`}
+    >
+        <div className="absolute inset-0 bg-gradient-to-r from-yellow-500/0 via-yellow-500/5 to-yellow-500/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000"></div>
+        <h3 className="font-bold text-slate-200 tracking-wide flex items-center justify-between z-10">Manage Users</h3>
+        <div className={`p-1.5 rounded-lg border transition-all z-10 ${showManageUsers ? 'text-black border-[#e5c158] bg-[#e5c158] shadow-[0_0_10px_rgba(229,193,88,0.5)]' : 'text-slate-500 border-slate-700 bg-black/40 group-hover:text-[#e5c158] group-hover:border-[#e5c158]/30'}`}>
+           {showManageUsers ? <ChevronUp size={16} strokeWidth={3} /> : <ChevronDown size={16} />}
+        </div>
+</button>
+
+{showManageUsers && (
+    <div className="bg-[#13151c] rounded-b-2xl shadow-lg border border-[#e5c158]/50 border-t-0 p-5 mb-6 backdrop-blur-sm relative before:absolute before:inset-0 before:bg-gradient-to-b before:from-yellow-500/5 before:to-transparent before:pointer-events-none">
+        <p className="text-xs text-slate-400 mb-5 pl-1 relative z-10">Search by User ID to access their wallet, block them, and see their teams.</p>
+        
+        <div className="relative z-10 flex gap-2 mb-6">
+            <input 
+                type="text" 
+                placeholder="Enter User ID..."
+                value={searchUserId}
+                onChange={e => setSearchUserId(e.target.value)}
+                className="bg-black/50 border border-slate-700 text-slate-200 px-4 py-2.5 rounded-xl w-full focus:outline-none focus:border-[#e5c158]/50 text-sm font-mono placeholder:text-slate-600"
+            />
+            <button 
+                onClick={async () => {
+                    if(!searchUserId.trim()) return;
+                    setIsSearchingUser(true);
+                    try {
+                        const wRef = doc(db, 'wallets', searchUserId.trim());
+                        const wDoc = await getDoc(wRef);
+                        if (wDoc.exists()) {
+                            setSearchedUserWallet({ id: searchUserId.trim(), ...wDoc.data() });
+                        } else {
+                            alert("No user wallet found for this ID.");
+                            setSearchedUserWallet(null);
+                        }
+                    } catch(e) {
+                        console.error(e);
+                        alert("Error finding user.");
+                    }
+                    setIsSearchingUser(false);
+                }}
+                disabled={isSearchingUser || !searchUserId.trim()}
+                className={`bg-[#e5c158] text-black px-5 py-2.5 rounded-xl font-bold active:scale-95 transition-transform flex items-center justify-center ${isSearchingUser ? 'opacity-70' : 'hover:bg-[#f0b90b]'}`}
+            >
+                {isSearchingUser ? '...' : <Search size={18} />}
+            </button>
+        </div>
+
+        {searchedUserWallet && (
+            <div className="relative z-10 bg-black/40 border border-slate-700 rounded-xl p-4">
+                <div className="flex justify-between items-start mb-4 border-b border-slate-700 pb-4">
+                    <div>
+                        <p className="text-[#e5c158] font-mono text-sm break-all font-bold tracking-tight">{searchedUserWallet.id}</p>
+                        <p className="text-xs text-slate-500 mt-1">User ID</p>
+                    </div>
+                    <button 
+                        onClick={async () => {
+                            const newBlockedStat = !searchedUserWallet.blocked;
+                            if (window.confirm(`Are you sure you want to ${newBlockedStat ? 'block' : 'unblock'} this user?`)) {
+                                await setDoc(doc(db, 'wallets', searchedUserWallet.id), { ...searchedUserWallet, blocked: newBlockedStat });
+                                setSearchedUserWallet({...searchedUserWallet, blocked: newBlockedStat});
+                            }
+                        }}
+                        className={`text-xs font-black uppercase px-4 py-2 rounded-lg border shadow-sm ${searchedUserWallet.blocked ? 'bg-[#153B25]/20 border-[#4ADE80]/50 text-[#4ADE80] hover:bg-[#153B25]/50' : 'bg-red-900/20 border-red-500/50 text-red-500 hover:bg-red-900/50'}`}
+                    >
+                        {searchedUserWallet.blocked ? 'Unblock User' : 'Block User'}
+                    </button>
+                </div>
+                
+                <h4 className="text-sm font-bold text-slate-300 mb-3">Wallet Editor</h4>
+                <div className="flex flex-col gap-3 mb-6 border-b border-slate-700 pb-6">
+                    {['deposit', 'winning', 'bonus'].map((type) => {
+                        const status = walletSaveStatus[type] || 'idle';
+                        return (
+                            <div key={type} className="bg-[#13151c] p-3 rounded-lg border border-slate-800 flex items-center justify-between gap-4">
+                                 <div className="flex-1">
+                                     <p className="text-xs text-slate-500 capitalize mb-2 font-bold">{type} Balance</p>
+                                     <div className="flex items-center gap-2">
+                                        <span className="text-slate-400 font-bold text-lg">₹</span>
+                                        <input 
+                                            type="number"
+                                            value={searchedUserWallet[type] === undefined ? '' : searchedUserWallet[type]}
+                                            onChange={(e) => {
+                                                const val = e.target.value === '' ? '' : parseFloat(e.target.value);
+                                                setSearchedUserWallet(prev => ({...prev, [type]: val}));
+                                            }}
+                                            className="bg-transparent border-b border-slate-700 font-black text-slate-200 outline-none focus:border-[#e5c158] w-full text-xl"
+                                        />
+                                     </div>
+                                 </div>
+                                 <button
+                                     onClick={async () => {
+                                         setWalletSaveStatus(prev => ({...prev, [type]: 'saving'}));
+                                         try {
+                                             const numVal = parseFloat(searchedUserWallet[type]) || 0;
+                                             await updateDoc(doc(db, 'wallets', searchedUserWallet.id), { [type]: numVal });
+                                             setWalletSaveStatus(prev => ({...prev, [type]: 'success'}));
+                                             setTimeout(() => {
+                                                 setWalletSaveStatus(prev => ({...prev, [type]: 'idle'}));
+                                             }, 2000);
+                                         } catch(e) {
+                                             console.error(e);
+                                             setWalletSaveStatus(prev => ({...prev, [type]: 'idle'}));
+                                             alert("Error updating wallet");
+                                         }
+                                     }}
+                                     disabled={status === 'saving'}
+                                     className={`px-6 py-3 mt-4 rounded-xl font-black text-sm shadow-lg transition-colors uppercase tracking-widest text-white shrink-0 outline-none focus:outline-none min-w-[100px] ${status === 'success' ? 'bg-[#4ADE80] border border-[#4ADE80]' : status === 'saving' ? 'bg-red-700/50 cursor-not-allowed' : 'bg-red-600 hover:bg-red-500 border border-red-500/50'}`}
+                                 >
+                                     {status === 'success' ? 'ADDED !' : status === 'saving' ? '...' : 'ADD'}
+                                 </button>
+                            </div>
+                        );
+                    })}
+                </div>
+
+                <h4 className="text-sm font-bold text-slate-300 mb-3">User's Joined Matches</h4>
+                <div className="space-y-2 max-h-60 overflow-y-auto pr-1 custom-scrollbar">
+                    {(() => {
+                        const userTeams = savedTeams.filter(t => t.userId === searchedUserWallet.id);
+                        if (userTeams.length === 0) return <p className="text-xs text-slate-500">No teams found for this user.</p>;
+                        
+                        return userTeams.map((st, i) => {
+                            const matchStat = appMatches.find(m => m.id === st.match.id)?.status || 'Upcoming';
+                            return (
+                                <div key={i} className="flex justify-between items-center p-3 bg-[#13151c] border border-slate-800 rounded-lg group hover:border-slate-700">
+                                    <div className="flex flex-col">
+                                        <span className="font-bold text-slate-200 text-sm">{st.match.team1.shortFrame} vs {st.match.team2.shortFrame}</span>
+                                        <span className="text-[10px] text-slate-500 mt-1">{st.contestName} • {matchStat}</span>
+                                    </div>
+                                    <div className="flex flex-col items-end">
+                                        <span className="font-black text-[#e5c158] text-sm">₹{st.fee}</span>
+                                        {st.amountWon > 0 && <span className="text-[10px] text-[#4ADE80] mt-1 font-bold">Won: ₹{st.amountWon}</span>}
+                                    </div>
+                                </div>
+                            );
+                        });
+                    })()}
+                </div>
+            </div>
+        )}
+    </div>
+)}
+
+
 <button 
       onClick={() => setShowManageKYC(!showManageKYC)}
       className={`flex items-center justify-between w-full mt-4 bg-[#13151c] border ${showManageKYC ? 'border-[#e5c158]/30 rounded-t-xl border-b-0 mb-0 bg-gradient-to-b from-[#e5c158]/5 to-transparent' : 'border-slate-800 rounded-xl mb-3 hover:border-[#e5c158]/30'} p-4 shadow-lg transition-all relative group overflow-hidden`}
@@ -4958,6 +5434,7 @@ export default function App() {
                          </div>
                          <div className="flex-1 space-y-1">
                            <p className="text-sm text-slate-400">Full Name: <span className="text-slate-200">{selectedKycRequest.userName}</span></p>
+                           <p className="text-sm text-slate-400">User ID: <span className="text-slate-200 font-mono select-all">{selectedKycRequest.userNumericId || selectedKycRequest.userId}</span></p>
                            <p className="text-sm text-slate-400">Email: <span className="text-slate-200">{selectedKycRequest.userEmail || 'user@example.com'}</span></p>
                            <p className="text-sm text-slate-400">Phone: <span className="text-slate-200">{selectedKycRequest.userPhone || '+91-XXXXX-XXXXX'}</span></p>
                            <p className="text-sm text-slate-400 flex items-center gap-2">KYC Status: <span className="px-2 py-0.5 rounded bg-[#e5c158]/20 text-[#e5c158] text-[10px] uppercase font-bold tracking-wider">{selectedKycRequest.status === 'Pending Review' ? 'PENDING VERIFICATION' : selectedKycRequest.status}</span></p>
@@ -5064,6 +5541,93 @@ export default function App() {
              )}
 
              </>)}
+{adminTab === 'ENTRY FEES' && (<>
+   <h3 className="font-bold text-[#e5c158]/80 uppercase tracking-widest text-[10px] mb-3 ml-1 mt-6">System Control: Entry Fees Section</h3>
+   <div className="bg-[#13151c] rounded-2xl shadow-lg border border-[#e5c158]/20 p-5 mb-6 relative overflow-hidden backdrop-blur-sm">
+       <p className="text-xs text-slate-400 mb-5 pl-1 relative z-10">See all completed/filled contest instances and the entry fees generated.</p>
+       
+       <div className="space-y-4 relative z-10">
+           {(() => {
+               // Group savedTeams by match.id -> contestName -> instanceId
+               const filledInstances: any[] = [];
+               appMatches.forEach(match => {
+                   appContests.forEach(contest => {
+                       const cspots = contest.spots > 0 ? contest.spots : 2;
+                       const teamsForThis = savedTeams.filter(t => t.match?.id === match.id && t.contestName === contest.name);
+                       if (teamsForThis.length === 0) return;
+                       
+                       // Group by instanceId
+                       const instanceMap: {[key: string]: any[]} = {};
+                       teamsForThis.forEach(t => {
+                           const iId = t.instanceId || 0;
+                           if (!instanceMap[iId]) instanceMap[iId] = [];
+                           instanceMap[iId].push(t);
+                       });
+
+                       Object.keys(instanceMap).forEach(iId => {
+                           const teamsInInstance = instanceMap[iId];
+                           if (teamsInInstance.length === cspots) {
+                               filledInstances.push({
+                                   matchId: match.id,
+                                   matchSeries: match.series,
+                                   team1: match.team1.shortFrame,
+                                   team2: match.team2.shortFrame,
+                                   matchTime: match.time,
+                                   contestName: contest.name,
+                                   contestType: contest.type,
+                                   instanceId: iId,
+                                   totalFees: teamsInInstance.reduce((acc, t) => acc + (t.fee || 0), 0),
+                                   teams: teamsInInstance
+                               });
+                           }
+                       });
+                   });
+               });
+
+               if (filledInstances.length === 0) {
+                   return <p className="text-sm font-bold text-slate-500 text-center py-6 bg-black/40 border border-slate-700 rounded-xl">No filled contests yet.</p>;
+               }
+
+               const totalRevenue = filledInstances.reduce((acc, inst) => acc + inst.totalFees, 0);
+
+               return (
+                  <>
+                    <div className="bg-black/40 border border-slate-700 p-4 rounded-xl flex items-center justify-between mb-4">
+                       <span className="text-sm text-slate-400 font-bold uppercase">Total Entry Fees (Filled)</span>
+                       <span className="text-xl font-black text-green-500">₹{totalRevenue}</span>
+                    </div>
+
+                    {filledInstances.map((inst, i) => (
+                        <div key={i} className="bg-black/40 border border-slate-700/50 p-4 rounded-xl flex flex-col gap-2 relative">
+                            <div className="flex justify-between items-center border-b border-slate-800 pb-2">
+                               <div>
+                                  <span className="text-xs text-yellow-500 font-bold">{inst.contestName} ({inst.contestType})</span>
+                                  <div className="text-[10px] text-slate-400 flex gap-1 items-center mt-1">
+                                     <span className="bg-slate-800 px-1.5 py-0.5 rounded">{inst.team1} vs {inst.team2}</span>
+                                     <span>• Instance #{parseInt(inst.instanceId) + 1}</span>
+                                  </div>
+                               </div>
+                               <div className="text-right">
+                                  <span className="text-xs text-slate-500 block uppercase font-bold">Total Entry Fee</span>
+                                  <span className="text-sm text-green-400 font-black">₹{inst.totalFees}</span>
+                               </div>
+                            </div>
+                            <div className="flex -space-x-2 overflow-hidden py-1">
+                               {inst.teams.map((t: any, idx: number) => (
+                                   <div key={idx} className="inline-block h-6 w-6 rounded-full ring-2 ring-black bg-slate-800 text-[8px] flex items-center justify-center font-bold text-white shrink-0" title={t.userName}>
+                                      {t.userName.substring(0, 2).toUpperCase()}
+                                   </div>
+                               ))}
+                               <span className="ml-4 text-[10px] text-slate-500 self-center font-bold">{inst.teams.length} Users Joined</span>
+                            </div>
+                        </div>
+                    ))}
+                  </>
+               );
+           })()}
+       </div>
+   </div>
+</>)}
 {adminTab === 'FINANCIALS' && (<>
 <button 
       onClick={() => setShowManageWithdrawals(!showManageWithdrawals)}
@@ -5090,7 +5654,7 @@ export default function App() {
                                 <div className="flex justify-between items-start mb-3 border-b border-[#e5c158]/20 pb-3">
                                   <div className="flex flex-col">
                                     <span className="text-[10px] font-black text-[#e5c158]/70 uppercase tracking-widest leading-none mb-1">User ID</span>
-                                    <span className="font-bold text-slate-200 text-xs">{req.userId || 'Unknown'}</span>
+                                    <span className="font-bold text-slate-200 text-xs font-mono select-all">{req.userNumericId || req.userId || 'Unknown'}</span>
                                   </div>
                                   <div className="flex flex-col text-right">
                                     <span className="text-[10px] font-black text-[#e5c158]/70 uppercase tracking-widest leading-none mb-1">Amount</span>
@@ -5173,6 +5737,7 @@ export default function App() {
                               </div>
                               <div className="mb-4 bg-black/60 p-4 rounded-lg border border-slate-700">
                                 {req.userName && <p className="text-xs text-slate-300 mb-2 flex justify-between"><span>User:</span> <span className="font-bold text-slate-200">{req.userName}</span></p>}
+                                <p className="text-xs text-slate-300 mb-2 flex justify-between"><span>ID:</span> <span className="font-bold text-slate-200 font-mono select-all">{req.userNumericId || req.userId}</span></p>
                                 <p className="text-xs text-slate-300 mb-2 flex justify-between"><span>Time:</span> <span className="font-bold text-slate-200 text-[10px]">{req.timestamp}</span></p>
                                 <p className="text-xs text-slate-300 mb-2 flex justify-between items-center"><span>UTR:</span> <span className="font-mono font-bold text-slate-200 bg-black/80 px-2 py-0.5 border border-slate-600 rounded">{req.utr}</span></p>
                                 <p className="text-xs text-[#e5c158] font-bold flex items-center justify-end gap-1 underline mt-3 cursor-pointer hover:text-[#f0b90b]">
@@ -5565,6 +6130,17 @@ export default function App() {
     );
   };
 
+  if (wallet?.blocked) {
+     return (
+        <div className={`relative h-[100dvh] w-full max-w-md mx-auto bg-app-bg text-app-text font-sans shadow-2xl overflow-hidden border-x border-app-border flex flex-col items-center justify-center p-8 text-center ${themeMode === 'Light' ? 'theme-light' : ''} color-${themeColor.toLowerCase()}`}>
+           <Shield size={64} className="text-red-500 mb-4" />
+           <h2 className="text-2xl font-black mb-2 text-red-500">Account Blocked</h2>
+           <p className="text-sm font-bold text-app-text-muted mb-8">Your account has been restricted by the admin. Please contact support.</p>
+           <button onClick={() => firebaseSignOut(auth)} className="bg-red-600 hover:bg-red-700 font-bold px-6 py-2 rounded-xl text-white shadow-lg active:scale-95 transition-transform">Logout</button>
+        </div>
+     );
+  }
+
   return (
     <div className={`relative h-[100dvh] w-full max-w-md mx-auto bg-app-bg text-app-text font-sans shadow-2xl overflow-hidden border-x border-app-border ${themeMode === 'Light' ? 'theme-light' : ''} color-${themeColor.toLowerCase()}`}>
 <>
@@ -5738,14 +6314,15 @@ export default function App() {
                                    credits: parseFloat(newPlayerCredits.trim()) || 8.0,
                                } : p));
                            } else {
-                               const newP = {
+                               const newP: Player = {
                                    id: 'p' + Date.now(),
                                    name: newPlayerName.trim(),
-                                   role: newPlayerRole,
+                                   role: newPlayerRole as 'BAT' | 'BOWL' | 'AR' | 'WK',
                                    credits: parseFloat(newPlayerCredits.trim()) || 8.0,
                                    points: 0,
                                    team: newPlayerTeamShort,
-                                   isPlaying: false
+                                   isPlaying: false,
+                                   selPercent: 50
                                };
                                setAppPlayers([...appPlayers, newP]);
                            }
@@ -5755,6 +6332,17 @@ export default function App() {
                            setShowTeamAddPlayerModal(false);
                        }
                    }} className="w-full py-3 bg-[#e5c158] text-black shadow-lg rounded-xl font-bold tracking-widest text-sm text-center transition-all active:scale-95 uppercase">{editingPlayerId ? 'Save Changes' : 'Save Player'}</button>
+                   {editingPlayerId && (
+                       <button onClick={() => {
+                           if (window.confirm("Are you sure you want to delete this player?")) {
+                               setAppPlayers(appPlayers.filter(p => p.id !== editingPlayerId));
+                               setNewPlayerName('');
+                               setNewPlayerCredits('9.0');
+                               setEditingPlayerId(null);
+                               setShowTeamAddPlayerModal(false);
+                           }
+                       }} className="w-full mt-2 py-3 bg-red-600/20 text-red-500 border border-red-500/50 shadow-lg rounded-xl font-bold tracking-widest text-sm text-center transition-all active:scale-95 uppercase">Delete Player</button>
+                   )}
                 </div>
             </div>
         )}
@@ -5832,6 +6420,7 @@ export default function App() {
          <ContestDetailsView 
             activeMatch={activeMatch}
             contest={activeContestDetails}
+            instanceId={activeContestInstanceId}
             savedTeams={savedTeams}
             appPlayers={appPlayers}
             currentUser={user}

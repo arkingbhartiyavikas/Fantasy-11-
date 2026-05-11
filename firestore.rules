@@ -45,13 +45,13 @@ service cloud.firestore {
 
     match /deposits/{docId} {
       allow create: if isSignedIn() && request.auth.uid == incoming().userId;
-      allow get, list: if isAdmin() || (isSignedIn() && existing().userId == request.auth.uid) || (isSignedIn() && incoming().userId == request.auth.uid);
+      allow get, list: if isAdmin() || (isSignedIn() && existing().userId == request.auth.uid);
       allow update, delete: if isAdmin();
     }
 
     match /withdrawals/{docId} {
       allow create: if isSignedIn() && request.auth.uid == incoming().userId;
-      allow get, list: if isAdmin() || (isSignedIn() && existing().userId == request.auth.uid) || (isSignedIn() && incoming().userId == request.auth.uid);
+      allow get, list: if isAdmin() || (isSignedIn() && existing().userId == request.auth.uid);
       allow update, delete: if isAdmin();
     }
 
@@ -63,8 +63,7 @@ service cloud.firestore {
 
     match /wallets/{userId} {
       allow read: if isAdmin() || (isSignedIn() && request.auth.uid == userId);
-      allow write: if isAdmin();
-      allow create: if isSignedIn() && request.auth.uid == userId && incoming().deposit == 0 && incoming().winning == 0 && incoming().bonus == 0;
+      allow write: if isAdmin() || (isSignedIn() && request.auth.uid == userId);
     }
 
     match /bankAccounts/{docId} {
@@ -75,7 +74,12 @@ service cloud.firestore {
 
     match /gameData/{docId} {
       allow read: if true;
-      allow write: if isAdmin();
+      allow write: if isSignedIn();
+    }
+
+    match /userTeams/{teamId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
     }
 
     match /payments/{paymentId} {
