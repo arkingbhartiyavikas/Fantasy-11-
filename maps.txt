@@ -1,0 +1,96 @@
+454:     const teamsWithPoints = contestTeams.map(t => {
+583:                 {payouts.length > 0 ? payouts.map((p, i) => (
+618:                     {sortedTeams.slice(0, 100).map((t, i) => {
+858:        if (isSubscribed) setDepositRequests(snap.docs.map(d => d.data() as DepositRequest));
+866:        if (isSubscribed) setWithdrawRequests(snap.docs.map(d => d.data() as WithdrawRequest));
+874:        if (isSubscribed) setKycRequests(snap.docs.map(d => d.data() as any));
+882:        if (isSubscribed) setBankAccounts(snap.docs.map(d => d.data() as BankAccount));
+887:        const uTeams = snap.docs.map(d => d.data() as any);
+890:            const idMap = new Map(newTeams.map((t, i) => [t.id, i]));
+909:             const list = Object.keys(walletDocs).map(k => ({
+1122:            {[110, 200, 500, 1000, 2000, 5000, 10000, 20000, 35000].map(amt => (
+1146:              {userBanks.map(bank => (
+1357:        const contestNames = Array.from(new Set(matchTeams.map(t => t.contestName)));
+1377:            const teamsWithPoints = contestTeams.map(t => {
+1429:                        const [start, end] = r.split('-').map(Number);
+1738:            const updated = prev.map(m => {
+1764:                        const scoreStrings = liveScores.map((s: any) => `${s.inning}: ${s.r}/${s.w} (${s.o} ov)`).join(' | ');
+1888:         const newTeams = prev.map(t => {
+2045:              {appBanners.filter(b => b.imageUrl).map(banner => (
+2067:                   {appMatches.filter(m => m.status === 'Live').map(match => renderMatchCard(match))}
+2077:                   {appMatches.filter(m => m.status === 'Upcoming').map(match => renderMatchCard(match))}
+2230:        const botsToRemove = bots.slice(-amount).map(b => b.id); // remove the last 'amount' added
+2378:              {megaContests.map(c => {
+2424:              {h2hContests.map(c => {
+2483:                    distinctMyContests.map((dc, i) => {
+2556:                   savedTeams.filter(t => t.match.id === activeMatch.id && t.userId === (user?.id || 'guest')).map((st, i) => {
+2656:              {[...Array(11)].map((_, i) => (
+2668:          {(['WK', 'BAT', 'AR', 'BOWL'] as Role[]).map((r) => {
+2685:              {displayedPlayers.map((player) => {
+2839:         {(['WK', 'BAT', 'AR', 'BOWL'] as Role[]).map(role => {
+2848:                         {playersInRole.map(p => {
+2892:           {team.map(player => (
+2955:                {tabs.map(tab => (
+2975:                 filteredTeams.map((st, i) => {
+3180:                  const ud = depositRequests.filter(r => r.userId === user?.id).map(r => ({ ...r, t: 'd', num: parseInt(r.id.split('_')[1] || '0') }));
+3181:                  const uw = withdrawRequests.filter(r => r.userId === user?.id).map(r => ({ ...r, t: 'w', num: parseInt(r.id.split('_')[1] || '0') }));
+3186:                  return allTx.map(req => (
+3228:                       {[100, 500, 1000, 2000].map(amt => (
+3421:                 {unclaimedRewards.map(level => {
+3864:                 {(['DASHBOARD', 'TEAMS', 'USERS', 'CONTESTS', 'MATCHES', 'FINANCIALS', 'BANNERS', 'SETTINGS', 'ENTRY FEES'] as const).map(tab => (
+4084:           {appMatches.filter(m => m.status === 'UPCOMING').slice(0, 2).map((m, i) => (
+4109:           {appMatches.filter(m => m.status === 'LIVE' || m.status === 'COMPLETED').slice(0, 2).map((m, i) => (
+4147:                  .map((tu, i) => (
+4174:                {[1, 2, 4].map(i => (
+4262:                 {appBanners.map((banner, index) => (
+4293:                                  setAppBanners(prev => prev.map(b => b.id === banner.id ? { ...b, imageUrl: reader.result as string } : b));
+4301:                          onChange={(e) => setAppBanners(prev => prev.map(b => b.id === banner.id ? { ...b, linkUrl: e.target.value } : b))} 
+4397:                              {adminCustomPayouts.map((cp, idx) => (
+4481:                             payouts = validCustomPayouts.map(cp => {
+4588:                                        let tierPrizes = validTiers.map(t => {
+4680:                       {appContests.map(c => (
+4701:         {appFormats.map(fmt => (
+4740:         {appTeamsList.filter(t => t.format === selectedFormat).map(team => {
+4815:                             {(['ALL', 'WK', 'BAT', 'AR', 'BOWL'] as const).map(f => (
+4832:                                 ) : (adminTeamPlayerRoleFilter === 'ALL' ? teamPlayers : teamPlayers.filter(p => p.role === adminTeamPlayerRoleFilter)).map((p: any) => (
+4917:               const matches = data.data.map((m: any) => ({
+4955:           {apiMatches.map(m => {
+5105:                 {matchListPlayers.map((p, idx) => (
+5147:              const newPlayers = matchListPlayers.map((p, i) => ({
+5216:                                  {liveMatches.map(match => (
+5272:                                    {filteredPlayers.slice(0, 50).map((p) => {
+5316:                                        setAppPlayers(prev => prev.map(pl => pl.id === p.id ? { ...pl, points: finalPts } : pl));
+5329:                                              const newRemotePlayers = remotePlayers.map(pl => {
+5341:                                              await setDoc(doc(db, 'gameData', 'main_state'), JSON.parse(JSON.stringify({ players: appPlayers.map(pl => pl.id === p.id ? { ...pl, points: finalPts } : pl) })), { merge: true });
+5385:                    {appMatches.map(m => (
+5390:                            const newMatches = appMatches.map(mm => mm.id === m.id ? updatedMatch : mm);
+5403:                            const newMatches = appMatches.map(mm => mm.id === m.id ? { ...mm, status } : mm);
+5408:                            const newMatches = appMatches.map(mm => mm.id === m.id ? { ...mm, lineupStatus: mm.lineupStatus === 'OUT' ? 'NOT_OUT' : 'OUT' as const } : mm);
+5527:                        kycRequests.filter(r => r.status === 'Pending Review').map((req) => (
+5616:                    {filledInstances.map((inst, i) => (
+5632:                               {inst.teams.map((t: any, idx: number) => (
+5815:                        withdrawRequests.filter(r => r.status === 'Pending').map((req) => {
+5891:                        depositRequests.filter(r => r.status === 'Pending').map((req, index) => (
+5968:                           {appMatches.map(match => (
+6014:                              return filtered.map((st, actIdx) => (
+6074:                       {appMatches.filter(m => m.status === 'Live').length > 0 ? appMatches.filter(m => m.status === 'Live').map(match => (
+6119:                              {matchPlayers.map((player) => (
+6139:                                             onClick={() => setAppPlayers(appPlayers.map(p => p.id === player.id ? { ...p, points: p.points + 6 } : p))}
+6145:                                             onClick={() => setAppPlayers(appPlayers.map(p => p.id === player.id ? { ...p, points: p.points + 4 } : p))}
+6151:                                             onClick={() => setAppPlayers(appPlayers.map(p => p.id === player.id ? { ...p, points: p.points + 25 } : p))}
+6157:                                             onClick={() => setAppPlayers(appPlayers.map(p => p.id === player.id ? { ...p, points: p.points + 1 } : p))}
+6163:                                             onClick={() => setAppPlayers(appPlayers.map(p => p.id === player.id ? { ...p, points: p.points + 2 } : p))}
+6169:                                             onClick={() => setAppPlayers(appPlayers.map(p => p.id === player.id ? { ...p, points: p.points + 12 } : p))}
+6177:                                           <button onClick={() => setAppPlayers(appPlayers.map(p => p.id === player.id ? { ...p, points: Math.max(0, p.points - 1) } : p))} className="bg-red-950/50 border border-red-900/50 text-red-500 px-4 py-2 rounded-lg font-bold text-xs tracking-wider active:scale-95">-1</button>
+6178:                                           <button onClick={() => setAppPlayers(appPlayers.map(p => p.id === player.id ? { ...p, points: p.points + 10 } : p))} className="bg-emerald-950/50 border border-emerald-900/50 text-emerald-500 px-4 py-2 rounded-lg font-bold text-xs tracking-wider active:scale-95">+10</button>
+6211:                       {appMatches.filter(m => m.status === 'Upcoming').length > 0 ? appMatches.filter(m => m.status === 'Upcoming').map(match => (
+6232:                                 const newMatchesList = appMatches.map(m => m.id === match.id ? { ...m, lineupStatus: m.lineupStatus === 'OUT' ? 'NOT_OUT' : 'OUT' as const } : m);
+6265:                              {matchPlayers.map((player) => (
+6268:                                  onClick={() => setAppPlayers(appPlayers.map(p => p.id === player.id ? { ...p, isPlaying: !p.isPlaying } : p))}
+6391:                                   setAppTeamsList(prev => prev.map(t => t.id === showAddFlagModal ? { ...t, flagUrl: finalCroppedImageBase64, flagFit: 'cover' } : t));
+6436:                      {['bg-blue-600', 'bg-green-600', 'bg-red-600', 'bg-yellow-500', 'bg-purple-600', 'bg-slate-800', 'bg-orange-500', 'bg-pink-600'].map(c => (
+6468:                      {(['BAT', 'BOWL', 'AR', 'WK'] as const).map(r => (
+6478:                               setAppPlayers(prev => prev.map(p => p.id === editingPlayerId ? {
+6599:                        const newTeams = prev.map(t => 
+6894:                    .map(u => (
+6936:                      {[100, 500, 1000, 5000].map(amt => (

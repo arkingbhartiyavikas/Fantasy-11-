@@ -1,0 +1,96 @@
+     const teamsWithPoints = contestTeams.map(t => {
+                 {payouts.length > 0 ? payouts.map((p, i) => (
+                     {sortedTeams.slice(0, 100).map((t, i) => {
+        if (isSubscribed) setDepositRequests(snap.docs.map(d => d.data() as DepositRequest));
+        if (isSubscribed) setWithdrawRequests(snap.docs.map(d => d.data() as WithdrawRequest));
+        if (isSubscribed) setKycRequests(snap.docs.map(d => d.data() as any));
+        if (isSubscribed) setBankAccounts(snap.docs.map(d => d.data() as BankAccount));
+        const uTeams = snap.docs.map(d => d.data() as any);
+            const idMap = new Map(newTeams.map((t, i) => [t.id, i]));
+             const list = Object.keys(walletDocs).map(k => ({
+            {[110, 200, 500, 1000, 2000, 5000, 10000, 20000, 35000].map(amt => (
+              {userBanks.map(bank => (
+        const contestNames = Array.from(new Set(matchTeams.map(t => t.contestName)));
+            const teamsWithPoints = contestTeams.map(t => {
+                        const [start, end] = r.split('-').map(Number);
+            const updated = prev.map(m => {
+                        const scoreStrings = liveScores.map((s: any) => `${s.inning}: ${s.r}/${s.w} (${s.o} ov)`).join(' | ');
+         const newTeams = prev.map(t => {
+              {appBanners.filter(b => b.imageUrl).map(banner => (
+                   {appMatches.filter(m => m.status === 'Live').map(match => renderMatchCard(match))}
+                   {appMatches.filter(m => m.status === 'Upcoming').map(match => renderMatchCard(match))}
+        const botsToRemove = bots.slice(-amount).map(b => b.id); // remove the last 'amount' added
+              {megaContests.map(c => {
+              {h2hContests.map(c => {
+                    distinctMyContests.map((dc, i) => {
+                   savedTeams.filter(t => t.match.id === activeMatch.id && t.userId === (user?.id || 'guest')).map((st, i) => {
+              {[...Array(11)].map((_, i) => (
+          {(['WK', 'BAT', 'AR', 'BOWL'] as Role[]).map((r) => {
+              {displayedPlayers.map((player) => {
+         {(['WK', 'BAT', 'AR', 'BOWL'] as Role[]).map(role => {
+                         {playersInRole.map(p => {
+           {team.map(player => (
+                {tabs.map(tab => (
+                 filteredTeams.map((st, i) => {
+                  const ud = depositRequests.filter(r => r.userId === user?.id).map(r => ({ ...r, t: 'd', num: parseInt(r.id.split('_')[1] || '0') }));
+                  const uw = withdrawRequests.filter(r => r.userId === user?.id).map(r => ({ ...r, t: 'w', num: parseInt(r.id.split('_')[1] || '0') }));
+                  return allTx.map(req => (
+                       {[100, 500, 1000, 2000].map(amt => (
+                 {unclaimedRewards.map(level => {
+                 {(['DASHBOARD', 'TEAMS', 'USERS', 'CONTESTS', 'MATCHES', 'FINANCIALS', 'BANNERS', 'SETTINGS', 'ENTRY FEES'] as const).map(tab => (
+           {appMatches.filter(m => m.status === 'UPCOMING').slice(0, 2).map((m, i) => (
+           {appMatches.filter(m => m.status === 'LIVE' || m.status === 'COMPLETED').slice(0, 2).map((m, i) => (
+                  .map((tu, i) => (
+                {[1, 2, 4].map(i => (
+                 {appBanners.map((banner, index) => (
+                                  setAppBanners(prev => prev.map(b => b.id === banner.id ? { ...b, imageUrl: reader.result as string } : b));
+                          onChange={(e) => setAppBanners(prev => prev.map(b => b.id === banner.id ? { ...b, linkUrl: e.target.value } : b))} 
+                              {adminCustomPayouts.map((cp, idx) => (
+                             payouts = validCustomPayouts.map(cp => {
+                                        let tierPrizes = validTiers.map(t => {
+                       {appContests.map(c => (
+         {appFormats.map(fmt => (
+         {appTeamsList.filter(t => t.format === selectedFormat).map(team => {
+                             {(['ALL', 'WK', 'BAT', 'AR', 'BOWL'] as const).map(f => (
+                                 ) : (adminTeamPlayerRoleFilter === 'ALL' ? teamPlayers : teamPlayers.filter(p => p.role === adminTeamPlayerRoleFilter)).map((p: any) => (
+               const matches = data.data.map((m: any) => ({
+           {apiMatches.map(m => {
+                 {matchListPlayers.map((p, idx) => (
+              const newPlayers = matchListPlayers.map((p, i) => ({
+                                  {liveMatches.map(match => (
+                                    {filteredPlayers.slice(0, 50).map((p) => {
+                                        setAppPlayers(prev => prev.map(pl => pl.id === p.id ? { ...pl, points: finalPts } : pl));
+                                              const newRemotePlayers = remotePlayers.map(pl => {
+                                              await setDoc(doc(db, 'gameData', 'main_state'), JSON.parse(JSON.stringify({ players: appPlayers.map(pl => pl.id === p.id ? { ...pl, points: finalPts } : pl) })), { merge: true });
+                    {appMatches.map(m => (
+                            const newMatches = appMatches.map(mm => mm.id === m.id ? updatedMatch : mm);
+                            const newMatches = appMatches.map(mm => mm.id === m.id ? { ...mm, status } : mm);
+                            const newMatches = appMatches.map(mm => mm.id === m.id ? { ...mm, lineupStatus: mm.lineupStatus === 'OUT' ? 'NOT_OUT' : 'OUT' as const } : mm);
+                        kycRequests.filter(r => r.status === 'Pending Review').map((req) => (
+                    {filledInstances.map((inst, i) => (
+                               {inst.teams.map((t: any, idx: number) => (
+                        withdrawRequests.filter(r => r.status === 'Pending').map((req) => {
+                        depositRequests.filter(r => r.status === 'Pending').map((req, index) => (
+                           {appMatches.map(match => (
+                              return filtered.map((st, actIdx) => (
+                       {appMatches.filter(m => m.status === 'Live').length > 0 ? appMatches.filter(m => m.status === 'Live').map(match => (
+                              {matchPlayers.map((player) => (
+                                             onClick={() => setAppPlayers(appPlayers.map(p => p.id === player.id ? { ...p, points: p.points + 6 } : p))}
+                                             onClick={() => setAppPlayers(appPlayers.map(p => p.id === player.id ? { ...p, points: p.points + 4 } : p))}
+                                             onClick={() => setAppPlayers(appPlayers.map(p => p.id === player.id ? { ...p, points: p.points + 25 } : p))}
+                                             onClick={() => setAppPlayers(appPlayers.map(p => p.id === player.id ? { ...p, points: p.points + 1 } : p))}
+                                             onClick={() => setAppPlayers(appPlayers.map(p => p.id === player.id ? { ...p, points: p.points + 2 } : p))}
+                                             onClick={() => setAppPlayers(appPlayers.map(p => p.id === player.id ? { ...p, points: p.points + 12 } : p))}
+                                           <button onClick={() => setAppPlayers(appPlayers.map(p => p.id === player.id ? { ...p, points: Math.max(0, p.points - 1) } : p))} className="bg-red-950/50 border border-red-900/50 text-red-500 px-4 py-2 rounded-lg font-bold text-xs tracking-wider active:scale-95">-1</button>
+                                           <button onClick={() => setAppPlayers(appPlayers.map(p => p.id === player.id ? { ...p, points: p.points + 10 } : p))} className="bg-emerald-950/50 border border-emerald-900/50 text-emerald-500 px-4 py-2 rounded-lg font-bold text-xs tracking-wider active:scale-95">+10</button>
+                       {appMatches.filter(m => m.status === 'Upcoming').length > 0 ? appMatches.filter(m => m.status === 'Upcoming').map(match => (
+                                 const newMatchesList = appMatches.map(m => m.id === match.id ? { ...m, lineupStatus: m.lineupStatus === 'OUT' ? 'NOT_OUT' : 'OUT' as const } : m);
+                              {matchPlayers.map((player) => (
+                                  onClick={() => setAppPlayers(appPlayers.map(p => p.id === player.id ? { ...p, isPlaying: !p.isPlaying } : p))}
+                                   setAppTeamsList(prev => prev.map(t => t.id === showAddFlagModal ? { ...t, flagUrl: finalCroppedImageBase64, flagFit: 'cover' } : t));
+                      {['bg-blue-600', 'bg-green-600', 'bg-red-600', 'bg-yellow-500', 'bg-purple-600', 'bg-slate-800', 'bg-orange-500', 'bg-pink-600'].map(c => (
+                      {(['BAT', 'BOWL', 'AR', 'WK'] as const).map(r => (
+                               setAppPlayers(prev => prev.map(p => p.id === editingPlayerId ? {
+                        const newTeams = prev.map(t => 
+                    .map(u => (
+                      {[100, 500, 1000, 5000].map(amt => (

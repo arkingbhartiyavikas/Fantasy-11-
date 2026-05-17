@@ -1,10 +1,40 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import Cropper from 'react-easy-crop';
-import { Trophy, Clock, Users, ArrowLeft, Home, User, Wallet, Bell, PlayCircle, Shield, Plus, Minus, Info, Receipt, Settings, MessageSquare, Copy, PlusCircle, Edit2, ArrowDownToLine, ArrowDownLeft, ArrowRight, Check, X, ChevronUp, ChevronDown, Search, ChevronLeft, ChevronRight, Trash2, Download, BarChart2, Image as ImageIcon, ZoomIn } from 'lucide-react';
+import { Trophy, Clock, Users, ArrowLeft, Home, User, Wallet, Bell, PlayCircle, Shield, Plus, Minus, Info, Receipt, Settings, MessageSquare, Copy, PlusCircle, Edit2, ArrowDownToLine, ArrowDownLeft, ArrowRight, Check, X, ChevronUp, ChevronDown, Search, ChevronLeft, ChevronRight, Trash2, Download, BarChart2, Image as ImageIcon, ZoomIn, RefreshCw, AlertCircle } from 'lucide-react';
 import { auth, googleProvider, signInWithPopup, signOut as firebaseSignOut, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, db } from './lib/firebase';
-import { doc, onSnapshot, setDoc, collection, query, where, getDoc, getDocs, updateDoc, writeBatch } from 'firebase/firestore';
+import { doc, onSnapshot, setDoc, collection, query, where, getDoc, getDocs, updateDoc, writeBatch, increment, deleteDoc } from 'firebase/firestore';
 import { AreaChart, Area, LineChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip as RechartsTooltip, ResponsiveContainer, CartesianGrid, Legend } from 'recharts';
+
+class ErrorBoundary extends React.Component<{children: React.ReactNode}, {hasError: boolean, error: any}> {
+  constructor(props: any) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+  static getDerivedStateFromError(error: any) {
+    return { hasError: true, error };
+  }
+  componentDidCatch(error: any, errorInfo: any) {
+    console.error("ErrorBoundary caught an error", error, errorInfo);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="flex flex-col items-center justify-center h-screen bg-[#090b10] text-[#e5c158] p-8 text-center" style={{ zIndex: 9999 }}>
+          <div className="bg-red-500/10 p-6 rounded-3xl border border-red-500/30 mb-6">
+            <h1 className="text-2xl font-black mb-2">Something went wrong</h1>
+            <p className="text-xs text-slate-400 max-w-md mx-auto">{this.state.error?.message || "An unexpected error occurred in the UI."}</p>
+          </div>
+          <button 
+            onClick={() => window.location.reload()}
+            className="bg-[#e5c158] text-black font-black px-6 py-3 rounded-xl hover:bg-yellow-500 transition-all uppercase tracking-widest text-xs"
+          >Reload App</button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 const createImage = (url: string): Promise<HTMLImageElement> =>
   new Promise((resolve, reject) => {
@@ -117,135 +147,181 @@ const DEFAULT_MATCHES: Match[] = [
   {
     id: 'm1',
     series: 'TATA IPL 2026',
-    team1: { name: 'Chennai', shortFrame: 'CHE', color: 'bg-yellow-500' },
-    team2: { name: 'Mumbai', shortFrame: 'MUM', color: 'bg-app-accent' },
+    team1: { name: 'Chennai', shortFrame: 'CSK', color: 'bg-yellow-500' },
+    team2: { name: 'Mumbai', shortFrame: 'MI', color: 'bg-blue-600' },
     time: '2h 15m',
-    totalPrize: '₹55 Crores',
+    totalPrize: '₹50 Crores',
     status: 'Upcoming'
   },
   {
     id: 'm2',
     series: 'TATA IPL 2026',
-    team1: { name: 'Bengaluru', shortFrame: 'BEN', color: 'bg-app-accent' },
-    team2: { name: 'Kolkata', shortFrame: 'KOL', color: 'bg-purple-800' },
+    team1: { name: 'Bengaluru', shortFrame: 'RCB', color: 'bg-red-600' },
+    team2: { name: 'Kolkata', shortFrame: 'KKR', color: 'bg-purple-800' },
     time: 'Tomorrow, 7:30 PM',
     totalPrize: '₹40 Crores',
+    status: 'Upcoming'
+  },
+  {
+    id: 'm3',
+    series: 'TATA IPL 2026',
+    team1: { name: 'Hyderabad', shortFrame: 'SRH', color: 'bg-orange-500' },
+    team2: { name: 'Rajasthan', shortFrame: 'RR', color: 'bg-pink-600' },
+    time: 'Sunday, 3:30 PM',
+    totalPrize: '₹35 Crores',
     status: 'Upcoming'
   }
 ];
 
 // Using MOCK_PLAYERS as default, state is managed in app
 export const MOCK_PLAYERS: Player[] = [
-  // Wicket Keepers
-  { id: 'p1', name: 'M Dhoni', team: 'CHE', role: 'WK', credits: 8.5, points: 210, selPercent: 82 },
-  { id: 'p2', name: 'I Kishan', team: 'MUM', role: 'WK', credits: 8.0, points: 195, selPercent: 65 },
-  // Batsmen
-  { id: 'p3', name: 'R Sharma', team: 'MUM', role: 'BAT', credits: 9.0, points: 340, selPercent: 88 },
-  { id: 'p4', name: 'S Yadav', team: 'MUM', role: 'BAT', credits: 9.0, points: 410, selPercent: 91 },
-  { id: 'p5', name: 'R Gaikwad', team: 'CHE', role: 'BAT', credits: 8.5, points: 280, selPercent: 70 },
-  { id: 'p6', name: 'S Dube', team: 'CHE', role: 'BAT', credits: 8.0, points: 265, selPercent: 60 },
-  { id: 'p7', name: 'T Varma', team: 'MUM', role: 'BAT', credits: 7.5, points: 220, selPercent: 45 },
-  // All Rounders
-  { id: 'p8', name: 'H Pandya', team: 'MUM', role: 'AR', credits: 9.0, points: 310, selPercent: 85 },
-  { id: 'p9', name: 'R Jadeja', team: 'CHE', role: 'AR', credits: 9.0, points: 300, selPercent: 80 },
-  { id: 'p10', name: 'M Ali', team: 'CHE', role: 'AR', credits: 8.5, points: 210, selPercent: 55 },
-  // Bowlers
-  { id: 'p11', name: 'J Bumrah', team: 'MUM', role: 'BOWL', credits: 9.5, points: 420, selPercent: 95 },
-  { id: 'p12', name: 'M Pathirana', team: 'CHE', role: 'BOWL', credits: 8.5, points: 350, selPercent: 78 },
-  { id: 'p13', name: 'P Chawla', team: 'MUM', role: 'BOWL', credits: 8.0, points: 230, selPercent: 40 },
-  { id: 'p14', name: 'D Chahar', team: 'CHE', role: 'BOWL', credits: 8.0, points: 190, selPercent: 35 },
-  { id: 'p15', name: 'G Coetzee', team: 'MUM', role: 'BOWL', credits: 8.0, points: 240, selPercent: 50 },
+  // --- INDIA (IND) ---
+  { id: 'ind_1', name: 'Virat Kohli', team: 'IND', role: 'BAT', credits: 9.5, points: 0, selPercent: 95 },
+  { id: 'ind_2', name: 'Rohit Sharma', team: 'IND', role: 'BAT', credits: 9.0, points: 0, selPercent: 90 },
+  { id: 'ind_3', name: 'Shubman Gill', team: 'IND', role: 'BAT', credits: 8.5, points: 0, selPercent: 80 },
+  { id: 'ind_4', name: 'Suryakumar Yadav', team: 'IND', role: 'BAT', credits: 9.0, points: 0, selPercent: 88 },
+  { id: 'ind_5', name: 'Yashasvi Jaiswal', team: 'IND', role: 'BAT', credits: 8.5, points: 0, selPercent: 75 },
+  { id: 'ind_6', name: 'Rishabh Pant', team: 'IND', role: 'WK', credits: 8.5, points: 0, selPercent: 82 },
+  { id: 'ind_7', name: 'KL Rahul', team: 'IND', role: 'WK', credits: 8.5, points: 0, selPercent: 70 },
+  { id: 'ind_8', name: 'Sanju Samson', team: 'IND', role: 'WK', credits: 8.0, points: 0, selPercent: 55 },
+  { id: 'ind_9', name: 'Hardik Pandya', team: 'IND', role: 'AR', credits: 9.0, points: 0, selPercent: 85 },
+  { id: 'ind_10', name: 'Ravindra Jadeja', team: 'IND', role: 'AR', credits: 9.0, points: 0, selPercent: 80 },
+  { id: 'ind_11', name: 'Axar Patel', team: 'IND', role: 'AR', credits: 8.5, points: 0, selPercent: 65 },
+  { id: 'ind_12', name: 'Shivam Dube', team: 'IND', role: 'AR', credits: 8.0, points: 0, selPercent: 60 },
+  { id: 'ind_13', name: 'Jasprit Bumrah', team: 'IND', role: 'BOWL', credits: 9.5, points: 0, selPercent: 92 },
+  { id: 'ind_14', name: 'Mohammed Siraj', team: 'IND', role: 'BOWL', credits: 8.5, points: 0, selPercent: 70 },
+  { id: 'ind_15', name: 'Kuldeep Yadav', team: 'IND', role: 'BOWL', credits: 8.5, points: 0, selPercent: 78 },
+  { id: 'ind_16', name: 'Arshdeep Singh', team: 'IND', role: 'BOWL', credits: 8.5, points: 0, selPercent: 72 },
+  { id: 'ind_17', name: 'Mohammed Shami', team: 'IND', role: 'BOWL', credits: 8.5, points: 0, selPercent: 65 },
+  { id: 'ind_18', name: 'Yuzvendra Chahal', team: 'IND', role: 'BOWL', credits: 8.0, points: 0, selPercent: 50 },
 
-  // India (IND)
-  { id: 'ind_1', name: 'R Pant', team: 'IND', role: 'WK', credits: 8.5, points: 0, selPercent: 75 },
-  { id: 'ind_2', name: 'S Samson', team: 'IND', role: 'WK', credits: 8.0, points: 0, selPercent: 45 },
-  { id: 'ind_3', name: 'R Sharma', team: 'IND', role: 'BAT', credits: 9.0, points: 0, selPercent: 88 },
-  { id: 'ind_4', name: 'V Kohli', team: 'IND', role: 'BAT', credits: 9.0, points: 0, selPercent: 85 },
-  { id: 'ind_5', name: 'S Yadav', team: 'IND', role: 'BAT', credits: 8.5, points: 0, selPercent: 82 },
-  { id: 'ind_6', name: 'Y Jaiswal', team: 'IND', role: 'BAT', credits: 8.0, points: 0, selPercent: 60 },
-  { id: 'ind_7', name: 'H Pandya', team: 'IND', role: 'AR', credits: 9.0, points: 0, selPercent: 80 },
-  { id: 'ind_8', name: 'R Jadeja', team: 'IND', role: 'AR', credits: 8.5, points: 0, selPercent: 70 },
-  { id: 'ind_9', name: 'A Patel', team: 'IND', role: 'AR', credits: 8.0, points: 0, selPercent: 55 },
-  { id: 'ind_10', name: 'S Dube', team: 'IND', role: 'AR', credits: 8.0, points: 0, selPercent: 45 },
-  { id: 'ind_11', name: 'J Bumrah', team: 'IND', role: 'BOWL', credits: 9.0, points: 0, selPercent: 88 },
-  { id: 'ind_12', name: 'A Singh', team: 'IND', role: 'BOWL', credits: 8.5, points: 0, selPercent: 65 },
-  { id: 'ind_13', name: 'M Siraj', team: 'IND', role: 'BOWL', credits: 8.0, points: 0, selPercent: 50 },
-  { id: 'ind_14', name: 'K Yadav', team: 'IND', role: 'BOWL', credits: 8.5, points: 0, selPercent: 70 },
+  // --- CSK (Chennai Super Kings) ---
+  { id: 'csk_1', name: 'MS Dhoni', team: 'CSK', role: 'WK', credits: 8.5, points: 0, selPercent: 85 },
+  { id: 'csk_2', name: 'Ruturaj Gaikwad', team: 'CSK', role: 'BAT', credits: 9.0, points: 0, selPercent: 90 },
+  { id: 'csk_3', name: 'Rachin Ravindra', team: 'CSK', role: 'BAT', credits: 8.5, points: 0, selPercent: 78 },
+  { id: 'csk_4', name: 'Shivam Dube', team: 'CSK', role: 'AR', credits: 8.5, points: 0, selPercent: 82 },
+  { id: 'csk_5', name: 'Ravindra Jadeja', team: 'CSK', role: 'AR', credits: 9.0, points: 0, selPercent: 88 },
+  { id: 'csk_6', name: 'Daryl Mitchell', team: 'CSK', role: 'BAT', credits: 8.5, points: 0, selPercent: 70 },
+  { id: 'csk_7', name: 'Matheesha Pathirana', team: 'CSK', role: 'BOWL', credits: 9.0, points: 0, selPercent: 80 },
+  { id: 'csk_8', name: 'Tushar Deshpande', team: 'CSK', role: 'BOWL', credits: 8.0, points: 0, selPercent: 65 },
+  { id: 'csk_9', name: 'Deepak Chahar', team: 'CSK', role: 'BOWL', credits: 8.5, points: 0, selPercent: 60 },
+  { id: 'csk_10', name: 'Shardul Thakur', team: 'CSK', role: 'BOWL', credits: 8.5, points: 0, selPercent: 55 },
+  { id: 'csk_11', name: 'Ajinkya Rahane', team: 'CSK', role: 'BAT', credits: 8.0, points: 0, selPercent: 50 },
+  { id: 'csk_12', name: 'Moeen Ali', team: 'CSK', role: 'AR', credits: 8.5, points: 0, selPercent: 45 },
 
-  // Pakistan (PAK)
-  { id: 'pak_1', name: 'M Rizwan', team: 'PAK', role: 'WK', credits: 9.0, points: 0, selPercent: 85 },
-  { id: 'pak_2', name: 'A Khan', team: 'PAK', role: 'WK', credits: 8.0, points: 0, selPercent: 35 },
-  { id: 'pak_3', name: 'B Azam', team: 'PAK', role: 'BAT', credits: 9.0, points: 0, selPercent: 88 },
-  { id: 'pak_4', name: 'F Zaman', team: 'PAK', role: 'BAT', credits: 8.5, points: 0, selPercent: 70 },
-  { id: 'pak_5', name: 'S Ayub', team: 'PAK', role: 'BAT', credits: 8.0, points: 0, selPercent: 45 },
-  { id: 'pak_6', name: 'I Ahmed', team: 'PAK', role: 'BAT', credits: 8.5, points: 0, selPercent: 65 },
-  { id: 'pak_7', name: 'S Khan', team: 'PAK', role: 'AR', credits: 8.5, points: 0, selPercent: 75 },
-  { id: 'pak_8', name: 'I Wasim', team: 'PAK', role: 'AR', credits: 8.0, points: 0, selPercent: 60 },
-  { id: 'pak_9', name: 'S Afridi', team: 'PAK', role: 'BOWL', credits: 9.0, points: 0, selPercent: 85 },
-  { id: 'pak_10', name: 'N Shah', team: 'PAK', role: 'BOWL', credits: 8.5, points: 0, selPercent: 70 },
-  { id: 'pak_11', name: 'H Rauf', team: 'PAK', role: 'BOWL', credits: 8.5, points: 0, selPercent: 65 },
-  { id: 'pak_12', name: 'M Amir', team: 'PAK', role: 'BOWL', credits: 8.0, points: 0, selPercent: 55 },
-  { id: 'pak_13', name: 'A Ahmed', team: 'PAK', role: 'BOWL', credits: 8.0, points: 0, selPercent: 40 },
+  // --- MI (Mumbai Indians) ---
+  { id: 'mi_1', name: 'Rohit Sharma', team: 'MI', role: 'BAT', credits: 9.0, points: 0, selPercent: 92 },
+  { id: 'mi_2', name: 'Hardik Pandya', team: 'MI', role: 'AR', credits: 9.0, points: 0, selPercent: 88 },
+  { id: 'mi_3', name: 'Suryakumar Yadav', team: 'MI', role: 'BAT', credits: 9.5, points: 0, selPercent: 95 },
+  { id: 'mi_4', name: 'Ishan Kishan', team: 'MI', role: 'WK', credits: 8.5, points: 0, selPercent: 80 },
+  { id: 'mi_5', name: 'Jasprit Bumrah', team: 'MI', role: 'BOWL', credits: 9.5, points: 0, selPercent: 98 },
+  { id: 'mi_6', name: 'Tilak Varma', team: 'MI', role: 'BAT', credits: 8.5, points: 0, selPercent: 75 },
+  { id: 'mi_7', name: 'Tim David', team: 'MI', role: 'BAT', credits: 8.5, points: 0, selPercent: 70 },
+  { id: 'mi_8', name: 'Gerald Coetzee', team: 'MI', role: 'BOWL', credits: 8.5, points: 0, selPercent: 65 },
+  { id: 'mi_9', name: 'Piyush Chawla', team: 'MI', role: 'BOWL', credits: 8.0, points: 0, selPercent: 55 },
+  { id: 'mi_10', name: 'Mohammad Nabi', team: 'MI', role: 'AR', credits: 8.0, points: 0, selPercent: 40 },
+  { id: 'mi_11', name: 'Nuwan Thushara', team: 'MI', role: 'BOWL', credits: 8.0, points: 0, selPercent: 35 },
 
-  // Australia (AUS)
-  { id: 'aus_1', name: 'M Wade', team: 'AUS', role: 'WK', credits: 8.0, points: 0, selPercent: 50 },
-  { id: 'aus_2', name: 'J Inglis', team: 'AUS', role: 'WK', credits: 8.0, points: 0, selPercent: 45 },
-  { id: 'aus_3', name: 'D Warner', team: 'AUS', role: 'BAT', credits: 9.0, points: 0, selPercent: 80 },
-  { id: 'aus_4', name: 'T Head', team: 'AUS', role: 'BAT', credits: 9.0, points: 0, selPercent: 88 },
-  { id: 'aus_5', name: 'M Marsh', team: 'AUS', role: 'BAT', credits: 8.5, points: 0, selPercent: 75 },
-  { id: 'aus_6', name: 'T David', team: 'AUS', role: 'BAT', credits: 8.0, points: 0, selPercent: 60 },
-  { id: 'aus_7', name: 'G Maxwell', team: 'AUS', role: 'AR', credits: 9.0, points: 0, selPercent: 85 },
-  { id: 'aus_8', name: 'M Stoinis', team: 'AUS', role: 'AR', credits: 8.5, points: 0, selPercent: 70 },
-  { id: 'aus_9', name: 'C Green', team: 'AUS', role: 'AR', credits: 8.0, points: 0, selPercent: 55 },
-  { id: 'aus_10', name: 'M Starc', team: 'AUS', role: 'BOWL', credits: 9.0, points: 0, selPercent: 85 },
-  { id: 'aus_11', name: 'P Cummins', team: 'AUS', role: 'BOWL', credits: 8.5, points: 0, selPercent: 75 },
-  { id: 'aus_12', name: 'J Hazlewood', team: 'AUS', role: 'BOWL', credits: 8.5, points: 0, selPercent: 65 },
-  { id: 'aus_13', name: 'A Zampa', team: 'AUS', role: 'BOWL', credits: 8.5, points: 0, selPercent: 80 },
+  // --- RCB (Royal Challengers Bangalore) ---
+  { id: 'rcb_1', name: 'Virat Kohli', team: 'RCB', role: 'BAT', credits: 10.0, points: 0, selPercent: 99 },
+  { id: 'rcb_2', name: 'Faf du Plessis', team: 'RCB', role: 'BAT', credits: 9.0, points: 0, selPercent: 85 },
+  { id: 'rcb_3', name: 'Glenn Maxwell', team: 'RCB', role: 'AR', credits: 9.0, points: 0, selPercent: 80 },
+  { id: 'rcb_4', name: 'Rajat Patidar', team: 'RCB', role: 'BAT', credits: 8.5, points: 0, selPercent: 60 },
+  { id: 'rcb_5', name: 'Dinesh Karthik', team: 'RCB', role: 'WK', credits: 8.5, points: 0, selPercent: 70 },
+  { id: 'rcb_6', name: 'Cameron Green', team: 'RCB', role: 'AR', credits: 9.0, points: 0, selPercent: 75 },
+  { id: 'rcb_7', name: 'Will Jacks', team: 'RCB', role: 'AR', credits: 8.5, points: 0, selPercent: 65 },
+  { id: 'rcb_8', name: 'Mohammed Siraj', team: 'RCB', role: 'BOWL', credits: 9.0, points: 0, selPercent: 80 },
+  { id: 'rcb_9', name: 'Yash Dayal', team: 'RCB', role: 'BOWL', credits: 8.0, points: 0, selPercent: 50 },
+  { id: 'rcb_10', name: 'Karn Sharma', team: 'RCB', role: 'BOWL', credits: 8.0, points: 0, selPercent: 40 },
+  { id: 'rcb_11', name: 'Swapnil Singh', team: 'RCB', role: 'AR', credits: 7.5, points: 0, selPercent: 30 },
 
-  // England (ENG)
-  { id: 'eng_1', name: 'J Buttler', team: 'ENG', role: 'WK', credits: 9.0, points: 0, selPercent: 88 },
-  { id: 'eng_2', name: 'P Salt', team: 'ENG', role: 'WK', credits: 8.5, points: 0, selPercent: 80 },
-  { id: 'eng_3', name: 'W Jacks', team: 'ENG', role: 'BAT', credits: 8.5, points: 0, selPercent: 75 },
-  { id: 'eng_4', name: 'J Bairstow', team: 'ENG', role: 'BAT', credits: 8.5, points: 0, selPercent: 70 },
-  { id: 'eng_5', name: 'H Brook', team: 'ENG', role: 'BAT', credits: 8.0, points: 0, selPercent: 60 },
-  { id: 'eng_6', name: 'B Duckett', team: 'ENG', role: 'BAT', credits: 8.0, points: 0, selPercent: 45 },
-  { id: 'eng_7', name: 'M Ali', team: 'ENG', role: 'AR', credits: 8.5, points: 0, selPercent: 65 },
-  { id: 'eng_8', name: 'L Livingstone', team: 'ENG', role: 'AR', credits: 8.5, points: 0, selPercent: 70 },
-  { id: 'eng_9', name: 'S Curran', team: 'ENG', role: 'AR', credits: 8.5, points: 0, selPercent: 75 },
-  { id: 'eng_10', name: 'J Archer', team: 'ENG', role: 'BOWL', credits: 9.0, points: 0, selPercent: 80 },
-  { id: 'eng_11', name: 'A Rashid', team: 'ENG', role: 'BOWL', credits: 8.5, points: 0, selPercent: 75 },
-  { id: 'eng_12', name: 'M Wood', team: 'ENG', role: 'BOWL', credits: 8.0, points: 0, selPercent: 55 },
-  { id: 'eng_13', name: 'R Topley', team: 'ENG', role: 'BOWL', credits: 8.0, points: 0, selPercent: 60 },
+  // --- KKR (Kolkata Knight Riders) ---
+  { id: 'kkr_1', name: 'Shreyas Iyer', team: 'KKR', role: 'BAT', credits: 9.0, points: 0, selPercent: 80 },
+  { id: 'kkr_2', name: 'Sunil Narine', team: 'KKR', role: 'AR', credits: 9.5, points: 0, selPercent: 95 },
+  { id: 'kkr_3', name: 'Andre Russell', team: 'KKR', role: 'AR', credits: 9.5, points: 0, selPercent: 92 },
+  { id: 'kkr_4', name: 'Phil Salt', team: 'KKR', role: 'WK', credits: 9.0, points: 0, selPercent: 88 },
+  { id: 'kkr_5', name: 'Rinku Singh', team: 'KKR', role: 'BAT', credits: 8.5, points: 0, selPercent: 75 },
+  { id: 'kkr_6', name: 'Venkatesh Iyer', team: 'KKR', role: 'BAT', credits: 8.5, points: 0, selPercent: 70 },
+  { id: 'kkr_7', name: 'Mitchell Starc', team: 'KKR', role: 'BOWL', credits: 9.5, points: 0, selPercent: 82 },
+  { id: 'kkr_8', name: 'Varun Chakaravarthy', team: 'KKR', role: 'BOWL', credits: 9.0, points: 0, selPercent: 85 },
+  { id: 'kkr_9', name: 'Harshit Rana', team: 'KKR', role: 'BOWL', credits: 8.5, points: 0, selPercent: 70 },
+  { id: 'kkr_10', name: 'Vaibhav Arora', team: 'KKR', role: 'BOWL', credits: 8.0, points: 0, selPercent: 50 },
+  { id: 'kkr_11', name: 'Ramandeep Singh', team: 'KKR', role: 'AR', credits: 7.5, points: 0, selPercent: 40 },
 
-  // New Zealand (NZ)
-  { id: 'nz_1', name: 'D Conway', team: 'NZ', role: 'WK', credits: 8.5, points: 0, selPercent: 75 },
-  { id: 'nz_2', name: 'F Allen', team: 'NZ', role: 'WK', credits: 8.0, points: 0, selPercent: 60 },
-  { id: 'nz_3', name: 'K Williamson', team: 'NZ', role: 'BAT', credits: 9.0, points: 0, selPercent: 80 },
-  { id: 'nz_4', name: 'D Mitchell', team: 'NZ', role: 'BAT', credits: 8.5, points: 0, selPercent: 70 },
-  { id: 'nz_5', name: 'G Phillips', team: 'NZ', role: 'BAT', credits: 8.5, points: 0, selPercent: 65 },
-  { id: 'nz_6', name: 'M Chapman', team: 'NZ', role: 'BAT', credits: 8.0, points: 0, selPercent: 40 },
-  { id: 'nz_7', name: 'M Santner', team: 'NZ', role: 'AR', credits: 8.5, points: 0, selPercent: 70 },
-  { id: 'nz_8', name: 'R Ravindra', team: 'NZ', role: 'AR', credits: 8.5, points: 0, selPercent: 75 },
-  { id: 'nz_9', name: 'J Neesham', team: 'NZ', role: 'AR', credits: 8.0, points: 0, selPercent: 55 },
-  { id: 'nz_10', name: 'T Boult', team: 'NZ', role: 'BOWL', credits: 9.0, points: 0, selPercent: 85 },
-  { id: 'nz_11', name: 'T Southee', team: 'NZ', role: 'BOWL', credits: 8.5, points: 0, selPercent: 70 },
-  { id: 'nz_12', name: 'L Ferguson', team: 'NZ', role: 'BOWL', credits: 8.5, points: 0, selPercent: 65 },
-  { id: 'nz_13', name: 'I Sodhi', team: 'NZ', role: 'BOWL', credits: 8.0, points: 0, selPercent: 50 },
+  // --- SRH (Sunrisers Hyderabad) ---
+  { id: 'srh_1', name: 'Pat Cummins', team: 'SRH', role: 'BOWL', credits: 9.5, points: 0, selPercent: 90 },
+  { id: 'srh_2', name: 'Travis Head', team: 'SRH', role: 'BAT', credits: 9.5, points: 0, selPercent: 95 },
+  { id: 'srh_3', name: 'Abhishek Sharma', team: 'SRH', role: 'BAT', credits: 9.0, points: 0, selPercent: 92 },
+  { id: 'srh_4', name: 'Heinrich Klaasen', team: 'SRH', role: 'WK', credits: 9.5, points: 0, selPercent: 94 },
+  { id: 'srh_5', name: 'Aiden Markram', team: 'SRH', role: 'BAT', credits: 8.5, points: 0, selPercent: 65 },
+  { id: 'srh_6', name: 'Nitish Reddy', team: 'SRH', role: 'AR', credits: 8.5, points: 0, selPercent: 75 },
+  { id: 'srh_7', name: 'Bhuvneshwar Kumar', team: 'SRH', role: 'BOWL', credits: 8.5, points: 0, selPercent: 70 },
+  { id: 'srh_8', name: 'T Natarajan', team: 'SRH', role: 'BOWL', credits: 9.0, points: 0, selPercent: 85 },
+  { id: 'srh_9', name: 'Mayank Markande', team: 'SRH', role: 'BOWL', credits: 8.0, points: 0, selPercent: 40 },
+  { id: 'srh_10', name: 'Shahbaz Ahmed', team: 'SRH', role: 'AR', credits: 8.0, points: 0, selPercent: 50 },
+  { id: 'srh_11', name: 'Jaydev Unadkat', team: 'SRH', role: 'BOWL', credits: 8.0, points: 0, selPercent: 35 },
 
-  // West Indies (WI)
-  { id: 'wi_1', name: 'N Pooran', team: 'WI', role: 'WK', credits: 9.0, points: 0, selPercent: 85 },
-  { id: 'wi_2', name: 'S Hope', team: 'WI', role: 'WK', credits: 8.5, points: 0, selPercent: 65 },
-  { id: 'wi_3', name: 'R Powell', team: 'WI', role: 'BAT', credits: 8.5, points: 0, selPercent: 70 },
-  { id: 'wi_4', name: 'B King', team: 'WI', role: 'BAT', credits: 8.5, points: 0, selPercent: 60 },
-  { id: 'wi_5', name: 'J Charles', team: 'WI', role: 'BAT', credits: 8.0, points: 0, selPercent: 50 },
-  { id: 'wi_6', name: 'S Rutherford', team: 'WI', role: 'BAT', credits: 8.0, points: 0, selPercent: 45 },
-  { id: 'wi_7', name: 'A Russell', team: 'WI', role: 'AR', credits: 9.0, points: 0, selPercent: 88 },
-  { id: 'wi_8', name: 'R Shepherd', team: 'WI', role: 'AR', credits: 8.5, points: 0, selPercent: 75 },
-  { id: 'wi_9', name: 'R Chase', team: 'WI', role: 'AR', credits: 8.0, points: 0, selPercent: 60 },
-  { id: 'wi_10', name: 'A Hosein', team: 'WI', role: 'BOWL', credits: 8.5, points: 0, selPercent: 75 },
-  { id: 'wi_11', name: 'A Joseph', team: 'WI', role: 'BOWL', credits: 8.5, points: 0, selPercent: 70 },
-  { id: 'wi_12', name: 'G Motie', team: 'WI', role: 'BOWL', credits: 8.0, points: 0, selPercent: 65 },
-  { id: 'wi_13', name: 'S Joseph', team: 'WI', role: 'BOWL', credits: 8.0, points: 0, selPercent: 55 }
+  // --- RR (Rajasthan Royals) ---
+  { id: 'rr_1', name: 'Sanju Samson', team: 'RR', role: 'WK', credits: 9.0, points: 0, selPercent: 88 },
+  { id: 'rr_2', name: 'Jos Buttler', team: 'RR', role: 'WK', credits: 9.5, points: 0, selPercent: 92 },
+  { id: 'rr_3', name: 'Yashasvi Jaiswal', team: 'RR', role: 'BAT', credits: 9.0, points: 0, selPercent: 85 },
+  { id: 'rr_4', name: 'Riyan Parag', team: 'RR', role: 'BAT', credits: 9.0, points: 0, selPercent: 90 },
+  { id: 'rr_5', name: 'Shimron Hetmyer', team: 'RR', role: 'BAT', credits: 8.5, points: 0, selPercent: 60 },
+  { id: 'rr_6', name: 'Dhruv Jurel', team: 'RR', role: 'WK', credits: 8.0, points: 0, selPercent: 55 },
+  { id: 'rr_7', name: 'R Ashwin', team: 'RR', role: 'AR', credits: 8.5, points: 0, selPercent: 70 },
+  { id: 'rr_8', name: 'Trent Boult', team: 'RR', role: 'BOWL', credits: 9.5, points: 0, selPercent: 88 },
+  { id: 'rr_9', name: 'Yuzvendra Chahal', team: 'RR', role: 'BOWL', credits: 9.0, points: 0, selPercent: 85 },
+  { id: 'rr_10', name: 'Sandeep Sharma', team: 'RR', role: 'BOWL', credits: 8.5, points: 0, selPercent: 75 },
+  { id: 'rr_11', name: 'Avesh Khan', team: 'RR', role: 'BOWL', credits: 8.5, points: 0, selPercent: 65 },
+
+  // --- GT (Gujarat Titans) ---
+  { id: 'gt_1', name: 'Shubman Gill', team: 'GT', role: 'BAT', credits: 9.5, points: 0, selPercent: 92 },
+  { id: 'gt_2', name: 'Sai Sudharsan', team: 'GT', role: 'BAT', credits: 9.0, points: 0, selPercent: 85 },
+  { id: 'gt_3', name: 'David Miller', team: 'GT', role: 'BAT', credits: 8.5, points: 0, selPercent: 75 },
+  { id: 'gt_4', name: 'Rashid Khan', team: 'GT', role: 'AR', credits: 9.5, points: 0, selPercent: 95 },
+  { id: 'gt_5', name: 'Rahul Tewatia', team: 'GT', role: 'AR', credits: 8.5, points: 0, selPercent: 70 },
+  { id: 'gt_6', name: 'Mohit Sharma', team: 'GT', role: 'BOWL', credits: 8.5, points: 0, selPercent: 80 },
+  { id: 'gt_7', name: 'Noor Ahmad', team: 'GT', role: 'BOWL', credits: 8.5, points: 0, selPercent: 65 },
+  { id: 'gt_8', name: 'Umesh Yadav', team: 'GT', role: 'BOWL', credits: 8.5, points: 0, selPercent: 55 },
+  { id: 'gt_9', name: 'W Saha', team: 'GT', role: 'WK', credits: 8.0, points: 0, selPercent: 45 },
+  { id: 'gt_10', name: 'Vijay Shankar', team: 'GT', role: 'AR', credits: 8.0, points: 0, selPercent: 35 },
+
+  // --- DC (Delhi Capitals) ---
+  { id: 'dc_1', name: 'Rishabh Pant', team: 'DC', role: 'WK', credits: 9.5, points: 0, selPercent: 94 },
+  { id: 'dc_2', name: 'David Warner', team: 'DC', role: 'BAT', credits: 9.0, points: 0, selPercent: 80 },
+  { id: 'dc_3', name: 'Prithvi Shaw', team: 'DC', role: 'BAT', credits: 8.5, points: 0, selPercent: 60 },
+  { id: 'dc_4', name: 'J Fraser-McGurk', team: 'DC', role: 'BAT', credits: 9.0, points: 0, selPercent: 88 },
+  { id: 'dc_5', name: 'Axar Patel', team: 'DC', role: 'AR', credits: 9.0, points: 0, selPercent: 85 },
+  { id: 'dc_6', name: 'Kuldeep Yadav', team: 'DC', role: 'BOWL', credits: 9.0, points: 0, selPercent: 90 },
+  { id: 'dc_7', name: 'Khaleel Ahmed', team: 'DC', role: 'BOWL', credits: 8.5, points: 0, selPercent: 75 },
+  { id: 'dc_8', name: 'Mukesh Kumar', team: 'DC', role: 'BOWL', credits: 8.5, points: 0, selPercent: 70 },
+  { id: 'dc_9', name: 'Tristan Stubbs', team: 'DC', role: 'BAT', credits: 8.5, points: 0, selPercent: 78 },
+  { id: 'dc_10', name: 'Ishant Sharma', team: 'DC', role: 'BOWL', credits: 8.0, points: 0, selPercent: 45 },
+
+  // --- LSG (Lucknow Super Giants) ---
+  { id: 'lsg_1', name: 'KL Rahul', team: 'LSG', role: 'WK', credits: 9.0, points: 0, selPercent: 88 },
+  { id: 'lsg_2', name: 'Quinton de Kock', team: 'LSG', role: 'WK', credits: 9.0, points: 0, selPercent: 85 },
+  { id: 'lsg_3', name: 'Nicholas Pooran', team: 'LSG', role: 'BAT', credits: 9.0, points: 0, selPercent: 92 },
+  { id: 'lsg_4', name: 'Marcus Stoinis', team: 'LSG', role: 'AR', credits: 9.0, points: 0, selPercent: 88 },
+  { id: 'lsg_5', name: 'Krunal Pandya', team: 'LSG', role: 'AR', credits: 8.5, points: 0, selPercent: 75 },
+  { id: 'lsg_6', name: 'Ravi Bishnoi', team: 'LSG', role: 'BOWL', credits: 8.5, points: 0, selPercent: 80 },
+  { id: 'lsg_7', name: 'Naveen-ul-Haq', team: 'LSG', role: 'BOWL', credits: 8.5, points: 0, selPercent: 70 },
+  { id: 'lsg_8', name: 'Yash Thakur', team: 'LSG', role: 'BOWL', credits: 8.0, points: 0, selPercent: 60 },
+  { id: 'lsg_9', name: 'Ayush Badoni', team: 'LSG', role: 'BAT', credits: 8.0, points: 0, selPercent: 55 },
+  { id: 'lsg_10', name: 'Amit Mishra', team: 'LSG', role: 'BOWL', credits: 7.5, points: 0, selPercent: 30 },
+
+  // --- PBKS (Punjab Kings) ---
+  { id: 'pbks_1', name: 'Shikhar Dhawan', team: 'PBKS', role: 'BAT', credits: 9.0, points: 0, selPercent: 75 },
+  { id: 'pbks_2', name: 'Jonny Bairstow', team: 'PBKS', role: 'WK', credits: 9.0, points: 0, selPercent: 80 },
+  { id: 'pbks_3', name: 'Sam Curran', team: 'PBKS', role: 'AR', credits: 9.0, points: 0, selPercent: 88 },
+  { id: 'pbks_4', name: 'Liam Livingstone', team: 'PBKS', role: 'AR', credits: 9.0, points: 0, selPercent: 82 },
+  { id: 'pbks_5', name: 'Shashank Singh', team: 'PBKS', role: 'BAT', credits: 8.5, points: 0, selPercent: 78 },
+  { id: 'pbks_6', name: 'Ashutosh Sharma', team: 'PBKS', role: 'BAT', credits: 8.0, points: 0, selPercent: 65 },
+  { id: 'pbks_7', name: 'Harshal Patel', team: 'PBKS', role: 'BOWL', credits: 9.0, points: 0, selPercent: 85 },
+  { id: 'pbks_8', name: 'Arshdeep Singh', team: 'PBKS', role: 'BOWL', credits: 9.0, points: 0, selPercent: 88 },
+  { id: 'pbks_9', name: 'Kagiso Rabada', team: 'PBKS', role: 'BOWL', credits: 9.0, points: 0, selPercent: 82 },
+  { id: 'pbks_10', name: 'Rahul Chahar', team: 'PBKS', role: 'BOWL', credits: 8.0, points: 0, selPercent: 45 },
+  { id: 'pbks_11', name: 'Jitesh Sharma', team: 'PBKS', role: 'WK', credits: 8.5, points: 0, selPercent: 60 }
 ];
 
 const DEFAULT_CONTESTS: Contest[] = [
@@ -309,6 +385,7 @@ const AdminMatchEditCard: React.FC<{ match: Match, onUpdate: (m: Match) => void,
   const [editTime, setEditTime] = useState<string>(initialTime);
 
   const handleUpdate = () => {
+      if (!editTime || !editTime.includes(':')) return;
       let [hourString, minuteString] = editTime.split(':');
       let hour = parseInt(hourString);
       let ampm = hour >= 12 ? 'PM' : 'AM';
@@ -334,7 +411,7 @@ const AdminMatchEditCard: React.FC<{ match: Match, onUpdate: (m: Match) => void,
   return (
     <div className="bg-black/60 border border-slate-700 hover:border-[#e5c158]/30 rounded-xl p-4 flex flex-col gap-3 transition-colors">
       <div className="flex justify-between items-center border-b border-[#e5c158]/20 pb-3">
-        <div className="font-bold text-slate-200 text-sm">{match.team1.shortFrame} vs {match.team2.shortFrame}</div>
+        <div className="font-bold text-slate-200 text-sm">{match?.team1?.shortFrame} vs {match?.team2?.shortFrame}</div>
         <div className={`text-[10px] font-black tracking-widest uppercase px-2 py-1 rounded-sm border ${match.status === 'Upcoming' ? 'bg-blue-900/30 text-blue-400 border-blue-500/30' : match.status === 'Live' ? 'bg-red-900/40 text-red-400 border-red-500/50 shadow-[0_0_8px_rgba(239,68,68,0.4)] animate-pulse' : 'bg-green-900/30 text-green-400 border-green-500/30'}`}>{match.status}</div>
       </div>
       
@@ -435,12 +512,12 @@ const ContestDetailsView = ({
   const [activeTab, setActiveTab] = useState<'WINNINGS' | 'LEADERBOARD'>('WINNINGS');
   
   const contestTeams = useMemo(() => {
-     let filtered = savedTeams.filter(t => t.match?.id === activeMatch.id && t.contestName === contest.name);
+     let filtered = savedTeams.filter(t => t.match?.id === activeMatch?.id && t.contestName === contest.name);
      if (instanceId != null) {
         filtered = filtered.filter(t => typeof t.instanceId === 'number' ? t.instanceId === instanceId : true);
      }
      return filtered;
-  }, [savedTeams, activeMatch.id, contest.name, instanceId]);
+  }, [savedTeams, activeMatch?.id, contest.name, instanceId]);
   
   // Real-time calculation based on joined teams
   const currentCollected = contestTeams.length * contest.entryFee;
@@ -474,7 +551,19 @@ const ContestDetailsView = ({
      });
 
      // Sort teams by points (if available) for Leaderboard only once
-     return teamsWithPoints.sort((a, b) => (b.points || 0) - (a.points || 0));
+     const sorted = teamsWithPoints.sort((a, b) => (b.points || 0) - (a.points || 0));
+     
+     // Calculate Dense Ranking: 1, 1, 2, 2, 3...
+     let currentRank = 0;
+     let lastPoints = -1;
+     return sorted.map((team) => {
+        const p = team.points || 0;
+        if (p !== lastPoints) {
+           currentRank++;
+           lastPoints = p;
+        }
+        return { ...team, rank: currentRank };
+     });
   }, [contestTeams, appPlayers]);
 
   const getPayouts = () => {
@@ -520,7 +609,7 @@ const ContestDetailsView = ({
           </button>
         </div>
         <div className="text-center font-bold text-sm mb-1">
-          {activeMatch.team1.shortFrame} vs {activeMatch.team2.shortFrame}
+          {activeMatch?.team1?.shortFrame} vs {activeMatch?.team2?.shortFrame}
         </div>
       </header>
 
@@ -544,7 +633,7 @@ const ContestDetailsView = ({
           <span>{contestTeams.length} joined</span>
           <span>{contest.spots} total spots</span>
         </div>
-        {(isAdmin && activeMatch.status !== 'Upcoming') ? (
+        {(isAdmin && activeMatch?.status !== 'Upcoming') ? (
             <button 
                onClick={onMakeBotsWin}
                className="w-full mt-4 py-2 rounded font-bold text-sm text-white transition-transform bg-[#f0b90b] shadow-[0_0_10px_rgba(240,185,11,0.5)] hover:bg-[#dca809] active:scale-[0.98]"
@@ -554,10 +643,10 @@ const ContestDetailsView = ({
         ) : (
             <button 
                onClick={onJoin}
-               disabled={activeMatch.status !== 'Upcoming'}
-               className={`w-full mt-4 py-2 rounded font-bold text-sm text-white transition-transform ${activeMatch.status !== 'Upcoming' ? 'bg-slate-400' : 'bg-green-600 hover:bg-green-700 active:scale-[0.98]'}`}
+               disabled={activeMatch?.status !== 'Upcoming'}
+               className={`w-full mt-4 py-2 rounded font-bold text-sm text-white transition-transform ${activeMatch?.status !== 'Upcoming' ? 'bg-slate-400' : 'bg-green-600 hover:bg-green-700 active:scale-[0.98]'}`}
             >
-              {activeMatch.status !== 'Upcoming' ? 'Match Started' : `Join ₹${contest.entryFee}`}
+              {activeMatch?.status !== 'Upcoming' ? 'Match Started' : `Join ₹${contest.entryFee}`}
             </button>
         )}
       </div>
@@ -663,23 +752,65 @@ const ContestDetailsView = ({
 };
 
 export default function App() {
+  const [user, setUser] = useState<{email: string, id: string, name: string, numericId?: string} | null>(() => {
+    const saved = localStorage.getItem('dreamApp_user');
+    try { return saved ? JSON.parse(saved) : null; } catch(e) { return null; }
+  });
+
+  const isAdmin = user?.email === 'arkingbhartiyavikas@gmail.com';
+
+  const [firestoreQuotaExceeded, setFirestoreQuotaExceeded] = useState(false);
+
+  const handleFsError = (e: any, operation?: string, path?: string) => {
+     console.error(`Firestore Error [${operation || 'unknown'} @ ${path || 'unknown'}]:`, e);
+     if (e.message?.includes('resource-exhausted') || e.message?.includes('Quota exceeded') || e.code === 'resource-exhausted') {
+        setFirestoreQuotaExceeded(true);
+     }
+  };
+
   const [appPlayers, setAppPlayers] = useState<Player[]>(() => {
     const saved = localStorage.getItem('dreamApp_players');
-    return saved ? JSON.parse(saved) : MOCK_PLAYERS;
+    try { 
+      const p = JSON.parse(saved); 
+      if (!Array.isArray(p) || p.length < 50) return MOCK_PLAYERS;
+      // Auto-migrate old team codes
+      return p.map(player => {
+         const mapping: {[key: string]: string} = {
+            'CHE': 'CSK', 'MUM': 'MI', 'BEN': 'RCB', 'KOL': 'KKR',
+            'HYD': 'SRH', 'RAJ': 'RR', 'GUJ': 'GT', 'DEL': 'DC',
+            'LUC': 'LSG', 'PUN': 'PBKS'
+         };
+         if (player.team && mapping[player.team]) {
+            return { ...player, team: mapping[player.team] };
+         }
+         return player;
+      });
+    } catch(e) { return  MOCK_PLAYERS; }
   });
 
   const [isFirstPlayersLoad, setIsFirstPlayersLoad] = useState(true);
 
+  const lastCloudPlayers = React.useRef<string>('');
+
   useEffect(() => {
-    localStorage.setItem('dreamApp_players', JSON.stringify(appPlayers));
+    const currentStr = JSON.stringify(appPlayers);
+    localStorage.setItem('dreamApp_players', currentStr);
 
     // Prevent immediate overwrite when checking snapshot first time
-    if (!isFirstPlayersLoad) {
-         setDoc(doc(db, 'gameData', 'main_state'), JSON.parse(JSON.stringify({ players: appPlayers })), { merge: true }).catch(console.error);
-    } else {
+    // Only ADMIN should be able to sync local players list to the cloud main_state
+    if (!isFirstPlayersLoad && isAdmin) {
+         if (lastCloudPlayers.current !== currentStr) {
+             const timer = setTimeout(() => {
+                setDoc(doc(db, 'gameData', 'main_state'), JSON.parse(JSON.stringify({ players: appPlayers })), { merge: true })
+                  .then(() => { lastCloudPlayers.current = currentStr; })
+                  .catch(handleFsError);
+             }, 30000); // 30 second debounce to save quota
+             return () => clearTimeout(timer);
+         }
+    } else if (isFirstPlayersLoad) {
          setIsFirstPlayersLoad(false);
     }
-  }, [appPlayers]);
+  }, [appPlayers, isAdmin, isFirstPlayersLoad]);
 
   const [themeMode, setThemeMode] = useState<'Dark' | 'Light'>(() => localStorage.getItem('dreamApp_themeMode') as any || 'Dark');
   const [themeColor, setThemeColor] = useState<'Red' | 'Blue' | 'Green'>(() => localStorage.getItem('dreamApp_themeColor') as any || 'Blue');
@@ -709,9 +840,11 @@ export default function App() {
   const [activeContestDetails, setActiveContestDetails] = useState<Contest | null>(null);
   const [activeContestInstanceId, setActiveContestInstanceId] = useState<number | null>(null);
   
-  const [authMode, setAuthMode] = useState<'LOGIN' | 'SIGNUP'>('LOGIN');
+  const [authMode, setAuthMode] = useState<'LOGIN' | 'SIGNUP'>('SIGNUP');
   const [authInput, setAuthInput] = useState('');
   const [authPassword, setAuthPassword] = useState('');
+  const [authFirstName, setAuthFirstName] = useState('');
+  const [authLastName, setAuthLastName] = useState('');
   const [authLoading, setAuthLoading] = useState(false);
 
   const [winningPercentage, setWinningPercentage] = useState<number>(() => {
@@ -723,46 +856,21 @@ export default function App() {
     localStorage.setItem('dreamApp_winningRate', winningPercentage.toString());
   }, [winningPercentage]);
 
-  // Real App States with Local Storage persistence
-  const [user, setUser] = useState<{email: string, id: string, name: string, numericId?: string} | null>(() => {
-    const saved = localStorage.getItem('dreamApp_user');
-    return saved ? JSON.parse(saved) : null;
-  });
-
-  const isAdmin = user?.email === 'arkingbhartiyavikas@gmail.com';
-
   const [kycRequests, setKycRequests] = useState<any[]>([]);
-
-
-
-  const [userStats, setUserStats] = useState<{profits: number, wins: number}>({ profits: 0, wins: 0 });
-  const [userStatsLoaded, setUserStatsLoaded] = useState<string | null>(null);
 
   const [claimedLevels, setClaimedLevels] = useState<number[]>([]);
   const [claimedLevelsLoaded, setClaimedLevelsLoaded] = useState<string | null>(null);
 
   useEffect(() => {
     if (user?.id) {
-      if (userStatsLoaded !== user.id) {
-        const saved = localStorage.getItem(`dreamApp_userStats_${user.id}`);
-        setUserStats(saved ? JSON.parse(saved) : { profits: 0, wins: 0 });
-        setUserStatsLoaded(user.id);
-      } else {
-        localStorage.setItem(`dreamApp_userStats_${user.id}`, JSON.stringify(userStats));
-      }
-    } else {
-      if (userStatsLoaded !== null) {
-        setUserStats({ profits: 0, wins: 0 });
-        setUserStatsLoaded(null);
-      }
-    }
-  }, [userStats, user?.id, userStatsLoaded]);
-
-  useEffect(() => {
-    if (user?.id) {
       if (claimedLevelsLoaded !== user.id) {
         const saved = localStorage.getItem(`dreamApp_claimedLevels_${user.id}`);
-        setClaimedLevels(saved ? JSON.parse(saved) : []);
+        try {
+            const parsed = saved ? JSON.parse(saved) : [];
+            setClaimedLevels(Array.isArray(parsed) ? parsed : []);
+        } catch(e) {
+            setClaimedLevels([]);
+        }
         setClaimedLevelsLoaded(user.id);
       } else {
         localStorage.setItem(`dreamApp_claimedLevels_${user.id}`, JSON.stringify(claimedLevels));
@@ -779,20 +887,53 @@ export default function App() {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
         if (sessionStorage.getItem('isSigningUp') === 'true') {
-          sessionStorage.removeItem('isSigningUp');
-          await firebaseSignOut(auth);
+          // Do nothing, let handleAuth complete the setup and sign out
           return;
         }
-        let numericId = localStorage.getItem(`dreamApp_numericId_${firebaseUser.uid}`);
-        if (!numericId) {
-            numericId = Math.floor(1000000000 + Math.random() * 9000000000).toString();
+        
+        let numericId = localStorage.getItem(`dreamApp_numericId_${firebaseUser.uid}`) || '';
+        let fullName = firebaseUser.displayName || 'Fantasy Player';
+        
+        try {
+            const userDocRef = doc(db, 'users', firebaseUser.uid);
+            const userDoc = await getDoc(userDocRef);
+            if (userDoc.exists()) {
+                const data = userDoc.data();
+                numericId = data.numericId || numericId || '';
+                fullName = data.name || fullName;
+                
+                // If it existed in local storage but not DB, it's migrating now, but let's just make sure DB is updated
+                if (!data.numericId) {
+                    if (!numericId) {
+                        numericId = Math.floor(1000000000 + Math.random() * 9000000000).toString();
+                    }
+                    await setDoc(userDocRef, { numericId }, { merge: true });
+                }
+            } else {
+                if (!numericId) {
+                    numericId = Math.floor(1000000000 + Math.random() * 9000000000).toString();
+                }
+                await setDoc(userDocRef, {
+                    name: fullName,
+                    numericId: numericId,
+                    email: firebaseUser.email || ''
+                });
+            }
+        } catch (e) {
+            console.error("Failed to load user profile from DB", e);
+            if (!numericId) {
+                numericId = Math.floor(1000000000 + Math.random() * 9000000000).toString();
+            }
+        }
+
+        if (numericId) {
             localStorage.setItem(`dreamApp_numericId_${firebaseUser.uid}`, numericId);
         }
 
         localStorage.setItem('dreamApp_hasSignedUp', 'true');
         const newUser = {
           email: firebaseUser.email || '',
-          name: firebaseUser.displayName || 'Fantasy Player',
+          name: fullName,
           id: firebaseUser.uid,
           numericId: numericId
         };
@@ -804,12 +945,12 @@ export default function App() {
     });
     return () => unsubscribe();
   }, []);
-  const [wallet, setWallet] = useState<{deposit: number, winning: number, bonus: number, blocked?: boolean}>({ deposit: 0, winning: 0, bonus: 0 });
+  const [wallet, setWallet] = useState<{deposit: number, winning: number, bonus: number, blocked?: boolean, profits?: number, wins?: number}>({ deposit: 0, winning: 0, bonus: 0, profits: 0, wins: 0 });
   const [walletLoadedUser, setWalletLoadedUser] = useState<string | null>(null);
 
   useEffect(() => {
     if (!user?.id) {
-        setWallet({ deposit: 0, winning: 0, bonus: 0 });
+        setWallet({ deposit: 0, winning: 0, bonus: 0, profits: 0, wins: 0 });
         return;
     }
 
@@ -821,7 +962,7 @@ export default function App() {
              setWallet(docS.data() as any);
         } else {
              // Create initial wallet if doesn't exist
-             const init = { deposit: 0, winning: 0, bonus: 24 };
+             const init = { deposit: 0, winning: 0, bonus: 24, profits: 0, wins: 0 };
              setDoc(doc(db, 'wallets', user.id), init);
              if (isSubscribed) setWallet(init);
         }
@@ -877,6 +1018,57 @@ export default function App() {
         });
     });
 
+    let unsubAdminUsers = () => {};
+    let unsubAdminUserMeta = () => {};
+    if (isAdmin) {
+        let metaDocs: Record<string, any> = {};
+        let walletDocs: Record<string, any> = {};
+        const updateList = () => {
+             // Create a set of all unique UIDs from both users and wallets
+             const allUids = new Set([...Object.keys(metaDocs), ...Object.keys(walletDocs)]);
+             
+             const list = Array.from(allUids).map(k => {
+                  // If k is a numeric ID (10 digits), it's likely an orphaned wallet doc
+                  // from an older version. We should try to find which UID it belongs to.
+                  let data = { 
+                      id: k,
+                      ...walletDocs[k],
+                      ...(metaDocs[k] || {})
+                  };
+                  
+                  // If this is a numeric ID wallet, we might want to flag it or merge it
+                  // But for now, let's just make sure the list is clean.
+                  // Prefer entries that have metadata (names, etc)
+                  return data;
+             }).filter(u => {
+                 // Hide numeric ID wallets if we have a real UID user for them
+                 if (/^\d{10}$/.test(u.id)) {
+                     const realUser = Object.values(metaDocs).find((m: any) => m.numericId === u.id);
+                     if (realUser) return false; // Skip this numeric entry, it will be merged into the UID one
+                 }
+                 return true;
+             }).map(u => {
+                 // For real UID users, if they have a numeric ID, try to pull data from that numeric wallet if the UID wallet is empty
+                 if (u.numericId && (!u.deposit && !u.winning && !u.bonus)) {
+                     const legacyWallet = walletDocs[u.numericId];
+                     if (legacyWallet) {
+                         return { ...u, ...legacyWallet };
+                     }
+                 }
+                 return u;
+             });
+             setAdminUserList(list);
+        };
+        unsubAdminUsers = onSnapshot(collection(db, 'wallets'), (snap) => {
+            snap.docs.forEach(d => { walletDocs[d.id] = d.data(); });
+            if (isSubscribed) updateList();
+        });
+        unsubAdminUserMeta = onSnapshot(collection(db, 'users'), (snap) => {
+            snap.docs.forEach(d => { metaDocs[d.id] = d.data(); });
+            if (isSubscribed) updateList();
+        });
+    }
+
     return () => { 
         isSubscribed = false;
         unsubWallet(); 
@@ -885,6 +1077,8 @@ export default function App() {
         unsubKyc(); 
         unsubBank();
         unsubUserTeams();
+        unsubAdminUsers();
+        unsubAdminUserMeta();
     };
   }, [user?.id, isAdmin]);
 
@@ -901,29 +1095,41 @@ export default function App() {
   const updateWallet = (updater: any) => {
      setWallet((prev: any) => {
          const next = typeof updater === 'function' ? updater(prev) : updater;
-         if (user?.id) setDoc(doc(db, 'wallets', user.id), next);
+         // Perform DB sync OUTSIDE the setter to avoid repeated calls and side-effects in render cycle
+         setTimeout(() => {
+             if (user?.id) {
+                setDoc(doc(db, 'wallets', user.id), next, { merge: true }).catch(e => {
+                  if (e.message.includes('Quota exceeded')) {
+                    setFirestoreQuotaExceeded(true);
+                    console.warn("Firestore Quota Exceeded. Wallet state only saved locally for now.");
+                  } else {
+                    console.error(e);
+                  }
+                });
+             }
+         }, 10);
          return next;
      });
   };
 
-  const balance = wallet.deposit + wallet.winning + wallet.bonus;
+  const balance = (wallet.deposit || 0) + (wallet.winning || 0) + (wallet.bonus || 0);
 
   const setBalance = (updater: number | ((prev: number) => number)) => {
-    updateWallet((prev: {deposit: number, winning: number, bonus: number}) => {
-      const currentTotal = prev.deposit + prev.winning + prev.bonus;
+    updateWallet((prev: any) => {
+      const currentTotal = (prev.deposit || 0) + (prev.winning || 0) + (prev.bonus || 0);
       let newTotal = typeof updater === 'function' ? updater(currentTotal) : updater;
       // Safety bounds to prevent NaN
       if (isNaN(newTotal) || !isFinite(newTotal)) newTotal = 0;
       const diff = newTotal - currentTotal;
-      if (diff > 0) return { ...prev, deposit: prev.deposit + diff };
+      if (diff > 0) return { ...prev, deposit: (prev.deposit || 0) + diff };
       let rem = -diff;
-      let bon = prev.bonus;
+      let bon = prev.bonus || 0;
       if (rem > 0 && bon > 0) { const d = Math.min(rem, bon); bon -= d; rem -= d; }
-      let dep = prev.deposit;
+      let dep = prev.deposit || 0;
       if (rem > 0 && dep > 0) { const d = Math.min(rem, dep); dep -= d; rem -= d; }
-      let win = prev.winning;
+      let win = prev.winning || 0;
       if (rem > 0 && win > 0) { const d = Math.min(rem, win); win -= d; rem -= d; }
-      return { deposit: Math.max(0, dep), winning: win, bonus: bon };
+      return { ...prev, deposit: Math.max(0, dep), winning: win, bonus: bon };
     });
   };
   const [depositRequests, setDepositRequests] = useState<DepositRequest[]>([]);
@@ -1052,7 +1258,7 @@ export default function App() {
                 <div className="text-xs text-gray-400 mt-1">Balance</div>
               </div>
               <div className="flex-1">
-                <div className="text-2xl font-bold">₹{wallet.winning.toLocaleString('en-IN', {maximumFractionDigits:0})}</div>
+                <div className="text-2xl font-bold">₹{Number(wallet.winning || 0).toLocaleString('en-IN', {maximumFractionDigits:0})}</div>
                 <div className="text-xs text-gray-400 mt-1">Withdrawable</div>
               </div>
             </div>
@@ -1103,7 +1309,7 @@ export default function App() {
                 >
                   <div>
                     <p className="font-bold text-sm text-white">{bank.accountHolderName}</p>
-                    <p className="text-xs text-gray-400 mt-1">{bank.accountNumber.substring(0, 4)}XXXXXXX (IFSC: {bank.ifscCode})</p>
+                    <p className="text-xs text-gray-400 mt-1">{String(bank.accountNumber).substring(0, 4)}XXXXXXX (IFSC: {bank.ifscCode})</p>
                   </div>
                   {withdrawAccountId === bank.id && (
                     <div className="w-5 h-5 bg-green-500 rounded-full flex items-center justify-center">
@@ -1164,6 +1370,7 @@ export default function App() {
   };
 
   const [withdrawRequests, setWithdrawRequests] = useState<WithdrawRequest[]>([]);
+  const [adminUserList, setAdminUserList] = useState<any[]>([]);
 
 
 
@@ -1172,7 +1379,8 @@ export default function App() {
   const [savedTeams, setSavedTeams] = useState<any[]>(() => {
     const saved = localStorage.getItem('dreamApp_teams');
     if (saved) {
-        let parsed = JSON.parse(saved);
+        let parsed;
+        try { parsed = JSON.parse(saved); if (!Array.isArray(parsed)) parsed = []; } catch(e) { parsed = []; }
         
         const expanded: any[] = [];
         const BOT_NAMES = ['Rahul', 'Amit', 'Rohit', 'Virat', 'Mahi', 'Suresh', 'Dinesh', 'Sachin', 'Kapil', 'Virender', 'Ravi', 'Ramesh', 'Sanjay', 'Vicky', 'Raju'];
@@ -1203,11 +1411,11 @@ export default function App() {
   });
   const [appContests, setAppContests] = useState<Contest[]>(() => {
     const saved = localStorage.getItem('dreamApp_contests');
-    return saved ? JSON.parse(saved) : DEFAULT_CONTESTS;
+    try { const p = JSON.parse(saved); return Array.isArray(p) ? p :  DEFAULT_CONTESTS; } catch(e) { return  DEFAULT_CONTESTS; }
   });
   const [appMatches, setAppMatches] = useState<Match[]>(() => {
     const saved = localStorage.getItem('dreamApp_matches');
-    return saved ? JSON.parse(saved) : DEFAULT_MATCHES;
+    try { const p = JSON.parse(saved); return Array.isArray(p) ? p :  DEFAULT_MATCHES; } catch(e) { return  DEFAULT_MATCHES; }
   });
 
   useEffect(() => {
@@ -1265,8 +1473,12 @@ export default function App() {
              }
              if (data.contests && Array.isArray(data.contests)) setAppContests(data.contests);
              if (data.players && Array.isArray(data.players)) {
+                 const dataStr = JSON.stringify(data.players);
                  setAppPlayers(prev => {
-                     if (JSON.stringify(prev) !== JSON.stringify(data.players)) return data.players;
+                     if (JSON.stringify(prev) !== dataStr) {
+                         lastCloudPlayers.current = dataStr;
+                         return data.players;
+                     }
                      return prev;
                  });
              }
@@ -1292,9 +1504,10 @@ export default function App() {
     return () => unsub();
   }, []);
 
-  const distributePrizes = (matchId: string) => {
+  const distributePrizes = async (matchId: string) => {
     let anyWonInfo = "";
     
+    // Calculate off the latest state directly. Since it's a synchronous map to build the batch, it's fine.
     setSavedTeams(currentTeams => {
         const updatedTeams = [...currentTeams];
         const matchTeams = updatedTeams.filter(t => t.match?.id === matchId && !t.prizeDistributed);
@@ -1305,6 +1518,9 @@ export default function App() {
         let localBalanceUpdate = 0;
         let localWinCount = 0;
         let platformProfit = 0;
+        
+        const batch = writeBatch(db);
+        let batchCount = 0;
         
         contestNames.forEach(cName => {
             const contestTeams = matchTeams.filter(t => t.contestName === cName);
@@ -1363,8 +1579,16 @@ export default function App() {
                }
             }
 
-            sortedTeams.forEach((t, index) => {
-                const rank = index + 1;
+            let currentRank = 0;
+            let lastPoints = -1;
+            sortedTeams.forEach((t) => {
+                const p = t.points || 0;
+                if (p !== lastPoints) {
+                    currentRank++;
+                    lastPoints = p;
+                }
+                const rank = currentRank;
+                let amt = 0;
                 const payoutStr = payouts.find(p => {
                     const r = p.rank.toString().replace('#', '').trim();
                     if(r.includes('-')) {
@@ -1375,7 +1599,7 @@ export default function App() {
                 });
 
                 if (payoutStr) {
-                   let amt = typeof payoutStr.amount === 'number' ? payoutStr.amount : parseFloat(payoutStr.amount.toString().replace(/[^0-9.]/g, ''));
+                   amt = typeof payoutStr.amount === 'number' ? payoutStr.amount : parseFloat(payoutStr.amount.toString().replace(/[^0-9.]/g, ''));
                    if (amt) {
                        if (t.userId === user?.id) {
                            localBalanceUpdate += amt;
@@ -1385,26 +1609,34 @@ export default function App() {
                        } else if (t.userId === 'admin_bot' || t.userId === 'admin_bot_boot') {
                            // Bot won. Prize money stays with platform
                        } else {
-                           const key = `dreamApp_wallet_v3_${t.userId}`;
-                           const saved = localStorage.getItem(key);
-                           const curr = saved ? JSON.parse(saved) : { deposit: 0, winning: 0, bonus: 0 };
-                           curr.winning += amt;
-                           localStorage.setItem(key, JSON.stringify(curr));
                            contestProfit -= amt;
                        }
-                       
-                       t._ref.prizeDistributed = true;
-                       t._ref.amountWon = amt;
-                       t._ref.rank = rank;
+                   } else { amt = 0; }
+                }
+
+                t._ref.prizeDistributed = true;
+                t._ref.amountWon = amt;
+                t._ref.rank = rank;
+                
+                if (t.userId && t.userId !== 'admin_bot' && t.userId !== 'admin_bot_boot' && t.userId !== 'guest') {
+                   // Add to firestore batch
+                   const teamRef = doc(db, 'userTeams', t.id);
+                   batch.set(teamRef, { prizeDistributed: true, amountWon: amt, rank: rank }, { merge: true });
+                   batchCount++;
+                   if (amt > 0) {
+                       const wRef = doc(db, 'wallets', t.userId);
+                       batch.set(wRef, { winning: increment(amt) }, { merge: true });
+                       batchCount++;
                    }
-                } else {
-                   t._ref.prizeDistributed = true;
-                   t._ref.amountWon = 0;
-                   t._ref.rank = rank;
                 }
             });
             platformProfit += contestProfit;
         });
+
+        // Async commit the batch after updating state
+        if (batchCount > 0) {
+            batch.commit().catch(e => console.error("Error distributing prizes to DB:", e));
+        }
         
         if (isAdmin && user?.id) {
             localBalanceUpdate += platformProfit;
@@ -1414,8 +1646,7 @@ export default function App() {
         }
         
         if (localBalanceUpdate > 0 && user?.id) {
-           updateWallet(prev => ({ ...prev, winning: prev.winning + localBalanceUpdate }));
-           setUserStats(prev => ({...prev, profits: prev.profits + localBalanceUpdate, wins: prev.wins + localWinCount}));
+           updateWallet((prev: any) => ({ ...prev, winning: prev.winning + localBalanceUpdate, profits: (prev.profits || 0) + localBalanceUpdate, wins: (prev.wins || 0) + localWinCount }));
            setTimeout(() => {
                alert(`🎉 Match Completed! Prizes have been distributed.\n\nYou won a total of ₹${localBalanceUpdate.toFixed(2)} distributed to your wallet!\n${anyWonInfo}`);
            }, 500);
@@ -1443,6 +1674,7 @@ export default function App() {
   // Admin Contest Creation State
   const [adminContestType, setAdminContestType] = useState<'Mega' | 'H2H' | 'H2H_3' | 'H2H_4' | 'H2H_5'>('Mega');
   const [adminTab, setAdminTab] = useState<'DASHBOARD' | 'MATCHES' | 'CONTESTS' | 'USERS' | 'SETTINGS' | 'TEAMS' | 'BANNERS' | 'ENTRY FEES' | 'FINANCIALS'>('DASHBOARD');
+  const [showDashboardUsers, setShowDashboardUsers] = useState<boolean>(false);
   const [adminContestName, setAdminContestName] = useState<string>('');
   const [adminContestPrize, setAdminContestPrize] = useState<string>('');
   const [adminContestEntry, setAdminContestEntry] = useState<string>('');
@@ -1543,7 +1775,6 @@ export default function App() {
   const [showApiSync, setShowApiSync] = useState<boolean>(false);
   const [apiMatches, setApiMatches] = useState<any[]>([]);
   const [isFetchingApi, setIsFetchingApi] = useState<boolean>(false);
-  const [cricApiKey, setCricApiKey] = useState<string>(() => localStorage.getItem('cricApiKey') || '0a3d33c0-9c55-48ea-9d6e-a23081246556');
   const [adminTeamEditMatchId, setAdminTeamEditMatchId] = useState<string | null>(null);
   const [teamSearchQuery, setTeamSearchQuery] = useState<string>('');
   const [matchTab, setMatchTab] = useState<'Contests' | 'My Contests' | 'My Teams'>('Contests');
@@ -1561,6 +1792,7 @@ export default function App() {
 
   // Payment & Edit State
   const [showPaymentModal, setShowPaymentModal] = useState<boolean>(false);
+  const [showAdminQuickAdd, setShowAdminQuickAdd] = useState<boolean>(false);
   const [paymentAmount, setPaymentAmount] = useState<string>('100');
   const [paymentMethod, setPaymentMethod] = useState<'Google Pay' | 'PhonePe' | 'Paytm' | ''>('');
   const [paymentUtr, setPaymentUtr] = useState<string>('');
@@ -1574,7 +1806,23 @@ export default function App() {
   
   const [showManageUsers, setShowManageUsers] = useState<boolean>(false);
   const [searchUserId, setSearchUserId] = useState<string>('');
-  const [searchedUserWallet, setSearchedUserWallet] = useState<any>(null);
+  const [adminProfileModalUser, setAdminProfileModalUser] = useState<any | null>(null);
+
+  // Real-time listener for the user being edited in the admin modal
+  useEffect(() => {
+    if (!adminProfileModalUser || !adminProfileModalUser.id) return;
+    
+    // Subscribe to the wallet of the user being edited to ensure real-time balance updates
+    const unsub = onSnapshot(doc(db, 'wallets', adminProfileModalUser.id), (docS) => {
+      if (docS.exists()) {
+        const walletData = docS.data();
+        // Use functional update to avoid stale state issues
+        setAdminProfileModalUser(prev => prev && prev.id === adminProfileModalUser.id ? { ...prev, ...walletData } : prev);
+      }
+    });
+    
+    return () => unsub();
+  }, [adminProfileModalUser?.id]);
   const [walletSaveStatus, setWalletSaveStatus] = useState<{[key: string]: 'idle' | 'saving' | 'success'}>({});
   const [isSearchingUser, setIsSearchingUser] = useState<boolean>(false);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -1583,7 +1831,7 @@ export default function App() {
   // Teams Management State
   const [appFormats, setAppFormats] = useState<string[]>(() => {
       const saved = localStorage.getItem('dreamApp_formats');
-      return saved ? JSON.parse(saved) : ['T20', 'ODI', 'Test', 'IPL'];
+      try { const p = JSON.parse(saved); return Array.isArray(p) ? p :  ['T20', 'ODI', 'Test', 'IPL']; } catch(e) { return  ['T20', 'ODI', 'Test', 'IPL']; }
   });
   useEffect(() => {
     localStorage.setItem('dreamApp_formats', JSON.stringify(appFormats));
@@ -1591,14 +1839,44 @@ export default function App() {
 
   const [appTeamsList, setAppTeamsList] = useState<{id: string, name: string, shortName: string, color: string, format: string, flagUrl?: string, flagFit?: 'cover' | 'contain'}[]>(() => {
       const saved = localStorage.getItem('dreamApp_teamsList');
-      return saved ? JSON.parse(saved) : [
+      try { const p = JSON.parse(saved); return Array.isArray(p) ? p :  [
+         // --- IPL TEAMS ---
+         { id: 'it1', name: 'Chennai Super Kings', shortName: 'CSK', color: 'bg-yellow-500', format: 'IPL' },
+         { id: 'it2', name: 'Mumbai Indians', shortName: 'MI', color: 'bg-blue-600', format: 'IPL' },
+         { id: 'it3', name: 'Royal Challengers Bangalore', shortName: 'RCB', color: 'bg-red-600', format: 'IPL' },
+         { id: 'it4', name: 'Kolkata Knight Riders', shortName: 'KKR', color: 'bg-purple-800', format: 'IPL' },
+         { id: 'it5', name: 'Sunrisers Hyderabad', shortName: 'SRH', color: 'bg-orange-500', format: 'IPL' },
+         { id: 'it6', name: 'Rajasthan Royals', shortName: 'RR', color: 'bg-pink-600', format: 'IPL' },
+         { id: 'it7', name: 'Gujarat Titans', shortName: 'GT', color: 'bg-slate-800', format: 'IPL' },
+         { id: 'it8', name: 'Delhi Capitals', shortName: 'DC', color: 'bg-blue-800', format: 'IPL' },
+         { id: 'it9', name: 'Lucknow Super Giants', shortName: 'LSG', color: 'bg-blue-400', format: 'IPL' },
+         { id: 'it10', name: 'Punjab Kings', shortName: 'PBKS', color: 'bg-red-500', format: 'IPL' },
+         
+         // --- T20 INTERNATIONAL ---
          { id: 't1', name: 'India', shortName: 'IND', color: 'bg-blue-600', format: 'T20' },
          { id: 't2', name: 'Pakistan', shortName: 'PAK', color: 'bg-green-600', format: 'T20' },
          { id: 't3', name: 'England', shortName: 'ENG', color: 'bg-red-600', format: 'T20' },
          { id: 't4', name: 'Australia', shortName: 'AUS', color: 'bg-yellow-500', format: 'T20' },
          { id: 't5', name: 'New Zealand', shortName: 'NZ', color: 'bg-slate-800', format: 'T20' },
          { id: 't6', name: 'West Indies', shortName: 'WI', color: 'bg-[#7B1346]', format: 'T20' }
-      ];
+      ]; } catch(e) { return  [
+         { id: 'it1', name: 'Chennai Super Kings', shortName: 'CSK', color: 'bg-yellow-500', format: 'IPL' },
+         { id: 'it2', name: 'Mumbai Indians', shortName: 'MI', color: 'bg-blue-600', format: 'IPL' },
+         { id: 'it3', name: 'Royal Challengers Bangalore', shortName: 'RCB', color: 'bg-red-600', format: 'IPL' },
+         { id: 'it4', name: 'Kolkata Knight Riders', shortName: 'KKR', color: 'bg-purple-800', format: 'IPL' },
+         { id: 'it5', name: 'Sunrisers Hyderabad', shortName: 'SRH', color: 'bg-orange-500', format: 'IPL' },
+         { id: 'it6', name: 'Rajasthan Royals', shortName: 'RR', color: 'bg-pink-600', format: 'IPL' },
+         { id: 'it7', name: 'Gujarat Titans', shortName: 'GT', color: 'bg-slate-800', format: 'IPL' },
+         { id: 'it8', name: 'Delhi Capitals', shortName: 'DC', color: 'bg-blue-800', format: 'IPL' },
+         { id: 'it9', name: 'Lucknow Super Giants', shortName: 'LSG', color: 'bg-blue-400', format: 'IPL' },
+         { id: 'it10', name: 'Punjab Kings', shortName: 'PBKS', color: 'bg-red-500', format: 'IPL' },
+         { id: 't1', name: 'India', shortName: 'IND', color: 'bg-blue-600', format: 'T20' },
+         { id: 't2', name: 'Pakistan', shortName: 'PAK', color: 'bg-green-600', format: 'T20' },
+         { id: 't3', name: 'England', shortName: 'ENG', color: 'bg-red-600', format: 'T20' },
+         { id: 't4', name: 'Australia', shortName: 'AUS', color: 'bg-yellow-500', format: 'T20' },
+         { id: 't5', name: 'New Zealand', shortName: 'NZ', color: 'bg-slate-800', format: 'T20' },
+         { id: 't6', name: 'West Indies', shortName: 'WI', color: 'bg-[#7B1346]', format: 'T20' }
+      ]; }
   });
   useEffect(() => {
     localStorage.setItem('dreamApp_teamsList', JSON.stringify(appTeamsList));
@@ -1606,9 +1884,11 @@ export default function App() {
 
   const [appBanners, setAppBanners] = useState<{id: string, imageUrl: string, linkUrl?: string}[]>(() => {
     const saved = localStorage.getItem('dreamApp_banners');
-    return saved ? JSON.parse(saved) : [
+    try { const p = JSON.parse(saved); return Array.isArray(p) ? p :  [
        { id: 'b1', imageUrl: 'https://images.unsplash.com/photo-1540747913346-19e32dc3e97e?q=80&w=1200&auto=format&fit=crop', linkUrl: '' }
-    ];
+    ]; } catch(e) { return  [
+       { id: 'b1', imageUrl: 'https://images.unsplash.com/photo-1540747913346-19e32dc3e97e?q=80&w=1200&auto=format&fit=crop', linkUrl: '' }
+    ]; }
   });
   useEffect(() => {
     localStorage.setItem('dreamApp_banners', JSON.stringify(appBanners));
@@ -1645,8 +1925,8 @@ export default function App() {
   const creditsUsed = team.reduce((sum, p) => sum + p.credits, 0);
   const creditsLeft = 100 - creditsUsed;
 
-  const team1Count = team.filter(p => p.team === activeMatch?.team1.shortFrame).length;
-  const team2Count = team.filter(p => p.team === activeMatch?.team2.shortFrame).length;
+  const team1Count = team.filter(p => p.team === activeMatch?.team1?.shortFrame).length;
+  const team2Count = team.filter(p => p.team === activeMatch?.team2?.shortFrame).length;
 
   const handleSelectMatch = (match: Match) => {
     setActiveMatch(match);
@@ -1684,28 +1964,31 @@ export default function App() {
 
   useEffect(() => {
      let intervalId: any;
-     if (activeMatch && activeMatch.status === 'Live') {
+     if (activeMatch && activeMatch?.status === 'Live') {
          const fetchLiveScore = async () => {
-             if (!cricApiKey) return;
-             try {
-                // Determine raw ID from API prefix if exists
-                const rawId = activeMatch.id.replace('api_', '');
-                const res = await fetch(`https://api.cricapi.com/v1/match_info?apikey=${cricApiKey}&id=${rawId}`);
-                const data = await res.json();
-                if (data && data.status === 'success' && data.data) {
-                    const matchInfo = data.data;
-                    const liveScores = matchInfo.score || [];
-                    if (liveScores.length > 0) {
-                        const scoreStrings = liveScores.map((s: any) => `${s.inning}: ${s.r}/${s.w} (${s.o} ov)`).join(' | ');
-                        setLiveScore(scoreStrings);
-                    } else if (matchInfo.status) {
-                        setLiveScore(matchInfo.status);
-                    }
-                }
-             } catch (e) {
-                 console.error("Live Score Fetch Error:", e);
-             }
-         };
+              try {
+                 const rawId = activeMatch?.id.replace("api_", "");
+                 if (!rawId || rawId === "undefined") return;
+
+                 const res = await fetch("/api/cricket/match_info?id=" + rawId);
+                 if (!res.ok) return;
+                 const data = await res.json();
+                 if (data && data.status === "success" && data.data) {
+                     const matchInfo = data.data;
+                     const liveScores = matchInfo.score || [];
+                     if (liveScores.length > 0) {
+                         const scoreStrings = liveScores.map((s: any) => `${s.inning}: ${s.r}/${s.w} (${s.o} ov)`).join(" | ");
+                         setLiveScore(scoreStrings);
+                     } else if (matchInfo.status) {
+                         setLiveScore(matchInfo.status);
+                     }
+                 }
+              } catch (e) {
+                  if (!(e instanceof TypeError && e.message === "Failed to fetch")) {
+                      console.error("Live Score Fetch Error:", e);
+                  }
+              }
+          };
          fetchLiveScore();
          intervalId = setInterval(fetchLiveScore, 30000); // 30 sec polling
      } else {
@@ -1715,7 +1998,7 @@ export default function App() {
      return () => {
          if (intervalId) clearInterval(intervalId);
      }
-  }, [activeMatch, cricApiKey]);
+  }, [activeMatch]);
 
   const getFormattedTimer = (match: Match) => {
     let ts = match.time?.trim() || '';
@@ -1803,6 +2086,9 @@ export default function App() {
       if (player.role === 'AR' && roleCount >= 4) return alert('Max 4 All-rounders allowed');
       if (player.role === 'BOWL' && roleCount >= 6) return alert('Max 6 Bowlers allowed');
 
+      const sameTeamCount = team.filter(p => p.team === player.team).length;
+      if (sameTeamCount >= 7) return alert(`You can select maximum 7 players from ${player.team}`);
+
       setTeam([...team, player]);
     }
   };
@@ -1814,14 +2100,19 @@ export default function App() {
     if (isAdminBotEditMode) {
       if (!activeMatch) return;
       const bp = { players: team, captain, viceCaptain };
-      localStorage.setItem(`dreamApp_bot_blueprint_${activeMatch.id}`, JSON.stringify(bp));
+      localStorage.setItem(`dreamApp_bot_blueprint_${activeMatch?.id}`, JSON.stringify(bp));
       
-      setSavedTeams(prev => prev.map(t => {
-         if (t.match?.id === activeMatch.id && t.userId === 'admin_bot') {
-            return { ...t, players: team, captain, viceCaptain, _ref: { ...t, players: team, captain, viceCaptain } };
-         }
-         return t;
-      }));
+      setSavedTeams(prev => {
+         const newTeams = prev.map(t => {
+            if (t.match?.id === activeMatch?.id && t.userId === 'admin_bot') {
+               return { ...t, players: team, captain, viceCaptain, _ref: { ...t, players: team, captain, viceCaptain } };
+            }
+            return t;
+         });
+         const adminTeams = newTeams.filter(t => t.userId === 'admin_bot' || t.userId === 'admin_bot_boot');
+         setDoc(doc(db, 'gameData', 'main_state'), JSON.parse(JSON.stringify({ adminTeams })), { merge: true }).catch(console.error);
+         return newTeams;
+      });
       
       alert("✅ Auto Team updated successfully. All currently joined auto teams will use this lineup!");
       setIsAdminBotEditMode(null);
@@ -1834,14 +2125,16 @@ export default function App() {
       const updatedTeams = [...savedTeams];
       const editedTeamMeta = {
         ...updatedTeams[editingSavedTeamIndex],
-        players: team,
+        players: team.map(p => ({ id: p.id, name: p.name, role: p.role, team: p.team, credits: p.credits })),
         captain,
-        viceCaptain
+        viceCaptain,
+        updatedAt: Date.now()
       };
       updatedTeams[editingSavedTeamIndex] = editedTeamMeta;
       setSavedTeams(updatedTeams);
       if (editedTeamMeta.userId && editedTeamMeta.userId !== 'guest') {
-         setDoc(doc(db, 'userTeams', editedTeamMeta.id), editedTeamMeta, { merge: true }).catch(console.error);
+         const userTeamPath = `userTeams/${editedTeamMeta.id}`;
+         setDoc(doc(db, 'userTeams', editedTeamMeta.id), editedTeamMeta, { merge: true }).catch(e => handleFsError(e, 'update_user_team', userTeamPath));
       }
       setEditingSavedTeamIndex(null);
       alert("✅ Team updated successfully!");
@@ -1854,9 +2147,9 @@ export default function App() {
 
     const teamIdStr = `T${savedTeams.length + 1}`;
     const newId = Date.now().toString();
-    const contestDef = appContests.find(c => c.name === contestName) || DEFAULT_CONTESTS[0];
-    const instanceSpots = contestDef.spots > 0 ? contestDef.spots : 2;
-    const sameContestTeams = savedTeams.filter(t => t.match?.id === activeMatch?.id && t.contestName === contestName);
+    const contestDef = appContests?.find(c => c.name === contestName) || (DEFAULT_CONTESTS && DEFAULT_CONTESTS[0]) || { spots: 2, name: 'Contest', fee: 59 };
+    const instanceSpots = (contestDef && contestDef.spots > 0) ? contestDef.spots : 2;
+    const sameContestTeams = (savedTeams || []).filter(t => t.match?.id === activeMatch?.id && t.contestName === contestName);
 
     const userTeamsInSameContest = sameContestTeams.filter(t => t.userId === (user?.id || 'guest'));
     if (contestDef && contestDef.maxTeams && userTeamsInSameContest.length >= contestDef.maxTeams) {
@@ -1866,26 +2159,30 @@ export default function App() {
 
     const instanceId = Math.floor(sameContestTeams.length / instanceSpots);
     
+    const liteMatch = activeMatch ? { id: activeMatch.id, series: activeMatch.series, team1: activeMatch.team1, team2: activeMatch.team2, status: activeMatch.status } : null;
+
     const newTeamMeta = {
       id: newId,
-      match: activeMatch,
+      match: liteMatch,
       teamId: teamIdStr,
-      players: team,
+      players: team.map(p => ({ id: p.id, name: p.name, role: p.role, team: p.team, credits: p.credits })),
       captain,
       viceCaptain,
       contestName: contestName,
       fee: fee,
       userId: user?.id || 'guest',
       userNumericId: user?.numericId,
-      userName: user?.name || user?.email?.split('@')[0] || 'Guest Player',
+      userName: user?.name || String(user?.email || '').split('@')[0] || 'Guest Player',
       prizeDistributed: false,
-      instanceId: instanceId
+      instanceId: instanceId,
+      createdAt: Date.now()
     };
 
     // Save the created team to "My Matches"
     setSavedTeams(prev => [...prev, newTeamMeta]);
     if (user?.id) {
-       setDoc(doc(db, 'userTeams', newId), newTeamMeta).catch(e => console.error("Could not sync user team:", e));
+       const userTeamPath = `userTeams/${newId}`;
+       setDoc(doc(db, 'userTeams', newId), newTeamMeta).catch(e => handleFsError(e, 'save_user_team', userTeamPath));
     }
 
     // Optional: Deduct balance for Mega Contest
@@ -1944,17 +2241,25 @@ export default function App() {
 
   const renderHome = () => (
     <div className="flex flex-col h-full bg-app-bg">
-      <header className="p-4 flex items-center justify-between pb-2 bg-app-bg">
+      <header className="p-4 flex items-center justify-between pb-2 bg-app-bg relative">
         <div className="flex items-center gap-2">
           <div className="w-2 h-2 rounded-full bg-app-accent"></div>
           <h1 className="text-xl font-bold text-app-text">Fantasy11</h1>
         </div>
-        <div className="flex flex-col items-end cursor-pointer" onClick={() => setView('PROFILE')}>
-          <div className="flex items-center gap-2">
-             <span className="font-bold text-sm text-app-text">Hey {user ? user.name.split(' ')[0].toUpperCase() : 'ARKING'}</span>
+        <div className="flex flex-col items-end">
+          <div className="flex items-center gap-2 cursor-pointer" onClick={() => setView('PROFILE')}>
+             <span className="font-bold text-sm text-app-text">Hey {user ? String(user.name || user.email || '').split(' ')[0].split('@')[0].toUpperCase() : 'ARKING'}</span>
              <span className="bg-yellow-500 text-black text-[10px] px-1.5 py-0.5 rounded flex items-center font-bold">⚡ Lvl 3</span>
           </div>
-          <span className="text-[10px] text-app-text-muted">Your match day, y...</span>
+          <div className="flex items-center gap-2 mt-1">
+             <button onClick={() => setShowAdminQuickAdd(true)} className="bg-green-500/20 text-green-500 border border-green-500/50 px-2 py-0.5 rounded text-[10px] uppercase font-black transition-colors hover:bg-green-500/30 flex items-center gap-1">
+                <Plus size={10} strokeWidth={4} /> Wallet
+             </button>
+             <button onClick={() => setView('WALLET')} className="flex items-center gap-1 bg-app-card/80 border border-app-border px-2 py-0.5 rounded text-[10px] font-bold text-app-text transition-colors hover:bg-app-card-hover">
+                <Wallet size={10} />
+                ₹{balance.toLocaleString('en-IN', {maximumFractionDigits:0})}
+             </button>
+          </div>
         </div>
       </header>
 
@@ -2016,14 +2321,14 @@ export default function App() {
     >
       <div className="flex justify-between items-center mb-3">
         <div className="flex flex-col items-center">
-          <div className={`w-12 h-12 rounded-full flex items-center justify-center font-bold text-lg text-app-text border-2 border-app-border-hover overflow-hidden shadow-inner ${match.team1.color}`}>
-             {match.team1.flagUrl ? (
-                 <img src={match.team1.flagUrl} alt={match.team1.shortFrame} className={`w-full h-full ${match.team1.flagFit === 'contain' ? 'object-contain' : 'object-cover'}`} />
+          <div className={`w-12 h-12 rounded-full flex items-center justify-center font-bold text-lg text-app-text border-2 border-app-border-hover overflow-hidden shadow-inner ${match?.team1?.color?.startsWith('bg-') ? match.team1.color : ''}`} style={!match?.team1?.color?.startsWith('bg-') ? {backgroundColor: match?.team1?.color} : {}}>
+             {match?.team1?.flagUrl ? (
+                 <img src={match?.team1?.flagUrl} alt={match?.team1?.shortFrame} className={`w-full h-full ${match?.team1?.flagFit === 'contain' ? 'object-contain' : 'object-cover'}`} />
              ) : (
-                 match.team1.shortFrame
+                 match?.team1?.shortFrame
              )}
           </div>
-          <span className="text-xs text-app-text mt-1 font-semibold">{match.team1.shortFrame}</span>
+          <span className="text-xs text-app-text mt-1 font-semibold">{match?.team1?.shortFrame}</span>
         </div>
         
         <div className="flex flex-col items-center">
@@ -2039,14 +2344,14 @@ export default function App() {
         </div>
 
         <div className="flex flex-col items-center">
-          <div className={`w-12 h-12 rounded-full flex items-center justify-center font-bold text-lg text-app-text border-2 border-app-border-hover overflow-hidden shadow-inner ${match.team2.color}`}>
-             {match.team2.flagUrl ? (
-                 <img src={match.team2.flagUrl} alt={match.team2.shortFrame} className={`w-full h-full ${match.team2.flagFit === 'contain' ? 'object-contain' : 'object-cover'}`} />
+          <div className={`w-12 h-12 rounded-full flex items-center justify-center font-bold text-lg text-app-text border-2 border-app-border-hover overflow-hidden shadow-inner ${match?.team2?.color?.startsWith('bg-') ? match.team2.color : ''}`} style={!match?.team2?.color?.startsWith('bg-') ? {backgroundColor: match?.team2?.color} : {}}>
+             {match?.team2?.flagUrl ? (
+                 <img src={match?.team2?.flagUrl} alt={match?.team2?.shortFrame} className={`w-full h-full ${match?.team2?.flagFit === 'contain' ? 'object-contain' : 'object-cover'}`} />
              ) : (
-                 match.team2.shortFrame
+                 match?.team2?.shortFrame
              )}
           </div>
-          <span className="text-xs text-app-text mt-1 font-semibold">{match.team2.shortFrame}</span>
+          <span className="text-xs text-app-text mt-1 font-semibold">{match?.team2?.shortFrame}</span>
         </div>
       </div>
       
@@ -2066,7 +2371,7 @@ export default function App() {
     if (!activeMatch) return;
     
     // Generate pool of valid random variations to give illusion of uniqueness while keeping performance high
-    const availablePlayers = appPlayers.filter(p => p.team === activeMatch.team1.shortFrame || p.team === activeMatch.team2.shortFrame);
+    const availablePlayers = appPlayers.filter(p => p.team === activeMatch?.team1?.shortFrame || p.team === activeMatch?.team2?.shortFrame);
     const variations = [];
     
     for (let v = 0; v < 100; v++) {
@@ -2103,7 +2408,7 @@ export default function App() {
     }
     
     // Instead of activeMatch with all players, use a lightweight match object payload to save JS memory
-    const liteMatch = { id: activeMatch.id, status: activeMatch.status, team1: activeMatch.team1, team2: activeMatch.team2 };
+    const liteMatch = { id: activeMatch?.id, status: activeMatch?.status, team1: activeMatch.team1, team2: activeMatch.team2 };
     
     // figure out initial instance id offset based on current teams
     const sameContestTeams = savedTeams.filter(t => t.match?.id === activeMatch?.id && t.contestName === contest.name);
@@ -2133,7 +2438,12 @@ export default function App() {
         });
     }
     
-    setSavedTeams(prev => [...prev, ...newBots] as any);
+    setSavedTeams(prev => {
+        const newTeams = [...prev, ...newBots] as any;
+        const adminTeams = newTeams.filter((t: any) => t.userId === 'admin_bot' || t.userId === 'admin_bot_boot');
+        setDoc(doc(db, 'gameData', 'main_state'), JSON.parse(JSON.stringify({ adminTeams })), { merge: true }).catch(console.error);
+        return newTeams;
+    });
   };
 
   const handleRemoveBot = (e: React.MouseEvent, contest: Contest, type: 'AUTO' | 'BOOT' = 'AUTO', amount: number = 1) => {
@@ -2142,14 +2452,17 @@ export default function App() {
         const bots = prev.filter(t => t.match?.id === activeMatch?.id && t.contestName === contest.name && t.userId === (type === 'BOOT' ? 'admin_bot_boot' : 'admin_bot'));
         if (bots.length === 0) return prev;
         const botsToRemove = bots.slice(-amount).map(b => b.id); // remove the last 'amount' added
-        return prev.filter(t => !botsToRemove.includes(t.id));
+        const newTeams = prev.filter(t => !botsToRemove.includes(t.id));
+        const adminTeams = newTeams.filter(t => t.userId === 'admin_bot' || t.userId === 'admin_bot_boot');
+        setDoc(doc(db, 'gameData', 'main_state'), JSON.parse(JSON.stringify({ adminTeams })), { merge: true }).catch(console.error);
+        return newTeams;
      });
   };
 
   const renderBotControls = (contest: Contest) => {
      if (!isAdmin || !activeMatch) return null;
-     const botTeamsAuto = savedTeams.filter(t => t.match?.id === activeMatch.id && t.contestName === contest.name && t.userId === 'admin_bot');
-     const botTeamsBoot = savedTeams.filter(t => t.match?.id === activeMatch.id && t.contestName === contest.name && t.userId === 'admin_bot_boot');
+     const botTeamsAuto = savedTeams.filter(t => t.match?.id === activeMatch?.id && t.contestName === contest.name && t.userId === 'admin_bot');
+     const botTeamsBoot = savedTeams.filter(t => t.match?.id === activeMatch?.id && t.contestName === contest.name && t.userId === 'admin_bot_boot');
      const botCountAuto = botTeamsAuto.length;
      const botCountBoot = botTeamsBoot.length;
      
@@ -2216,7 +2529,7 @@ export default function App() {
     const megaContests = appContests.filter(c => c.type === 'Mega');
     const h2hContests = appContests.filter(c => c.type === 'H2H' || c.type === '3 Spots' || c.type === '4 Spots' || c.type === '5 Spots');
 
-    const userTeamsInMatch = savedTeams.filter(t => t.match?.id === activeMatch.id && t.userId === (user?.id || 'guest'));
+    const userTeamsInMatch = savedTeams.filter(t => t.match?.id === activeMatch?.id && t.userId === (user?.id || 'guest'));
     const myTeamsCount = userTeamsInMatch.length;
     
     // Calculate unique contests joined by user
@@ -2235,42 +2548,42 @@ export default function App() {
             <div className="flex items-center gap-3">
               <button onClick={() => setView('HOME')} className="p-1 -ml-1 active:bg-app-card/10 rounded-full transition-colors"><ArrowLeft size={24} /></button>
               <div className="flex flex-col">
-                <span className="font-bold text-sm block">{activeMatch.team1.shortFrame} vs {activeMatch.team2.shortFrame}</span>
+                <span className="font-bold text-sm block">{activeMatch?.team1?.shortFrame} vs {activeMatch?.team2?.shortFrame}</span>
                 <span className="text-[10px] text-app-text-muted">{activeMatch.series}</span>
               </div>
             </div>
-            {activeMatch.status === 'Upcoming' && (
+            {activeMatch?.status === 'Upcoming' && (
               <span className="text-[10px] font-bold text-app-text-muted flex items-center gap-1"><Clock size={12}/> {getFormattedTimer(activeMatch)} left</span>
             )}
         </header>
 
         <div className="bg-app-card p-4 flex justify-between items-center z-10 shrink-0 border-b border-app-border">
            <div className="flex flex-col items-center">
-             <div className={`w-14 h-14 rounded-full flex items-center justify-center font-bold text-xl text-app-text border-2 border-app-border-hover relative overflow-hidden shrinkage-0 ${activeMatch.team1.color}`}>
-                {activeMatch.team1.flagUrl ? <img src={activeMatch.team1.flagUrl} alt={activeMatch.team1.shortFrame} className={`w-full h-full ${activeMatch.team1.flagFit === 'contain' ? 'object-contain' : 'object-cover'}`} /> : activeMatch.team1.shortFrame}
+             <div className={`w-14 h-14 rounded-full flex items-center justify-center font-bold text-xl text-app-text border-2 border-app-border-hover relative overflow-hidden shrinkage-0 ${activeMatch?.team1?.color}`}>
+                {activeMatch?.team1?.flagUrl ? <img src={activeMatch?.team1?.flagUrl} alt={activeMatch?.team1?.shortFrame} className={`w-full h-full ${activeMatch?.team1?.flagFit === 'contain' ? 'object-contain' : 'object-cover'}`} /> : activeMatch?.team1?.shortFrame}
              </div>
-             <span className="text-xs text-app-text mt-1 font-bold">{activeMatch.team1.shortFrame}</span>
+             <span className="text-xs text-app-text mt-1 font-bold">{activeMatch?.team1?.shortFrame}</span>
            </div>
            <div className="flex flex-col items-center text-center px-2">
-              {activeMatch.status === 'Live' ? (
+              {activeMatch?.status === 'Live' ? (
                   <div className="flex flex-col items-center">
                      <span className="text-app-accent font-bold text-base tracking-widest flex items-center gap-1 mb-1"><div className="w-2 h-2 rounded-full bg-app-accent animate-pulse"></div>LIVE</span>
                      {liveScore && <span className="text-yellow-400 font-black text-xs text-center border-t border-app-border-hover pt-1 mt-1 break-words">{liveScore}</span>}
                   </div>
-              ) : <span className="text-[#FFD700] font-bold text-sm block">{activeMatch.status.toUpperCase()}</span>}
+              ) : <span className="text-[#FFD700] font-bold text-sm block">{String(activeMatch?.status || '').toUpperCase()}</span>}
               <span className="text-[10px] text-app-text-muted mt-1">{activeMatch.time}</span>
               <span className="text-[10px] text-app-text-muted mt-0.5">Stadium</span>
            </div>
            <div className="flex flex-col items-center">
-             <div className={`w-14 h-14 rounded-full flex items-center justify-center font-bold text-xl text-app-text border-2 border-app-border-hover relative overflow-hidden shrinkage-0 ${activeMatch.team2.color}`}>
-                {activeMatch.team2.flagUrl ? <img src={activeMatch.team2.flagUrl} alt={activeMatch.team2.shortFrame} className={`w-full h-full ${activeMatch.team2.flagFit === 'contain' ? 'object-contain' : 'object-cover'}`} /> : activeMatch.team2.shortFrame}
+             <div className={`w-14 h-14 rounded-full flex items-center justify-center font-bold text-xl text-app-text border-2 border-app-border-hover relative overflow-hidden shrinkage-0 ${activeMatch?.team2?.color}`}>
+                {activeMatch?.team2?.flagUrl ? <img src={activeMatch?.team2?.flagUrl} alt={activeMatch?.team2?.shortFrame} className={`w-full h-full ${activeMatch?.team2?.flagFit === 'contain' ? 'object-contain' : 'object-cover'}`} /> : activeMatch?.team2?.shortFrame}
              </div>
-             <span className="text-xs text-app-text mt-1 font-bold">{activeMatch.team2.shortFrame}</span>
+             <span className="text-xs text-app-text mt-1 font-bold">{activeMatch?.team2?.shortFrame}</span>
            </div>
         </div>
 
         <div className="flex bg-app-bg text-xs font-bold shrink-0 border-b border-app-border">
-           {(activeMatch.status === 'Upcoming' || isAdmin) && (
+           {(activeMatch?.status === 'Upcoming' || isAdmin) && (
              <button className={`flex-1 py-3 ${matchTab === 'Contests' ? 'text-app-accent border-b-2 border-app-accent' : 'text-app-text-muted'}`} onClick={() => setMatchTab('Contests')}>
                Contests
              </button>
@@ -2278,16 +2591,16 @@ export default function App() {
            <button className={`flex-1 py-3 ${matchTab === 'My Contests' ? 'text-app-accent border-b-2 border-app-accent' : 'text-app-text-muted'}`} onClick={() => setMatchTab('My Contests')}>
              {`My Contests (${myContestsCount})`}
            </button>
-           <button className={`flex-1 py-3 ${matchTab === 'My Teams' || (activeMatch.status !== 'Upcoming' && !isAdmin && matchTab !== 'My Contests') ? 'text-app-accent border-b-2 border-app-accent' : 'text-app-text-muted'}`} onClick={() => setMatchTab('My Teams')}>
+           <button className={`flex-1 py-3 ${matchTab === 'My Teams' || (activeMatch?.status !== 'Upcoming' && !isAdmin && matchTab !== 'My Contests') ? 'text-app-accent border-b-2 border-app-accent' : 'text-app-text-muted'}`} onClick={() => setMatchTab('My Teams')}>
              {`My Teams (${myTeamsCount})`}
            </button>
         </div>
 
         <div className="flex-1 overflow-y-auto p-4 space-y-4 pb-20">
-          {(matchTab === 'Contests' && (activeMatch.status === 'Upcoming' || isAdmin)) && (
+          {(matchTab === 'Contests' && (activeMatch?.status === 'Upcoming' || isAdmin)) && (
              <>
               {megaContests.map(c => {
-                const totalTeamsCount = savedTeams.filter(t => t.match?.id === activeMatch.id && t.contestName === c.name).length;
+                const totalTeamsCount = savedTeams.filter(t => t.match?.id === activeMatch?.id && t.contestName === c.name).length;
                 const spotsLeft = Math.max(0, c.spots - totalTeamsCount);
                 const fillPercent = Math.min(100, (totalTeamsCount / c.spots) * 100);
                 
@@ -2303,13 +2616,14 @@ export default function App() {
                       <button 
                         onClick={(e) => {
                           e.stopPropagation();
-                          if(activeMatch.status !== 'Upcoming') {
+                          if(activeMatch?.status !== 'Upcoming') {
                              alert("Match is already live or completed!"); return;
                           }
+                          setActiveContestDetails(c);
                           setSelectedContest({fee: c.entryFee, name: c.name, id: c.id, spots: c.spots});
                           setView('CREATE_TEAM');
                         }}
-                        className={`${activeMatch.status === 'Upcoming' ? 'bg-green-600 active:scale-95 hover:bg-green-700' : 'bg-slate-700'} transition-all text-white font-bold py-1.5 px-6 rounded text-lg shadow-sm`}
+                        className={`${activeMatch?.status === 'Upcoming' ? 'bg-green-600 active:scale-95 hover:bg-green-700' : 'bg-slate-700'} transition-all text-white font-bold py-1.5 px-6 rounded text-lg shadow-sm`}
                       >
                         ₹{c.entryFee}
                       </button>
@@ -2318,8 +2632,8 @@ export default function App() {
                       <div className="bg-app-accent h-full" style={{width:`${fillPercent}%`}}></div>
                     </div>
                     <div className="flex justify-between text-[10px] text-app-text-muted font-semibold">
-                      <span className="text-red-400">{spotsLeft.toLocaleString('en-IN')} spots left</span>
-                      <span>{c.spots.toLocaleString('en-IN')} spots</span>
+                      <span className="text-red-400">{Number(spotsLeft || 0).toLocaleString('en-IN')} spots left</span>
+                      <span>{Number(c.spots || 0).toLocaleString('en-IN')} spots</span>
                     </div>
                   </div>
                   
@@ -2332,7 +2646,7 @@ export default function App() {
               )})}
 
               {h2hContests.map(c => {
-                const totalTeamsCount = savedTeams.filter(t => t.match?.id === activeMatch.id && t.contestName === c.name).length;
+                const totalTeamsCount = savedTeams.filter(t => t.match?.id === activeMatch?.id && t.contestName === c.name).length;
                 const cspots = c.spots > 0 ? c.spots : 2;
                 const teamsInCurrentInstance = totalTeamsCount % cspots;
                 const spotsLeft = cspots - teamsInCurrentInstance;
@@ -2350,13 +2664,15 @@ export default function App() {
                         <button 
                         onClick={(e) => {
                             e.stopPropagation();
-                            if(activeMatch.status !== 'Upcoming') {
+                            if(activeMatch?.status !== 'Upcoming') {
                                alert("Match is already live or completed!"); return;
                             }
+                            setActiveContestDetails(c);
+                            setActiveContestInstanceId(Math.floor(totalTeamsCount / cspots));
                             setSelectedContest({fee: c.entryFee, name: c.name, id: c.id, spots: c.spots});
                             setView('CREATE_TEAM');
                           }}
-                          className={`${activeMatch.status === 'Upcoming' ? 'bg-green-600 active:scale-95 hover:bg-green-700' : 'bg-slate-700'} transition-all text-white font-bold py-1.5 px-6 rounded text-lg shadow-sm border-b-2 border-green-800`}
+                          className={`${activeMatch?.status === 'Upcoming' ? 'bg-green-600 active:scale-95 hover:bg-green-700' : 'bg-slate-700'} transition-all text-white font-bold py-1.5 px-6 rounded text-lg shadow-sm border-b-2 border-green-800`}
                         >
                           ₹{c.entryFee}
                         </button>
@@ -2391,7 +2707,7 @@ export default function App() {
                     distinctMyContests.map((dc, i) => {
                         const c = appContests.find(cc => cc.name === dc.contestName);
                         if (!c) return null;
-                        const totalTeamsCount = savedTeams.filter(t => t.match?.id === activeMatch.id && t.contestName === c.name).length;
+                        const totalTeamsCount = savedTeams.filter(t => t.match?.id === activeMatch?.id && t.contestName === c.name).length;
                         const cspots = c.spots > 0 ? c.spots : 2;
                         
                         let spotsLeft = 0;
@@ -2402,7 +2718,7 @@ export default function App() {
                             fillPercent = Math.min(100, (totalTeamsCount / c.spots) * 100);
                         } else {
                             // Find all teams in this specific instance
-                            const teamsInThisInstance = savedTeams.filter(t => t.match?.id === activeMatch.id && t.contestName === c.name && t.instanceId === dc.instanceId).length;
+                            const teamsInThisInstance = savedTeams.filter(t => t.match?.id === activeMatch?.id && t.contestName === c.name && t.instanceId === dc.instanceId).length;
                             spotsLeft = cspots - teamsInThisInstance;
                             fillPercent = (teamsInThisInstance / cspots) * 100;
                         }
@@ -2419,13 +2735,15 @@ export default function App() {
                                  <button 
                                  onClick={(e) => {
                                      e.stopPropagation();
-                                     if(activeMatch.status !== 'Upcoming') {
+                                     if(activeMatch?.status !== 'Upcoming') {
                                         alert("Match is already live or completed!"); return;
                                      }
+                                     setActiveContestDetails(c);
+                                     setActiveContestInstanceId(dc.instanceId);
                                      setSelectedContest({fee: c.entryFee, name: c.name, id: c.id, spots: c.spots});
                                      setView('CREATE_TEAM');
                                    }}
-                                   className={`${activeMatch.status === 'Upcoming' ? 'bg-green-600 active:scale-95 hover:bg-green-700' : 'bg-slate-700'} transition-all text-white font-bold py-1.5 px-6 rounded text-lg shadow-sm border-b-2 border-green-800`}
+                                   className={`${activeMatch?.status === 'Upcoming' ? 'bg-green-600 active:scale-95 hover:bg-green-700' : 'bg-slate-700'} transition-all text-white font-bold py-1.5 px-6 rounded text-lg shadow-sm border-b-2 border-green-800`}
                                  >
                                    ₹{c.entryFee}
                                  </button>
@@ -2452,15 +2770,15 @@ export default function App() {
 
           {matchTab === 'My Teams' && (
              <>
-                {savedTeams.filter(t => t.match.id === activeMatch.id && t.userId === (user?.id || 'guest')).length === 0 ? (
+                {savedTeams.filter(t => t.match?.id === activeMatch?.id && t.userId === (user?.id || 'guest')).length === 0 ? (
                      <div className="flex flex-col items-center justify-center h-full opacity-60 mt-10">
                         <Trophy size={60} className="text-app-text-muted mb-4" />
                         <p className="font-bold text-app-text-muted">No teams found!</p>
                         <p className="text-sm text-app-text-muted">You didn't join any contests.</p>
                      </div>
                 ) : (
-                   savedTeams.filter(t => t.match.id === activeMatch.id && t.userId === (user?.id || 'guest')).map((st, i) => {
-                       const currentMatchStatus = activeMatch.status;
+                   savedTeams.filter(t => t.match?.id === activeMatch?.id && t.userId === (user?.id || 'guest')).map((st, i) => {
+                       const currentMatchStatus = activeMatch?.status;
                        const totalPoints = (st.players || []).reduce((acc: number, player: Player) => {
                           const livePlayer = appPlayers.find(p => p.id === player.id) || player;
                           let mult = 1;
@@ -2472,17 +2790,17 @@ export default function App() {
                            <div key={i} className={`bg-app-card rounded-xl shadow-sm border border-app-border overflow-hidden ${currentMatchStatus === 'Completed' ? 'opacity-60' : ''}`}>
                               <div className="p-4 flex flex-col gap-3 text-sm">
                                  <div className="flex justify-between items-center">
-                                   <span className="font-bold">{st.match.team1.name}</span>
+                                   <span className="font-bold">{st.match?.team1?.name}</span>
                                    <div className="flex flex-col items-center">
-                                      <span className="bg-red-50 text-app-accent px-2 py-1 rounded text-[10px] font-bold">{currentMatchStatus === 'Live' ? 'In Progress' : currentMatchStatus === 'Completed' ? 'Ended' : st.match.time}</span>
+                                      <span className="bg-red-50 text-app-accent px-2 py-1 rounded text-[10px] font-bold">{currentMatchStatus === 'Live' ? 'In Progress' : currentMatchStatus === 'Completed' ? 'Ended' : st.match?.time}</span>
                                       {(currentMatchStatus === 'Live' || currentMatchStatus === 'Completed') && (
                                          <span className="text-sm font-black text-green-500 mt-1">{totalPoints} pts</span>
                                       )}
                                       {currentMatchStatus === 'Completed' && st.prizeDistributed && st.amountWon !== undefined && (
-                                         <span className="text-xs font-black text-[#e5c158] mt-0.5 tracking-tight uppercase">Won ₹{st.amountWon.toFixed(2)}</span>
+                                         <span className="text-xs font-black text-[#e5c158] mt-0.5 tracking-tight uppercase">Won ₹{Number(st.amountWon || 0).toFixed(2)}</span>
                                       )}
                                    </div>
-                                   <span className="font-bold">{st.match.team2.name}</span>
+                                   <span className="font-bold">{st.match?.team2?.name}</span>
                                  </div>
                                  <div className="bg-app-bg rounded p-2 flex justify-between items-center border border-app-border">
                                    <span className="text-xs font-bold text-app-text-muted">{st.contestName}</span>
@@ -2516,7 +2834,7 @@ export default function App() {
 
   const renderCreateTeam = () => {
     if (!activeMatch) return null;
-    const liveTeams = [activeMatch.team1.shortFrame, activeMatch.team2.shortFrame];
+    const liveTeams = [activeMatch?.team1?.shortFrame, activeMatch?.team2?.shortFrame];
     const displayedPlayers = appPlayers.filter(p => p.role === activeRole && liveTeams.includes(p.team));
 
     return (
@@ -2540,14 +2858,14 @@ export default function App() {
               </div>
               <div className="flex gap-4">
                 <div className="text-center flex flex-col items-center">
-                   <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs shadow-md border border-white/20 relative overflow-hidden shrinkage-0 ${activeMatch.team1.color}`}>
-                     {activeMatch.team1.flagUrl ? <img src={activeMatch.team1.flagUrl} alt={activeMatch.team1.shortFrame} className={`w-full h-full ${activeMatch.team1.flagFit === 'contain' ? 'object-contain' : 'object-cover'}`} /> : activeMatch.team1.shortFrame}
+                   <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs shadow-md border border-white/20 relative overflow-hidden shrinkage-0 ${activeMatch?.team1?.color?.startsWith('bg-') ? activeMatch.team1.color : ''}`} style={!activeMatch?.team1?.color?.startsWith('bg-') ? {backgroundColor: activeMatch?.team1?.color} : {}}>
+                     {activeMatch?.team1?.flagUrl ? <img src={activeMatch?.team1?.flagUrl} alt={activeMatch?.team1?.shortFrame} className={`w-full h-full ${activeMatch?.team1?.flagFit === 'contain' ? 'object-contain' : 'object-cover'}`} /> : activeMatch?.team1?.shortFrame}
                    </div>
                    <span className="text-[10px] font-bold mt-1 text-app-text-muted">{team1Count}</span>
                 </div>
                 <div className="text-center flex flex-col items-center">
-                   <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs shadow-md border border-white/20 relative overflow-hidden shrinkage-0 ${activeMatch.team2.color}`}>
-                     {activeMatch.team2.flagUrl ? <img src={activeMatch.team2.flagUrl} alt={activeMatch.team2.shortFrame} className={`w-full h-full ${activeMatch.team2.flagFit === 'contain' ? 'object-contain' : 'object-cover'}`} /> : activeMatch.team2.shortFrame}
+                   <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs shadow-md border border-white/20 relative overflow-hidden shrinkage-0 ${activeMatch?.team2?.color?.startsWith('bg-') ? activeMatch.team2.color : ''}`} style={!activeMatch?.team2?.color?.startsWith('bg-') ? {backgroundColor: activeMatch?.team2?.color} : {}}>
+                     {activeMatch?.team2?.flagUrl ? <img src={activeMatch?.team2?.flagUrl} alt={activeMatch?.team2?.shortFrame} className={`w-full h-full ${activeMatch?.team2?.flagFit === 'contain' ? 'object-contain' : 'object-cover'}`} /> : activeMatch?.team2?.shortFrame}
                    </div>
                    <span className="text-[10px] font-bold mt-1 text-app-text-muted">{team2Count}</span>
                 </div>
@@ -2590,7 +2908,7 @@ export default function App() {
             <AnimatePresence>
               {displayedPlayers.map((player) => {
                 const isSelected = !!team.find(p => p.id === player.id);
-                const tColor = player.team === activeMatch.team1.shortFrame ? activeMatch.team1.color : activeMatch.team2.color;
+                const tColor = player.team === activeMatch?.team1?.shortFrame ? activeMatch?.team1?.color : activeMatch?.team2?.color;
                 
                 return (
                   <motion.div 
@@ -2642,6 +2960,24 @@ export default function App() {
            <button 
              onClick={() => {
                if (team.length < 11) return alert(`Select ${11 - team.length} more players`);
+               const wkCount = team.filter(p => p.role === 'WK').length;
+               const batCount = team.filter(p => p.role === 'BAT').length;
+               const arCount = team.filter(p => p.role === 'AR').length;
+               const bowlCount = team.filter(p => p.role === 'BOWL').length;
+               
+               if (wkCount < 1) return alert("Select at least 1 Wicket Keeper (WK)");
+               if (batCount < 1) return alert("Select at least 1 Batsman (BAT)");
+               if (arCount < 1) return alert("Select at least 1 All-Rounder (AR)");
+               if (bowlCount < 1) return alert("Select at least 1 Bowler (BOWL)");
+               
+               const team1Short = activeMatch?.team1?.shortFrame;
+               const team2Short = activeMatch?.team2?.shortFrame;
+               const team1Count = team.filter(p => p.team === team1Short).length;
+               const team2Count = team.filter(p => p.team === team2Short).length;
+               
+               if (team1Count > 7) return alert(`You can select maximum 7 players from ${team1Short}`);
+               if (team2Count > 7) return alert(`You can select maximum 7 players from ${team2Short}`);
+               
                setView('SELECT_CAPTAIN');
              }}
              className={`flex-1 font-bold py-3 mx-auto rounded-lg shadow-md transition-colors ${
@@ -2657,10 +2993,12 @@ export default function App() {
 
   const renderTeamPreview = () => {
     const isLiveOrCompleted = activeMatch?.status === 'Live' || activeMatch?.status === 'Completed';
-    const totalPoints = team.reduce((acc, p) => {
+    const totalPoints = (team || []).reduce((acc, p) => {
+       if (!p) return acc;
        const latestP = appPlayers.find(ap => ap.id === p.id) || p;
        const mult = p.id === captain ? 2 : (p.id === viceCaptain ? 1.5 : 1);
-       return acc + (latestP.points * mult);
+       const pts = Number(latestP.points || 0);
+       return acc + (pts * mult);
     }, 0);
 
     return (
@@ -2686,9 +3024,9 @@ export default function App() {
             <span className="text-sm font-semibold tracking-wide">{team.length} / 11</span>
          </div>
          <div className="flex items-center justify-center gap-3 w-1/3">
-            <div className="px-2.5 py-0.5 border border-white/40 rounded-3xl text-[10px] font-bold bg-transparent text-white truncate max-w-[40px]">{activeMatch?.team1.shortFrame}</div>
+            <div className="px-2.5 py-0.5 border border-white/40 rounded-3xl text-[10px] font-bold bg-transparent text-white truncate max-w-[40px]">{activeMatch?.team1?.shortFrame}</div>
             <span className="text-sm font-bold whitespace-nowrap">{team1Count} : {team2Count}</span>
-            <div className="px-2.5 py-0.5 border border-white/40 rounded-3xl text-[10px] font-bold bg-[#13151c] text-white truncate max-w-[40px]">{activeMatch?.team2.shortFrame}</div>
+            <div className="px-2.5 py-0.5 border border-white/40 rounded-3xl text-[10px] font-bold bg-[#13151c] text-white truncate max-w-[40px]">{activeMatch?.team2?.shortFrame}</div>
          </div>
          <div className="flex flex-col items-end w-1/3">
             {isLiveOrCompleted ? (
@@ -2734,14 +3072,17 @@ export default function App() {
                      </div>
                      <div className="flex justify-center gap-2 sm:gap-6 w-full px-2">
                          {playersInRole.map(p => {
+                             if (!p) return null;
                              const latestP = appPlayers.find(ap => ap.id === p.id) || p;
                              const isC = p.id === captain;
                              const isVC = p.id === viceCaptain;
+                             const pName = p.name || 'Player';
+                             const pPoints = Number(latestP.points || 0);
                              return (
                              <div key={p.id} className="flex flex-col items-center cursor-pointer relative group">
                                  <div className="relative mb-1">
                                    <div className="w-[50px] h-[55px] flex items-end justify-center overflow-visible drop-shadow-lg">
-                                      <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${p.name.replace(/ /g, '')}&backgroundColor=transparent`} alt={p.name} className="w-[60px] h-[60px] object-cover" />
+                                      <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${pName.replace(/ /g, '')}&backgroundColor=transparent`} alt={pName} className="w-[60px] h-[60px] object-cover" />
                                    </div>
                                    {(isC || isVC) && (
                                      <div className={`absolute top-0 -left-2 w-[18px] h-[18px] border border-white text-white rounded-full flex items-center justify-center text-[9px] font-bold shadow-md z-10 ${isC ? 'bg-[#d32f2f]' : 'bg-transparent text-white'}`}>
@@ -2749,9 +3090,9 @@ export default function App() {
                                      </div>
                                    )}
                                  </div>
-                                 <div className="bg-black text-white text-[10px] font-medium px-2 py-0.5 rounded shadow-md whitespace-nowrap w-[70px] text-center truncate relative z-10">{p.name}</div>
+                                 <div className="bg-black text-white text-[10px] font-medium px-2 py-0.5 rounded shadow-md whitespace-nowrap w-[70px] text-center truncate relative z-10">{pName}</div>
                                  <span className="text-white text-[10px] mt-1 font-semibold drop-shadow-sm">
-                                   {isLiveOrCompleted ? `${latestP.points * (isC ? 2 : isVC ? 1.5 : 1)} Pt.` : `${p.credits} Cr`}
+                                   {isLiveOrCompleted ? `${(pPoints * (isC ? 2 : isVC ? 1.5 : 1)).toFixed(1)} Pt.` : `${p.credits || 0} Cr`}
                                  </span>
                              </div>
                              )
@@ -2777,8 +3118,8 @@ export default function App() {
       
       <div className="flex-1 overflow-y-auto bg-app-bg pb-20">
          <div className="bg-app-card">
-           {team.map(player => (
-             <div key={player.id} className="flex items-center p-3 border-b border-app-border">
+           {team && (team || []).map(player => (
+               <div key={player.id} className="flex items-center p-3 border-b border-app-border">
                <div className="w-12 h-12 rounded-full bg-app-bg flex items-end justify-center overflow-hidden shrink-0 border border-app-border">
                   <User size={40} className="text-app-text-muted translate-y-2" />
                </div>
@@ -2831,7 +3172,7 @@ export default function App() {
      const myUserId = user?.id || 'guest';
      const filteredTeams = savedTeams.filter(st => {
          if (st.userId !== myUserId) return false;
-         const currentMatchStatus = appMatches.find(m => m.id === st.match.id)?.status || 'Upcoming';
+         const currentMatchStatus = appMatches.find(m => m.id === st.match?.id)?.status || 'Upcoming';
          return currentMatchStatus === myMatchesTab;
      });
 
@@ -2862,7 +3203,7 @@ export default function App() {
              ) : (
                  filteredTeams.map((st, i) => {
                      // Check current match status from appMatches
-                     const currentMatchStatus = appMatches.find(m => m.id === st.match.id)?.status || 'Upcoming';
+                     const currentMatchStatus = appMatches.find(m => m.id === st.match?.id)?.status || 'Upcoming';
                      
                      // Calculate dynamic points
                      const totalPoints = (st.players || []).reduce((acc: number, player: Player) => {
@@ -2870,20 +3211,24 @@ export default function App() {
                         let mult = 1;
                         if (livePlayer.id === st.captain) mult = 2;
                         else if (livePlayer.id === st.viceCaptain) mult = 1.5;
-                        return acc + (livePlayer.points * mult);
+                        const pts = Number(livePlayer.points || 0);
+                        return acc + (pts * mult);
                      }, 0);
 
                      return (
                          <div key={i} className={`bg-app-card rounded-xl shadow-sm border border-app-border overflow-hidden ${currentMatchStatus === 'Completed' ? 'opacity-60' : ''}`}>
                             <div className="px-3 py-2.5 bg-app-card-inner border-b border-app-border flex justify-between items-center text-xs font-bold text-app-text-muted">
                                <div className="flex items-center gap-2 flex-1 min-w-0 pr-2">
-                                  <span className="truncate max-w-[40%] sm:max-w-none">{st.match.series}</span>
+                                  <span className="truncate max-w-[40%] sm:max-w-none">{st.match?.series}</span>
                                   {currentMatchStatus === 'Upcoming' && (
                                      <div className="flex flex-shrink-0 gap-1.5">
                                         <button 
                                            onClick={(e) => {
                                                e.stopPropagation();
                                                setActiveMatch(st.match);
+                                               const cMatch = appContests.find(cc => cc.name === st.contestName);
+                                               if (cMatch) setActiveContestDetails(cMatch);
+                                               setActiveContestInstanceId(st.instanceId);
                                                setSelectedContest({ fee: st.fee, name: st.contestName });
                                                setTeam([]);
                                                setCaptain(null);
@@ -2898,6 +3243,9 @@ export default function App() {
                                            onClick={(e) => {
                                                e.stopPropagation();
                                                setActiveMatch(st.match);
+                                               const cMatch = appContests.find(cc => cc.name === st.contestName);
+                                               if (cMatch) setActiveContestDetails(cMatch);
+                                               setActiveContestInstanceId(st.instanceId);
                                                setSelectedContest({ fee: st.fee, name: st.contestName });
                                                setTeam(st.players);
                                                setCaptain(null);
@@ -2924,6 +3272,9 @@ export default function App() {
                                           setEditingSavedTeamIndex(realIndex);
                                           setEditReturnView('MY_MATCHES');
                                           setActiveMatch(st.match);
+                                          const cMatch = appContests.find(cc => cc.name === st.contestName);
+                                          if (cMatch) setActiveContestDetails(cMatch);
+                                          setActiveContestInstanceId(st.instanceId);
                                           setSelectedContest({ fee: st.fee, name: st.contestName });
                                           setTeam(st.players || []);
                                           setCaptain(st.captain || null);
@@ -2941,25 +3292,25 @@ export default function App() {
                             <div className="p-4 flex flex-col gap-3 text-sm">
                                <div className="flex justify-between items-center text-center">
                                  <div className="flex flex-col items-center gap-1 w-20">
-                                   <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm overflow-hidden shadow-inner border border-app-border bg-app-bg ${st.match.team1.color}`}>
-                                      {st.match.team1.flagUrl ? <img src={st.match.team1.flagUrl} className={`w-full h-full ${st.match.team1.flagFit === 'contain' ? 'object-contain' : 'object-cover'}`} /> : st.match.team1.shortFrame}
+                                   <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm overflow-hidden shadow-inner border border-app-border bg-app-bg ${st.match?.team1?.color?.startsWith('bg-') ? st.match.team1.color : ''}`} style={!st.match?.team1?.color?.startsWith('bg-') ? {backgroundColor: st.match?.team1?.color} : {}}>
+                                      {st.match?.team1?.flagUrl ? <img src={st.match?.team1?.flagUrl} className={`w-full h-full ${st.match?.team1?.flagFit === 'contain' ? 'object-contain' : 'object-cover'}`} /> : st.match?.team1?.shortFrame}
                                    </div>
-                                   <span className="font-bold text-xs truncate w-full">{st.match.team1.shortFrame}</span>
+                                   <span className="font-bold text-xs truncate w-full">{st.match?.team1?.shortFrame}</span>
                                  </div>
                                  <div className="flex flex-col items-center flex-1">
-                                    <span className="bg-red-50 text-app-accent px-2 py-1 rounded text-[10px] font-bold">{currentMatchStatus === 'Live' ? 'In Progress' : currentMatchStatus === 'Completed' ? 'Ended' : st.match.time}</span>
+                                    <span className="bg-red-50 text-app-accent px-2 py-1 rounded text-[10px] font-bold">{currentMatchStatus === 'Live' ? 'In Progress' : currentMatchStatus === 'Completed' ? 'Ended' : st.match?.time}</span>
                                     {(currentMatchStatus === 'Live' || currentMatchStatus === 'Completed') && (
                                        <span className="text-sm font-black text-green-500 mt-1">{totalPoints} pts</span>
                                     )}
                                     {currentMatchStatus === 'Completed' && st.prizeDistributed && st.amountWon !== undefined && (
-                                       <span className="text-xs font-black text-[#e5c158] mt-0.5 tracking-tight uppercase">Won ₹{st.amountWon.toFixed(2)}</span>
+                                       <span className="text-xs font-black text-[#e5c158] mt-0.5 tracking-tight uppercase">Won ₹{Number(st.amountWon || 0).toFixed(2)}</span>
                                     )}
                                  </div>
                                  <div className="flex flex-col items-center gap-1 w-20">
-                                   <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm overflow-hidden shadow-inner border border-app-border bg-app-bg ${st.match.team2.color}`}>
-                                      {st.match.team2.flagUrl ? <img src={st.match.team2.flagUrl} className={`w-full h-full ${st.match.team2.flagFit === 'contain' ? 'object-contain' : 'object-cover'}`} /> : st.match.team2.shortFrame}
+                                   <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm overflow-hidden shadow-inner border border-app-border bg-app-bg ${st.match?.team2?.color?.startsWith('bg-') ? st.match.team2.color : ''}`} style={!st.match?.team2?.color?.startsWith('bg-') ? {backgroundColor: st.match?.team2?.color} : {}}>
+                                      {st.match?.team2?.flagUrl ? <img src={st.match?.team2?.flagUrl} className={`w-full h-full ${st.match?.team2?.flagFit === 'contain' ? 'object-contain' : 'object-cover'}`} /> : st.match?.team2?.shortFrame}
                                    </div>
-                                   <span className="font-bold text-xs truncate w-full">{st.match.team2.shortFrame}</span>
+                                   <span className="font-bold text-xs truncate w-full">{st.match?.team2?.shortFrame}</span>
                                  </div>
                                </div>
                                <div className="bg-app-bg rounded p-2 flex justify-between items-center border border-app-border">
@@ -2970,7 +3321,7 @@ export default function App() {
                             <div className="px-4 py-3 bg-app-card-inner border-t border-app-border flex justify-between items-center gap-3">
                                <button 
                                    onClick={() => {
-                                       const latestMatch = appMatches.find(m => m.id === st.match.id) || st.match;
+                                       const latestMatch = appMatches.find(m => m.id === st.match?.id) || st.match;
                                        if (currentMatchStatus !== 'Upcoming') {
                                            setActiveMatch(latestMatch);
                                            setSelectedContest({ fee: st.fee, name: st.contestName });
@@ -3025,15 +3376,15 @@ export default function App() {
                <div className="flex justify-between gap-2 mt-4 mb-5 border-b border-app-border-hover pb-4">
                   <div className="flex flex-col">
                      <span className="text-xs text-app-text-muted">Deposits</span>
-                     <span className="font-bold text-app-text text-sm">₹{wallet.deposit.toLocaleString('en-IN', {maximumFractionDigits:0})}</span>
+                     <span className="font-bold text-app-text text-sm">₹{Number(wallet.deposit || 0).toLocaleString('en-IN', {maximumFractionDigits:0})}</span>
                   </div>
                   <div className="flex flex-col">
                      <span className="text-xs text-app-text-muted">Winnings</span>
-                     <span className="font-bold text-[#4ADE80] text-sm">₹{wallet.winning.toLocaleString('en-IN', {maximumFractionDigits:0})}</span>
+                     <span className="font-bold text-[#4ADE80] text-sm">₹{Number(wallet.winning || 0).toLocaleString('en-IN', {maximumFractionDigits:0})}</span>
                   </div>
                   <div className="flex flex-col">
                      <span className="text-xs text-app-text-muted">Bonus</span>
-                     <span className="font-bold text-[#FFD700] text-sm">₹{wallet.bonus.toLocaleString('en-IN', {maximumFractionDigits:0})}</span>
+                     <span className="font-bold text-[#FFD700] text-sm">₹{Number(wallet.bonus || 0).toLocaleString('en-IN', {maximumFractionDigits:0})}</span>
                   </div>
                </div>
 
@@ -3254,9 +3605,9 @@ export default function App() {
         alert(`🎉 Congratulations! You received ₹${rewardAmount} for reaching Level ${levelIndex}!`);
     };
 
-    const totalWins = userStats.wins || 0;
+    const totalWins = wallet?.wins || 0;
     const winningRate = contestsJoined > 0 ? Math.round((totalWins / contestsJoined) * 100) : 0;
-    const totalProfit = userStats.profits || 0;
+    const totalProfit = wallet?.profits || 0;
 
     const userKycObj = kycRequests.find(k => k.userId === (user?.id || 'guest'));
     const kycStatus = userKycObj ? userKycObj.status : 'Pending';
@@ -3276,11 +3627,11 @@ export default function App() {
            <div className="bg-app-accent rounded-xl shadow-sm p-5 flex flex-col mb-4 text-white">
               <div className="flex items-center gap-4">
                 <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center text-3xl font-bold text-app-text shadow-inner">
-                   {user?.name.charAt(0).toUpperCase()}
+                   {(user?.name || user?.email || 'U').charAt(0).toUpperCase()}
                 </div>
                 <div className="flex flex-col text-app-text">
-                   <h2 className="text-xl font-bold uppercase">{user?.name}</h2>
-                   <p className="text-sm opacity-90 mb-2 font-mono">ID: {user?.numericId || user?.id || '1234567890'}</p>
+                   <h2 className="text-xl font-bold uppercase">{user?.name || 'User'}</h2>
+                   <p className="text-sm opacity-90 mb-2 font-mono">ID: {user?.numericId || 'Loading...'}</p>
                    <div className="flex flex-col gap-1 w-full">
                      <div className="flex gap-2 items-center">
                        <span className="bg-yellow-500 text-black text-[10px] px-2 py-0.5 rounded flex items-center font-bold w-fit">⚡ Level {userLevel}</span>
@@ -3318,9 +3669,29 @@ export default function App() {
                 <span className="text-2xl font-bold text-app-text">{winningRate}%</span>
                 <span className="text-[10px] text-app-text-muted mt-1 text-center font-medium uppercase tracking-wider">Winning<br/>Rate</span>
               </div>
-              <div className="bg-app-card rounded-xl flex-1 p-3 flex flex-col items-center justify-center border border-app-border shadow-sm col-span-2">
-                <span className="text-3xl font-black text-[#4ADE80]">₹{totalProfit.toLocaleString('en-IN')}</span>
-                <span className="text-xs text-app-text-muted mt-1 text-center font-bold uppercase tracking-wider">Total Profit Earned</span>
+              <div className="bg-app-card rounded-xl flex-1 p-4 flex flex-col items-center justify-center border border-app-border shadow-sm col-span-2">
+                <span className="text-xs text-app-text-muted mb-2 text-center font-bold uppercase tracking-wider">Total Profit Earned</span>
+                <span className="text-3xl font-black text-[#4ADE80]">₹{Number(totalProfit || 0).toLocaleString('en-IN')}</span>
+              </div>
+           </div>
+
+           <div className="bg-app-card rounded-xl shadow-sm border border-app-border overflow-hidden mb-6">
+              <div className="p-3 border-b border-app-border bg-app-card-inner">
+                 <h3 className="font-bold text-sm text-app-text flex items-center gap-2">My Wallet</h3>
+              </div>
+              <div className="grid grid-cols-3 divide-x divide-app-border">
+                 <div className="p-3 flex flex-col items-center justify-center hover:bg-app-card-hover transition-colors">
+                    <span className="text-app-text-muted text-[10px] font-bold uppercase tracking-wider mb-1">Deposit</span>
+                    <span className="font-bold text-blue-400">₹{Number(wallet.deposit || 0).toLocaleString('en-IN', {maximumFractionDigits:0})}</span>
+                 </div>
+                 <div className="p-3 flex flex-col items-center justify-center hover:bg-app-card-hover transition-colors">
+                    <span className="text-app-text-muted text-[10px] font-bold uppercase tracking-wider mb-1">Winnings</span>
+                    <span className="font-bold text-green-400">₹{Number(wallet.winning || 0).toLocaleString('en-IN', {maximumFractionDigits:0})}</span>
+                 </div>
+                 <div className="p-3 flex flex-col items-center justify-center hover:bg-app-card-hover transition-colors">
+                    <span className="text-app-text-muted text-[10px] font-bold uppercase tracking-wider mb-1">Bonus</span>
+                    <span className="font-bold text-[#e5c158]">₹{Number(wallet.bonus || 0).toLocaleString('en-IN', {maximumFractionDigits:0})}</span>
+                 </div>
               </div>
            </div>
 
@@ -3375,6 +3746,15 @@ export default function App() {
               </div>
            </div>
 
+           {isAdmin && (
+               <button 
+                 onClick={() => setView('ADMIN')}
+                 className="w-full mt-6 bg-[#e5c158]/20 border border-[#e5c158]/50 text-[#e5c158] font-bold py-3 rounded-xl shadow-sm active:scale-95 transition-all flex justify-center items-center gap-2 uppercase tracking-wide"
+               >
+                 <Shield size={18} /> Admin Panel
+               </button>
+           )}
+
            <button 
              onClick={async () => {
                 try {
@@ -3408,7 +3788,7 @@ export default function App() {
         id: `KYC${Date.now()}`,
         userId: user?.id || 'guest',
         userNumericId: user?.numericId,
-        userName: user?.name || user?.email?.split('@')[0] || 'Guest Player',
+        userName: user?.name || String(user?.email || '').split('@')[0] || 'Guest Player',
         aadhar: aadharInput,
         pan: panInput,
         status: 'Pending Review',
@@ -3508,6 +3888,10 @@ export default function App() {
       e.preventDefault();
       if (!authInput || !authPassword) return alert("Please enter mobile/email and password");
       
+      if (authMode === 'SIGNUP' && (!authFirstName.trim() || !authLastName.trim())) {
+         return alert("Please enter your First Name and Last Name");
+      }
+
       const parsedEmail = /^\d{10}$/.test(authInput.trim()) 
         ? `${authInput.trim()}@dreamapp.com` 
         : authInput.trim();
@@ -3516,10 +3900,25 @@ export default function App() {
       try {
         if (authMode === 'SIGNUP') {
           sessionStorage.setItem('isSigningUp', 'true');
-          await createUserWithEmailAndPassword(auth, parsedEmail, authPassword);
+          const cred = await createUserWithEmailAndPassword(auth, parsedEmail, authPassword);
+          const fullName = `${authFirstName.trim()} ${authLastName.trim()}`;
+          const numericId = Math.floor(1000000000 + Math.random() * 9000000000).toString();
+          await setDoc(doc(db, 'users', cred.user.uid), {
+             firstName: authFirstName.trim(),
+             lastName: authLastName.trim(),
+             name: fullName,
+             numericId: numericId,
+             email: parsedEmail
+          });
+          
+          sessionStorage.removeItem('isSigningUp');
+          await firebaseSignOut(auth);
+          
           alert("Signup successful! Please login below to continue.");
           setAuthMode('LOGIN');
           setAuthPassword('');
+          setAuthFirstName('');
+          setAuthLastName('');
         } else {
           await signInWithEmailAndPassword(auth, parsedEmail, authPassword);
         }
@@ -3547,6 +3946,28 @@ export default function App() {
           
           <div className="w-full space-y-4">
              <form onSubmit={handleAuth} className="flex flex-col gap-3">
+               {authMode === 'SIGNUP' && (
+                 <>
+                   <div>
+                      <input 
+                        type="text" 
+                        placeholder="First Name" 
+                        value={authFirstName}
+                        onChange={e => setAuthFirstName(e.target.value)}
+                        className="w-full bg-app-card border border-app-border text-app-text px-4 py-3 rounded-xl outline-none focus:border-app-accent font-medium"
+                      />
+                   </div>
+                   <div>
+                      <input 
+                        type="text" 
+                        placeholder="Last Name" 
+                        value={authLastName}
+                        onChange={e => setAuthLastName(e.target.value)}
+                        className="w-full bg-app-card border border-app-border text-app-text px-4 py-3 rounded-xl outline-none focus:border-app-accent font-medium"
+                      />
+                   </div>
+                 </>
+               )}
                <div>
                   <input 
                     type="text" 
@@ -3663,9 +4084,9 @@ export default function App() {
                    <h2 className="font-black text-transparent bg-clip-text bg-gradient-to-r from-[#e5c158] to-[#f0b90b] uppercase tracking-widest text-lg drop-shadow-[0_0_12px_rgba(229,193,88,0.4)]">DREAM11 VIP</h2>
                  </div>
                  <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-lg bg-[#e5c158]/10 border border-[#e5c158]/30 flex items-center justify-center text-[#e5c158] overflow-hidden shadow-[0_0_10px_rgba(229,193,88,0.2)]">
+                    <button onClick={() => setShowDashboardUsers(true)} className="w-8 h-8 rounded-lg bg-[#e5c158]/10 border border-[#e5c158]/30 flex items-center justify-center text-[#e5c158] overflow-hidden shadow-[0_0_10px_rgba(229,193,88,0.2)] hover:bg-[#e5c158]/20 transition-colors cursor-pointer">
                        <User size={16} />
-                    </div>
+                    </button>
                  </div>
              </div>
              
@@ -3694,16 +4115,25 @@ export default function App() {
                       setSyncMessage(null);
                       try {
                           const adminTeams = savedTeams.filter(t => t.userId === 'admin_bot' || t.userId === 'admin_bot_boot');
-                          await setDoc(doc(db, 'gameData', 'main_state'), JSON.parse(JSON.stringify({
+                          const syncData = JSON.parse(JSON.stringify({
                               matches: appMatches,
                               contests: appContests,
                               players: appPlayers,
                               adminTeams: adminTeams,
                               timestamp: Date.now()
-                          })));
+                          }));
+                          
+                          const syncPromise = setDoc(doc(db, 'gameData', 'main_state'), syncData);
+                          const timeoutPromise = new Promise((_, reject) => 
+                              setTimeout(() => reject(new Error("Network timeout: Cloud took too long to respond. Please check your internet or try again.")), 60000)
+                          );
+                          
+                          await Promise.race([syncPromise, timeoutPromise]);
+                          
                           setSyncMessage({type: 'success', text: '✅ Successfully synced Matches, Contests, Players, and Bots to the cloud. All phones will now update.'});
                       } catch (e: any) {
-                          setSyncMessage({type: 'error', text: 'Failed to sync to cloud: ' + e.message});
+                          handleFsError(e);
+                          setSyncMessage({type: 'error', text: 'Failed to sync: ' + e.message});
                       } finally {
                           setIsSyncing(false);
                       }
@@ -3730,17 +4160,16 @@ export default function App() {
         <div className="bg-[#13151c] rounded-2xl border border-[#e5c158]/20 p-5 shadow-lg flex-1">
             <div className="flex justify-between items-center mb-6">
                 <h3 className="text-lg font-bold text-slate-200 tracking-wide">Real-time User Activity</h3>
-                <button onClick={() => setAdminTab('USERS')} className="px-3 py-1 rounded bg-[#090b10] border border-slate-700 text-xs text-slate-400 flex items-center gap-1 hover:border-[#e5c158]/50 transition-colors">View Users <ChevronDown size={12} /></button>
             </div>
             
             <div className="grid grid-cols-3 gap-2 mb-6">
-                <div>
-                     <p className="text-slate-400 text-[10px] uppercase font-bold tracking-wider mb-1">Active Users</p>
-                    <p className="text-lg xl:text-xl font-bold text-slate-200 flex items-center gap-1">{appPlayers.length + 4700} <ChevronUp size={14} className="text-green-500"/></p>
+                <div className="p-2 -m-2 rounded transition-colors">
+                     <p className="text-slate-400 text-[10px] uppercase font-bold tracking-wider mb-1">Total Users</p>
+                    <p className="text-lg xl:text-xl font-bold text-slate-200 flex items-center gap-1">{adminUserList.length} <User size={14} className="text-[#e5c158]"/></p>
                 </div>
                 <div>
-                    <p className="text-slate-400 text-[10px] uppercase font-bold tracking-wider mb-1">New Registrations</p>
-                    <p className="text-lg xl:text-xl font-bold text-slate-200 flex items-center gap-1">{appPlayers.length + 200} <ChevronUp size={14} className="text-green-500"/></p>
+                    <p className="text-slate-400 text-[10px] uppercase font-bold tracking-wider mb-1">New Signups</p>
+                    <p className="text-lg xl:text-xl font-bold text-slate-200 flex items-center gap-1">{adminUserList.length} <ChevronUp size={14} className="text-green-500"/></p>
                 </div>
                 <div>
                     <p className="text-slate-400 text-[10px] uppercase font-bold tracking-wider mb-1">Total Entries</p>
@@ -3768,7 +4197,7 @@ export default function App() {
                     <Area type="monotone" dataKey="active" stroke="#06b6d4" strokeWidth={3} fillOpacity={1} fill="url(#colorActive)" />
                     <Area type="monotone" dataKey="new" stroke="#10b981" strokeWidth={3} fillOpacity={1} fill="url(#colorNew)" />
                   </AreaChart>
-               </ResponsiveContainer>
+                </ResponsiveContainer>
             </div>
         </div>
 
@@ -3778,41 +4207,66 @@ export default function App() {
                 <h3 className="text-lg font-bold text-slate-200 tracking-wide">Financial Overview</h3>
                 <button onClick={() => setAdminTab('FINANCIALS')} className="px-3 py-1 rounded bg-[#090b10] border border-slate-700 text-xs text-slate-400 flex items-center gap-1 hover:border-[#e5c158]/50 transition-colors">View Finance <ChevronDown size={12} /></button>
             </div>
-            <div className="grid grid-cols-3 gap-2 xl:gap-4">
-                <div>
-                   <p className="text-slate-400 text-[9px] xl:text-[10px] uppercase font-bold tracking-wider mb-1">Total Revenue</p>
-                   <p className="text-base xl:text-lg font-black text-slate-200 mb-3">2,753 Bn</p>
-                   <div className="h-[40px] w-full">
-                      <ResponsiveContainer width="100%" height="100%">
-                         <LineChart data={finData1}>
-                            <Line type="monotone" dataKey="v" stroke="#3b82f6" strokeWidth={2} dot={false} />
-                         </LineChart>
-                      </ResponsiveContainer>
-                   </div>
-                </div>
-                <div>
-                   <p className="text-slate-400 text-[9px] xl:text-[10px] uppercase font-bold tracking-wider mb-1">Payouts</p>
-                   <p className="text-base xl:text-lg font-black text-slate-200 mb-3 flex items-center gap-1">3.00M <ChevronDown size={12} className="text-red-500"/></p>
-                   <div className="h-[40px] w-full">
-                      <ResponsiveContainer width="100%" height="100%">
-                         <LineChart data={finData2}>
-                            <Line type="monotone" dataKey="v" stroke="#eab308" strokeWidth={2} dot={false} />
-                         </LineChart>
-                      </ResponsiveContainer>
-                   </div>
-                </div>
-                <div>
-                   <p className="text-slate-400 text-[9px] xl:text-[10px] uppercase font-bold tracking-wider mb-1">Profit Margin</p>
-                   <p className="text-base xl:text-lg font-black text-slate-200 mb-3 flex items-center gap-1">7.39% <span className="text-[9px] text-green-500 ml-1">▲ 1%</span></p>
-                   <div className="h-[40px] w-full">
-                      <ResponsiveContainer width="100%" height="100%">
-                         <LineChart data={finData3}>
-                            <Line type="monotone" dataKey="v" stroke="#22c55e" strokeWidth={2} dot={false} />
-                         </LineChart>
-                      </ResponsiveContainer>
-                   </div>
-                </div>
-            </div>
+            {(() => {
+                let totalRev = 0;
+                depositRequests.forEach(d => {
+                    if (d.status === 'Approved') totalRev += parseFloat(d.amount?.toString() || '0');
+                });
+            
+                let totalPay = 0;
+                withdrawRequests.forEach(w => {
+                    if (w.status === 'Approved') totalPay += parseFloat(w.amount?.toString() || '0');
+                });
+            
+                let margin = 0;
+                if (totalRev > 0) {
+                    margin = ((totalRev - totalPay) / totalRev) * 100;
+                }
+                
+                const formatFinance = (val: number) => {
+                    if (val >= 100000) return `₹${(val / 100000).toFixed(2)} L`;
+                    if (val >= 1000) return `₹${(val / 1000).toFixed(2)} K`;
+                    return `₹${val.toFixed(0)}`;
+                };
+
+                return (
+                    <div className="grid grid-cols-3 gap-2 xl:gap-4">
+                        <div>
+                           <p className="text-slate-400 text-[9px] xl:text-[10px] uppercase font-bold tracking-wider mb-1">Total Revenue</p>
+                           <p className="text-base xl:text-lg font-black text-slate-200 mb-3">{formatFinance(totalRev)}</p>
+                           <div className="h-[40px] w-full">
+                              <ResponsiveContainer width="100%" height="100%">
+                                 <LineChart data={finData1}>
+                                    <Line type="monotone" dataKey="v" stroke="#3b82f6" strokeWidth={2} dot={false} />
+                                 </LineChart>
+                              </ResponsiveContainer>
+                           </div>
+                        </div>
+                        <div>
+                           <p className="text-slate-400 text-[9px] xl:text-[10px] uppercase font-bold tracking-wider mb-1">Payouts</p>
+                           <p className="text-base xl:text-lg font-black text-slate-200 mb-3 flex items-center gap-1">{formatFinance(totalPay)} {totalPay > 0 ? <ChevronUp size={12} className="text-red-500"/> : null}</p>
+                           <div className="h-[40px] w-full">
+                              <ResponsiveContainer width="100%" height="100%">
+                                 <LineChart data={finData2}>
+                                    <Line type="monotone" dataKey="v" stroke="#eab308" strokeWidth={2} dot={false} />
+                                 </LineChart>
+                              </ResponsiveContainer>
+                           </div>
+                        </div>
+                        <div>
+                           <p className="text-slate-400 text-[9px] xl:text-[10px] uppercase font-bold tracking-wider mb-1">Profit Margin</p>
+                           <p className="text-base xl:text-lg font-black text-slate-200 mb-3 flex items-center gap-1">{margin.toFixed(2)}% {margin > 0 ? <span className="text-[9px] text-green-500 ml-1">▲</span> : <span className="text-[9px] text-red-500 ml-1">▼</span>}</p>
+                           <div className="h-[40px] w-full">
+                              <ResponsiveContainer width="100%" height="100%">
+                                 <LineChart data={finData3}>
+                                    <Line type="monotone" dataKey="v" stroke="#22c55e" strokeWidth={2} dot={false} />
+                                 </LineChart>
+                              </ResponsiveContainer>
+                           </div>
+                        </div>
+                    </div>
+                );
+            })()}
         </div>
     </div>
 
@@ -3863,11 +4317,11 @@ export default function App() {
               <div className="flex gap-2 xl:gap-3 items-center">
                  <div className="flex gap-1 items-center">
                     <div className="w-5 h-5 xl:w-6 xl:h-6 rounded-full overflow-hidden">
-                        <img src={m.team1.logo} alt="t1" className="w-full h-full object-cover" />
+                        <img src={m?.team1?.flagUrl} alt="t1" className="w-full h-full object-cover" />
                     </div>
                      <span className="text-[8px] xl:text-[10px] text-slate-400">VS</span>
                     <div className="w-5 h-5 xl:w-6 xl:h-6 rounded-full overflow-hidden">
-                        <img src={m.team2.logo} alt="t2" className="w-full h-full object-cover" />
+                        <img src={m?.team2?.flagUrl} alt="t2" className="w-full h-full object-cover" />
                     </div>
                  </div>
                  <div>
@@ -3888,11 +4342,11 @@ export default function App() {
               <div className="flex gap-2 xl:gap-3 items-center">
                  <div className="flex gap-1 items-center">
                     <div className="w-5 h-5 xl:w-6 xl:h-6 rounded-full overflow-hidden">
-                        <img src={m.team1.logo} alt="t1" className="w-full h-full object-cover" />
+                        <img src={m?.team1?.flagUrl} alt="t1" className="w-full h-full object-cover" />
                     </div>
                      <span className="text-[8px] xl:text-[10px] text-slate-400">VS</span>
                     <div className="w-5 h-5 xl:w-6 xl:h-6 rounded-full overflow-hidden">
-                        <img src={m.team2.logo} alt="t2" className="w-full h-full object-cover" />
+                        <img src={m?.team2?.flagUrl} alt="t2" className="w-full h-full object-cover" />
                     </div>
                  </div>
                  <div>
@@ -3918,26 +4372,29 @@ export default function App() {
                 <button onClick={() => setAdminTab('USERS')} className="text-slate-400 hover:text-white transition-colors text-xs font-bold">View All</button>
             </div>
             <div className="space-y-3">
-                {[
-                  { n: 'Uname Starts', p: 25300, src: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Uname+Starts' },
-                  { n: 'Name Second', p: 25000, src: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Name+Second' },
-                  { n: 'Name Third', p: 2000, src: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Name+Third' },
-                  { n: 'Name Fourth', p: 2000, src: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Name+Fourth' }
-                ].map((tu, i) => (
-                    <div key={i} className={"flex items-center justify-between p-2 rounded-xl transition-all cursor-pointer " + (i === 1 ? 'bg-[#e5c158]/5 border border-[#e5c158]/30 shadow-[0_0_10px_rgba(229,193,88,0.1)]' : 'hover:bg-slate-800')}>
-                       <div className="flex items-center gap-2 xl:gap-3">
+                {[...adminUserList]
+                  .sort((a, b) => (b.winning || 0) - (a.winning || 0))
+                  .slice(0, 4)
+                  .map((tu, i) => (
+                    <div key={tu.id} className={"flex items-center justify-between p-2 rounded-xl border transition-all " + (i === 0 ? 'bg-[#e5c158]/5 border-[#e5c158]/30 shadow-[0_0_10px_rgba(229,193,88,0.1)]' : 'border-slate-800 bg-[#090b10] hover:bg-slate-800')}>
+                       <div className="flex items-center gap-2 xl:gap-3 overflow-hidden flex-1 mr-2">
                           <span className="text-slate-500 font-mono text-xs w-3 xl:w-4">{i+1}.</span>
-                          <div className="w-6 h-6 xl:w-8 xl:h-8 rounded-full bg-slate-800 border border-slate-700 overflow-hidden shrink-0">
-                              <img src={tu.src} alt="avatar" className="w-full h-full object-cover" />
+                          <div onClick={() => {
+                              setAdminProfileModalUser(tu);
+                          }} className="w-8 h-8 xl:w-10 xl:h-10 rounded-full bg-slate-800 border border-slate-700 overflow-hidden shrink-0 cursor-pointer hover:scale-105 transition-transform" title="Open Profile">
+                              <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${tu.id}`} alt="avatar" className="w-full h-full object-cover" />
                           </div>
-                          <div>
-                              <p className="text-[10px] xl:text-xs font-bold text-slate-200 leading-tight">{tu.n}</p>
-                              <p className="text-[8px] xl:text-[10px] text-slate-500">2 Details</p>
+                          <div className="min-w-0">
+                              <p className="text-[10px] xl:text-xs font-bold text-slate-200 leading-tight truncate">{tu.name || (tu.email && String(tu.email).split('@')[0]) || 'User'}</p>
+                              <div className="flex gap-2 items-center mt-1">
+                                  <p className="text-[8px] xl:text-[9px] text-slate-500 truncate font-mono">{String(tu.id).substring(0, 8)}...</p>
+                              </div>
                           </div>
                        </div>
-                       <span className="text-[#e5c158] font-bold text-[10px] xl:text-xs">{tu.p.toLocaleString()}</span>
+                       <span className="text-[#e5c158] font-bold text-xs xl:text-sm shrink-0 pl-2">₹{Number(tu.winning || 0).toLocaleString()}</span>
                     </div>
                 ))}
+                {adminUserList.length === 0 && <p className="text-xs text-slate-500 text-center py-4">No users found.</p>}
             </div>
         </div>
 
@@ -4091,58 +4548,7 @@ export default function App() {
              </div>
              </>)}
 {adminTab === 'DASHBOARD' && (<>
-<h3 className="font-bold text-[#e5c158]/80 uppercase tracking-widest text-[10px] mb-3 ml-1">System Control: VIP Wallet Edit</h3>
-             <div className="bg-[#13151c] rounded-2xl shadow-lg border border-[#e5c158]/20 p-5 mb-6 relative overflow-hidden backdrop-blur-sm">
-                 <div className="absolute top-0 right-0 bg-yellow-500 text-black text-[9px] uppercase tracking-widest font-black px-3 py-1 rounded-bl-xl shadow-[0_0_10px_rgba(234,179,8,0.5)]">VIP ACCESS</div>
-                 <div className="flex justify-between items-center mb-4 mt-2">
-                    <div>
-                       <p className="font-bold text-slate-200">{user?.name}</p>
-                       <p className="text-xs text-[#e5c158]/70 font-mono">{user?.email}</p>
-                    </div>
-                    <div className="text-right">
-                       <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-0.5">Wallet Balance</p>
-                       <p className="font-black text-xl text-[#e5c158] drop-shadow-[0_0_8px_rgba(234,179,8,0.4)]">₹{balance.toFixed(2)}</p>
-                    </div>
-                 </div>
-                 <div className="flex flex-col gap-3">
-                    <div className="flex gap-2">
-                       <input 
-                          type="number" 
-                          placeholder="Enter money to add/deduct (₹)" 
-                          value={adminCustomAmount}
-                          onChange={(e) => setAdminCustomAmount(e.target.value)}
-                          className="flex-1 bg-black/50 border border-[#e5c158]/30 rounded-xl px-4 py-3 text-sm font-semibold text-slate-200 outline-none focus:border-yellow-500 focus:shadow-[0_0_10px_rgba(234,179,8,0.2)] transition-all"
-                       />
-                    </div>
-                    <div className="flex gap-2">
-                       <button 
-                          onClick={() => {
-                             const amt = parseFloat(adminCustomAmount);
-                             if (!isNaN(amt) && amt > 0) {
-                                setBalance(b => b + amt);
-                                setAdminCustomAmount('');
-                             }
-                          }} 
-                          className="flex-1 bg-green-500/20 hover:bg-green-500/30 text-green-400 border border-green-500/50 py-2.5 rounded-xl text-sm font-bold transition-colors"
-                       >
-                          + Add Funds
-                       </button>
-                       <button 
-                          onClick={() => {
-                             const amt = parseFloat(adminCustomAmount);
-                             if (!isNaN(amt) && amt > 0) {
-                                setBalance(b => Math.max(0, b - amt));
-                                setAdminCustomAmount('');
-                             }
-                          }} 
-                          className="flex-1 bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/50 py-2.5 rounded-xl text-sm font-bold transition-colors"
-                       >
-                          - Deduct Funds
-                       </button>
-                    </div>
-                    <button onClick={() => setBalance(0)} className="w-full bg-black/40 hover:bg-black/60 text-slate-400 border border-slate-700 py-2.5 rounded-xl text-sm font-bold transition-colors">Wipe Wallet to 0</button>
-                 </div>
-             </div>
+
              </>)}
 {adminTab === 'CONTESTS' && (<>
 <button 
@@ -4279,7 +4685,7 @@ export default function App() {
                           
                           let payouts = undefined;
                           let parsedPrize = 0;
-                          const lowerPrize = adminContestPrize.toLowerCase();
+                          const lowerPrize = (adminContestPrize || '').toString().toLowerCase();
                           const numPart = parseFloat(lowerPrize.replace(/[^0-9.]/g, ''));
                           if (!isNaN(numPart) && numPart > 0) {
                               if (lowerPrize.includes('cr')) parsedPrize = numPart * 10000000;
@@ -4318,7 +4724,7 @@ export default function App() {
                                    const to = parseInt(cp.rankTo) || from;
                                    const spotsInTier = (to - from + 1);
                                    
-                                   let rawAmountLabel = cp.amount.toLowerCase().replace(/,/g, '');
+                                   let rawAmountLabel = (cp.amount || '').toString().toLowerCase().replace(/,/g, '');
                                    let numericAmount = parseFloat(rawAmountLabel.replace(/[^0-9.]/g, '')) || 0;
                                    if (rawAmountLabel.includes('lakh') || rawAmountLabel.includes('l')) numericAmount *= 100000;
                                    else if (rawAmountLabel.includes('cr')) numericAmount *= 10000000;
@@ -4558,7 +4964,43 @@ export default function App() {
 
       <div className="flex justify-between items-center mt-2">
          <h3 className="font-bold text-slate-300 tracking-wide uppercase text-[10px]">Teams for {selectedFormat}</h3>
-         <button onClick={() => setShowAddTeamModal(true)} className="bg-[#e5c158]/10 hover:bg-[#e5c158]/20 px-3 py-2 rounded-lg text-[#e5c158] border border-[#e5c158]/30 text-xs font-bold flex items-center gap-1.5 transition-all"><Plus size={14}/> Add Team</button>
+         <div className="flex gap-2">
+            <button 
+               onClick={() => {
+                  if (window.confirm("WARNING: This will RESET all teams and UNLOCK all players to official defaults. Any custom teams you created will be preserved but missing ones will be added. Continue?")) {
+                     const defaultTeams = [
+                        { id: 'it1', name: 'Chennai Super Kings', shortName: 'CSK', color: 'bg-yellow-500', format: 'IPL' },
+                        { id: 'it2', name: 'Mumbai Indians', shortName: 'MI', color: 'bg-blue-600', format: 'IPL' },
+                        { id: 'it3', name: 'Royal Challengers Bangalore', shortName: 'RCB', color: 'bg-red-600', format: 'IPL' },
+                        { id: 'it4', name: 'Kolkata Knight Riders', shortName: 'KKR', color: 'bg-purple-800', format: 'IPL' },
+                        { id: 'it5', name: 'Sunrisers Hyderabad', shortName: 'SRH', color: 'bg-orange-500', format: 'IPL' },
+                        { id: 'it6', name: 'Rajasthan Royals', shortName: 'RR', color: 'bg-pink-600', format: 'IPL' },
+                        { id: 'it7', name: 'Gujarat Titans', shortName: 'GT', color: 'bg-slate-800', format: 'IPL' },
+                        { id: 'it8', name: 'Delhi Capitals', shortName: 'DC', color: 'bg-blue-800', format: 'IPL' },
+                        { id: 'it9', name: 'Lucknow Super Giants', shortName: 'LSG', color: 'bg-blue-400', format: 'IPL' },
+                        { id: 'it10', name: 'Punjab Kings', shortName: 'PBKS', color: 'bg-red-500', format: 'IPL' },
+                        { id: 't1', name: 'India', shortName: 'IND', color: 'bg-blue-600', format: 'T20' },
+                        { id: 't2', name: 'Pakistan', shortName: 'PAK', color: 'bg-green-600', format: 'T20' },
+                        { id: 't3', name: 'England', shortName: 'ENG', color: 'bg-red-600', format: 'T20' },
+                        { id: 't4', name: 'Australia', shortName: 'AUS', color: 'bg-yellow-500', format: 'T20' }
+                     ];
+                     
+                     setAppTeamsList(prev => {
+                        const existingKeys = new Set(prev.map(t => `${t.shortName}_${t.format}`));
+                        const toAdd = defaultTeams.filter(t => !existingKeys.has(`${t.shortName}_${t.format}`));
+                        return [...prev, ...toAdd];
+                     });
+                     
+                     setAppPlayers(MOCK_PLAYERS); // Force reset to full official list
+                     alert("Full Sync & Reset Complete! All IPL teams and India team are now populated with players.");
+                  }
+               }}
+               className="bg-blue-500/10 hover:bg-blue-500/20 px-3 py-2 rounded-lg text-blue-400 border border-blue-500/30 text-xs font-bold flex items-center gap-1.5 transition-all"
+            >
+               <RefreshCw size={14}/> Force Sync Defaults
+            </button>
+            <button onClick={() => setShowAddTeamModal(true)} className="bg-[#e5c158]/10 hover:bg-[#e5c158]/20 px-3 py-2 rounded-lg text-[#e5c158] border border-[#e5c158]/30 text-xs font-bold flex items-center gap-1.5 transition-all"><Plus size={14}/> Add Team</button>
+         </div>
       </div>
 
       <div className="grid grid-cols-1 gap-3">
@@ -4571,7 +5013,7 @@ export default function App() {
                  <div key={team.id} className={`bg-[#13151c] border ${isSelectedForMatch ? 'border-green-500 shadow-[0_0_10px_rgba(34,197,94,0.2)]' : 'border-slate-800'} rounded-xl overflow-hidden transition-all duration-300`}>
                     <div className="p-4 flex items-center justify-between cursor-pointer" onClick={() => setExpandedTeamId(isExpanded ? null : team.id)}>
                        <div className="flex items-center gap-3">
-                          <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-white shadow-inner overflow-hidden relative shrink-0 ${team.color}`}>
+                          <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-white shadow-inner overflow-hidden relative shrink-0 ${team?.color?.startsWith('bg-') ? team.color : ''}`} style={!team?.color?.startsWith('bg-') ? {backgroundColor: team?.color} : {}}>
                              {team.flagUrl ? (
                                  <img src={team.flagUrl} alt={team.shortName} className={`w-full h-full ${team.flagFit === 'contain' ? 'object-contain' : 'object-cover'}`} />
                              ) : (
@@ -4661,7 +5103,7 @@ export default function App() {
                                             setEditingPlayerId(p.id);
                                             setNewPlayerName(p.name);
                                             setNewPlayerRole(p.role as 'BAT' | 'BOWL' | 'AR' | 'WK');
-                                            setNewPlayerCredits(p.credits.toString());
+                                            setNewPlayerCredits((p.credits || 0).toString());
                                             setNewPlayerTeamShort(team.shortName);
                                             setShowTeamAddPlayerModal(true);
                                         }}
@@ -4726,27 +5168,13 @@ export default function App() {
          </div>
        </div>
        <div className="flex gap-2">
-         <input
-           type="text"
-           value={cricApiKey}
-           onChange={(e) => {
-             setCricApiKey(e.target.value);
-             localStorage.setItem('cricApiKey', e.target.value);
-           }}
-           placeholder="Enter CricAPI Key..."
-           className="w-full bg-black/50 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
-         />
          <button 
            onClick={async () => {
-             if (!cricApiKey) {
-               alert('Please enter a valid CricAPI Key to fetch real matches.');
-               return;
-             }
              setIsFetchingApi(true);
              setApiMatches([]);
              
              try {
-               const response = await fetch(`https://api.cricapi.com/v1/currentMatches?apikey=${cricApiKey}&offset=0`);
+               const response = await fetch(`/api/cricket/currentMatches?offset=0`);
                const data = await response.json();
                
                if (data.status !== 'success') {
@@ -4792,7 +5220,7 @@ export default function App() {
         <div className="mt-4 space-y-3 relative z-10">
            <h4 className="text-[10px] uppercase font-black tracking-widest text-slate-400 mb-2">Available Matches from API</h4>
            {apiMatches.map(m => {
-              const alreadyExists = appMatches.find(am => am.series === m.series && am.team1.shortFrame === m.team1.shortFrame && am.team2.shortFrame === m.team2.shortFrame);
+              const alreadyExists = appMatches.find(am => am.series === m.series && am?.team1?.shortFrame === m?.team1?.shortFrame && am?.team2?.shortFrame === m?.team2?.shortFrame);
               
               return (
                <div key={m.id} className="bg-black/60 border border-slate-700/50 p-3 rounded-xl flex items-center justify-between">
@@ -4802,7 +5230,7 @@ export default function App() {
                       <span className="text-[10px] text-slate-400">{m.series} • {m.time}</span>
                     </div>
                     <div className="font-bold text-sm text-white">
-                      {m.team1.shortFrame} <span className="text-slate-500 mx-1">vs</span> {m.team2.shortFrame}
+                      {m?.team1?.shortFrame} <span className="text-slate-500 mx-1">vs</span> {m?.team2?.shortFrame}
                     </div>
                   </div>
                   
@@ -5060,7 +5488,7 @@ export default function App() {
                                       >
                                           <div className="flex flex-col items-start gap-1">
                                               <span className="text-xs text-[#e5c158] font-bold">{match.series}</span>
-                                              <span className="font-bold text-slate-200">{match.team1.name} <span className="text-slate-500 font-normal">vs</span> {match.team2.name}</span>
+                                              <span className="font-bold text-slate-200">{match?.team1?.name} <span className="text-slate-500 font-normal">vs</span> {match?.team2?.name}</span>
                                           </div>
                                           <ChevronRight className="text-slate-500" size={20} />
                                       </button>
@@ -5072,15 +5500,15 @@ export default function App() {
                       const activeMatch = appMatches.find(m => m.id === adminScoringLiveMatchId);
                       if (!activeMatch) return null;
 
-                      const liveTeams = [activeMatch.team1.shortFrame, activeMatch.team2.shortFrame];
-                      const filteredPlayers = appPlayers.filter(p => liveTeams.includes(p.team) && (p.name.toLowerCase().includes(playerScoringSearch.toLowerCase()) || (p.team || '').toLowerCase().includes(playerScoringSearch.toLowerCase())));
+                      const liveTeams = [activeMatch?.team1?.shortFrame, activeMatch?.team2?.shortFrame];
+                      const filteredPlayers = appPlayers.filter(p => liveTeams.includes(p.team) && ((p.name || '').toLowerCase().includes((playerScoringSearch || '').toLowerCase()) || (p.team || '').toLowerCase().includes((playerScoringSearch || '').toLowerCase())));
 
                       return (
                           <>
                               <div className="mb-6 relative z-10">
                                 <div className="flex items-center gap-3 mb-4">
                                   <button onClick={() => setAdminScoringLiveMatchId(null)} className="p-1.5 bg-black/40 border border-slate-700 rounded-lg hover:border-[#e5c158]/50"><ArrowLeft size={16} className="text-slate-400" /></button>
-                                  <h3 className="font-bold text-slate-200">{activeMatch.team1.name} vs {activeMatch.team2.name}</h3>
+                                  <h3 className="font-bold text-slate-200">{activeMatch?.team1?.name} vs {activeMatch?.team2?.name}</h3>
                                 </div>
                                 <div className="flex items-center gap-2 bg-black/40 border border-slate-700/50 rounded-lg p-2.5">
                                   <Search size={16} className="text-slate-500" />
@@ -5113,7 +5541,7 @@ export default function App() {
                            return (
                              <tr key={p.id}>
                                <td className="p-3 font-bold text-slate-200">{p.name}</td>
-                               <td className="p-3 text-slate-400 font-mono">{(p.team || '').substring(0,3).toUpperCase()}</td>
+                               <td className="p-3 text-slate-400 font-mono">{String(p.team || '').substring(0,3).toUpperCase()}</td>
                                <td className="p-3 text-center text-slate-300">{p.points}</td>
                                <td className="p-3">
                                   <div className="flex items-center justify-center gap-2 bg-[#090b10] border border-slate-700 rounded p-1 w-24 mx-auto">
@@ -5256,151 +5684,6 @@ export default function App() {
 
              </>)}
 {adminTab === 'USERS' && (<>
-
-<button 
-      onClick={() => setShowManageUsers(!showManageUsers)}
-      className={`flex items-center justify-between w-full mt-4 bg-[#13151c] border ${showManageUsers ? 'border-[#e5c158]/30 rounded-t-xl border-b-0 mb-0 bg-gradient-to-b from-[#e5c158]/5 to-transparent' : 'border-slate-800 rounded-xl mb-3 hover:border-[#e5c158]/30'} p-4 shadow-lg transition-all relative group overflow-hidden`}
-    >
-        <div className="absolute inset-0 bg-gradient-to-r from-yellow-500/0 via-yellow-500/5 to-yellow-500/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000"></div>
-        <h3 className="font-bold text-slate-200 tracking-wide flex items-center justify-between z-10">Manage Users</h3>
-        <div className={`p-1.5 rounded-lg border transition-all z-10 ${showManageUsers ? 'text-black border-[#e5c158] bg-[#e5c158] shadow-[0_0_10px_rgba(229,193,88,0.5)]' : 'text-slate-500 border-slate-700 bg-black/40 group-hover:text-[#e5c158] group-hover:border-[#e5c158]/30'}`}>
-           {showManageUsers ? <ChevronUp size={16} strokeWidth={3} /> : <ChevronDown size={16} />}
-        </div>
-</button>
-
-{showManageUsers && (
-    <div className="bg-[#13151c] rounded-b-2xl shadow-lg border border-[#e5c158]/50 border-t-0 p-5 mb-6 backdrop-blur-sm relative before:absolute before:inset-0 before:bg-gradient-to-b before:from-yellow-500/5 before:to-transparent before:pointer-events-none">
-        <p className="text-xs text-slate-400 mb-5 pl-1 relative z-10">Search by User ID to access their wallet, block them, and see their teams.</p>
-        
-        <div className="relative z-10 flex gap-2 mb-6">
-            <input 
-                type="text" 
-                placeholder="Enter User ID..."
-                value={searchUserId}
-                onChange={e => setSearchUserId(e.target.value)}
-                className="bg-black/50 border border-slate-700 text-slate-200 px-4 py-2.5 rounded-xl w-full focus:outline-none focus:border-[#e5c158]/50 text-sm font-mono placeholder:text-slate-600"
-            />
-            <button 
-                onClick={async () => {
-                    if(!searchUserId.trim()) return;
-                    setIsSearchingUser(true);
-                    try {
-                        const wRef = doc(db, 'wallets', searchUserId.trim());
-                        const wDoc = await getDoc(wRef);
-                        if (wDoc.exists()) {
-                            setSearchedUserWallet({ id: searchUserId.trim(), ...wDoc.data() });
-                        } else {
-                            alert("No user wallet found for this ID.");
-                            setSearchedUserWallet(null);
-                        }
-                    } catch(e) {
-                        console.error(e);
-                        alert("Error finding user.");
-                    }
-                    setIsSearchingUser(false);
-                }}
-                disabled={isSearchingUser || !searchUserId.trim()}
-                className={`bg-[#e5c158] text-black px-5 py-2.5 rounded-xl font-bold active:scale-95 transition-transform flex items-center justify-center ${isSearchingUser ? 'opacity-70' : 'hover:bg-[#f0b90b]'}`}
-            >
-                {isSearchingUser ? '...' : <Search size={18} />}
-            </button>
-        </div>
-
-        {searchedUserWallet && (
-            <div className="relative z-10 bg-black/40 border border-slate-700 rounded-xl p-4">
-                <div className="flex justify-between items-start mb-4 border-b border-slate-700 pb-4">
-                    <div>
-                        <p className="text-[#e5c158] font-mono text-sm break-all font-bold tracking-tight">{searchedUserWallet.id}</p>
-                        <p className="text-xs text-slate-500 mt-1">User ID</p>
-                    </div>
-                    <button 
-                        onClick={async () => {
-                            const newBlockedStat = !searchedUserWallet.blocked;
-                            if (window.confirm(`Are you sure you want to ${newBlockedStat ? 'block' : 'unblock'} this user?`)) {
-                                await setDoc(doc(db, 'wallets', searchedUserWallet.id), { ...searchedUserWallet, blocked: newBlockedStat });
-                                setSearchedUserWallet({...searchedUserWallet, blocked: newBlockedStat});
-                            }
-                        }}
-                        className={`text-xs font-black uppercase px-4 py-2 rounded-lg border shadow-sm ${searchedUserWallet.blocked ? 'bg-[#153B25]/20 border-[#4ADE80]/50 text-[#4ADE80] hover:bg-[#153B25]/50' : 'bg-red-900/20 border-red-500/50 text-red-500 hover:bg-red-900/50'}`}
-                    >
-                        {searchedUserWallet.blocked ? 'Unblock User' : 'Block User'}
-                    </button>
-                </div>
-                
-                <h4 className="text-sm font-bold text-slate-300 mb-3">Wallet Editor</h4>
-                <div className="flex flex-col gap-3 mb-6 border-b border-slate-700 pb-6">
-                    {['deposit', 'winning', 'bonus'].map((type) => {
-                        const status = walletSaveStatus[type] || 'idle';
-                        return (
-                            <div key={type} className="bg-[#13151c] p-3 rounded-lg border border-slate-800 flex items-center justify-between gap-4">
-                                 <div className="flex-1">
-                                     <p className="text-xs text-slate-500 capitalize mb-2 font-bold">{type} Balance</p>
-                                     <div className="flex items-center gap-2">
-                                        <span className="text-slate-400 font-bold text-lg">₹</span>
-                                        <input 
-                                            type="number"
-                                            value={searchedUserWallet[type] === undefined ? '' : searchedUserWallet[type]}
-                                            onChange={(e) => {
-                                                const val = e.target.value === '' ? '' : parseFloat(e.target.value);
-                                                setSearchedUserWallet(prev => ({...prev, [type]: val}));
-                                            }}
-                                            className="bg-transparent border-b border-slate-700 font-black text-slate-200 outline-none focus:border-[#e5c158] w-full text-xl"
-                                        />
-                                     </div>
-                                 </div>
-                                 <button
-                                     onClick={async () => {
-                                         setWalletSaveStatus(prev => ({...prev, [type]: 'saving'}));
-                                         try {
-                                             const numVal = parseFloat(searchedUserWallet[type]) || 0;
-                                             await updateDoc(doc(db, 'wallets', searchedUserWallet.id), { [type]: numVal });
-                                             setWalletSaveStatus(prev => ({...prev, [type]: 'success'}));
-                                             setTimeout(() => {
-                                                 setWalletSaveStatus(prev => ({...prev, [type]: 'idle'}));
-                                             }, 2000);
-                                         } catch(e) {
-                                             console.error(e);
-                                             setWalletSaveStatus(prev => ({...prev, [type]: 'idle'}));
-                                             alert("Error updating wallet");
-                                         }
-                                     }}
-                                     disabled={status === 'saving'}
-                                     className={`px-6 py-3 mt-4 rounded-xl font-black text-sm shadow-lg transition-colors uppercase tracking-widest text-white shrink-0 outline-none focus:outline-none min-w-[100px] ${status === 'success' ? 'bg-[#4ADE80] border border-[#4ADE80]' : status === 'saving' ? 'bg-red-700/50 cursor-not-allowed' : 'bg-red-600 hover:bg-red-500 border border-red-500/50'}`}
-                                 >
-                                     {status === 'success' ? 'ADDED !' : status === 'saving' ? '...' : 'ADD'}
-                                 </button>
-                            </div>
-                        );
-                    })}
-                </div>
-
-                <h4 className="text-sm font-bold text-slate-300 mb-3">User's Joined Matches</h4>
-                <div className="space-y-2 max-h-60 overflow-y-auto pr-1 custom-scrollbar">
-                    {(() => {
-                        const userTeams = savedTeams.filter(t => t.userId === searchedUserWallet.id);
-                        if (userTeams.length === 0) return <p className="text-xs text-slate-500">No teams found for this user.</p>;
-                        
-                        return userTeams.map((st, i) => {
-                            const matchStat = appMatches.find(m => m.id === st.match.id)?.status || 'Upcoming';
-                            return (
-                                <div key={i} className="flex justify-between items-center p-3 bg-[#13151c] border border-slate-800 rounded-lg group hover:border-slate-700">
-                                    <div className="flex flex-col">
-                                        <span className="font-bold text-slate-200 text-sm">{st.match.team1.shortFrame} vs {st.match.team2.shortFrame}</span>
-                                        <span className="text-[10px] text-slate-500 mt-1">{st.contestName} • {matchStat}</span>
-                                    </div>
-                                    <div className="flex flex-col items-end">
-                                        <span className="font-black text-[#e5c158] text-sm">₹{st.fee}</span>
-                                        {st.amountWon > 0 && <span className="text-[10px] text-[#4ADE80] mt-1 font-bold">Won: ₹{st.amountWon}</span>}
-                                    </div>
-                                </div>
-                            );
-                        });
-                    })()}
-                </div>
-            </div>
-        )}
-    </div>
-)}
 
 
 <button 
@@ -5570,8 +5853,8 @@ export default function App() {
                                filledInstances.push({
                                    matchId: match.id,
                                    matchSeries: match.series,
-                                   team1: match.team1.shortFrame,
-                                   team2: match.team2.shortFrame,
+                                   team1: match?.team1?.shortFrame,
+                                   team2: match?.team2?.shortFrame,
                                    matchTime: match.time,
                                    contestName: contest.name,
                                    contestType: contest.type,
@@ -5615,7 +5898,7 @@ export default function App() {
                             <div className="flex -space-x-2 overflow-hidden py-1">
                                {inst.teams.map((t: any, idx: number) => (
                                    <div key={idx} className="inline-block h-6 w-6 rounded-full ring-2 ring-black bg-slate-800 text-[8px] flex items-center justify-center font-bold text-white shrink-0" title={t.userName}>
-                                      {t.userName.substring(0, 2).toUpperCase()}
+                                      {String(t.userName || t.userId || 'U').substring(0, 2).toUpperCase()}
                                    </div>
                                ))}
                                <span className="ml-4 text-[10px] text-slate-500 self-center font-bold">{inst.teams.length} Users Joined</span>
@@ -5629,6 +5912,155 @@ export default function App() {
    </div>
 </>)}
 {adminTab === 'FINANCIALS' && (<>
+   <div className="bg-[#13151c] rounded-2xl shadow-lg border border-[#e5c158]/20 p-5 mb-6 relative overflow-hidden backdrop-blur-sm">
+       <h3 className="font-bold text-slate-200 tracking-wide flex items-center gap-2 mb-6">
+           <BarChart2 size={18} className="text-[#e5c158]" /> Real-time Financial Breakdown
+       </h3>
+       
+       {(() => {
+           let totalRev = 0;
+           depositRequests.forEach(d => {
+               if (d.status === 'Approved') totalRev += parseFloat(d.amount?.toString() || '0');
+           });
+       
+           let totalPay = 0;
+           withdrawRequests.forEach(w => {
+               if (w.status === 'Approved') totalPay += parseFloat(w.amount?.toString() || '0');
+           });
+       
+           let margin = 0;
+           if (totalRev > 0) {
+               margin = ((totalRev - totalPay) / totalRev) * 100;
+           }
+
+           // Generate Monthly Data
+           const monthMap: Record<string, { name: string; revenue: number; payout: number }> = {};
+           
+           // Initialize last 6 months
+           for(let i=5; i>=0; i--) {
+               const d = new Date();
+               d.setMonth(d.getMonth() - i);
+               const monthName = d.toLocaleString('default', { month: 'short', year: '2-digit' });
+               monthMap[monthName] = { name: monthName, revenue: 0, payout: 0 };
+           }
+
+           depositRequests.forEach(d => {
+               if (d.status === 'Approved' && d.timestamp) {
+                   const date = new Date(d.timestamp);
+                   const mName = date.toLocaleString('default', { month: 'short', year: '2-digit' });
+                   if (monthMap[mName]) {
+                       monthMap[mName].revenue += parseFloat(d.amount?.toString() || '0');
+                   } else {
+                       monthMap[mName] = { name: mName, revenue: parseFloat(d.amount?.toString() || '0'), payout: 0 };
+                   }
+               }
+           });
+
+           withdrawRequests.forEach(w => {
+               if (w.status === 'Approved' && w.timestamp) {
+                   const date = new Date(w.timestamp);
+                   const mName = date.toLocaleString('default', { month: 'short', year: '2-digit' });
+                   if (monthMap[mName]) {
+                       monthMap[mName].payout += parseFloat(w.amount?.toString() || '0');
+                   } else {
+                       if (monthMap[mName]) {
+                           monthMap[mName].payout += parseFloat(w.amount?.toString() || '0');
+                       } else {
+                           monthMap[mName] = { name: mName, revenue: 0, payout: parseFloat(w.amount?.toString() || '0') };
+                       }
+                   }
+               }
+           });
+
+           // Sort the months chronologically
+           const monthlyData = Object.values(monthMap).sort((a,b) => {
+               const dateA = new Date('01 ' + a.name.replace("'", ""));
+               const dateB = new Date('01 ' + b.name.replace("'", ""));
+               return dateA.getTime() - dateB.getTime();
+           });
+
+           const formatFinance = (val: number) => {
+               if (val >= 100000) return `₹${(val / 100000).toFixed(2)} L`;
+               if (val >= 1000) return `₹${(val / 1000).toFixed(2)} K`;
+               return `₹${val.toFixed(0)}`;
+           };
+
+           return (
+               <>
+                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+                       <div className="bg-black/40 border border-[#3b82f6]/30 p-4 rounded-xl flex flex-col justify-center">
+                           <p className="text-slate-400 text-[10px] uppercase font-bold tracking-wider mb-1">Total Lifetime Revenue</p>
+                           <p className="text-2xl font-black text-[#3b82f6]">{formatFinance(totalRev)}</p>
+                       </div>
+                       <div className="bg-black/40 border border-[#eab308]/30 p-4 rounded-xl flex flex-col justify-center">
+                           <p className="text-slate-400 text-[10px] uppercase font-bold tracking-wider mb-1">Total Lifetime Payouts</p>
+                           <p className="text-2xl font-black text-[#eab308]">{formatFinance(totalPay)}</p>
+                       </div>
+                       <div className="bg-black/40 border border-[#22c55e]/30 p-4 rounded-xl flex flex-col justify-center">
+                           <p className="text-slate-400 text-[10px] uppercase font-bold tracking-wider mb-1">Net Margin</p>
+                           <p className="text-2xl font-black text-[#22c55e]">{margin.toFixed(2)}%</p>
+                       </div>
+                   </div>
+
+                   <div className="h-[250px] w-full">
+                       <p className="text-sm font-bold text-slate-300 mb-4">Monthly Revenue vs Payouts</p>
+                       <ResponsiveContainer width="100%" height="100%">
+                         <AreaChart data={monthlyData} margin={{ top: 5, right: 0, left: -20, bottom: 0 }}>
+                           <defs>
+                             <linearGradient id="colorRev" x1="0" y1="0" x2="0" y2="1">
+                               <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3}/>
+                               <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
+                             </linearGradient>
+                             <linearGradient id="colorPay" x1="0" y1="0" x2="0" y2="1">
+                               <stop offset="5%" stopColor="#eab308" stopOpacity={0.3}/>
+                               <stop offset="95%" stopColor="#eab308" stopOpacity={0}/>
+                             </linearGradient>
+                           </defs>
+                           <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
+                           <XAxis dataKey="name" stroke="#64748b" fontSize={10} tickMargin={10} axisLine={false} tickLine={false} />
+                           <YAxis stroke="#64748b" fontSize={10} tickFormatter={(value) => `₹${value >= 1000 ? (value/1000).toFixed(0) + 'k' : value}`} axisLine={false} tickLine={false} />
+                           <RechartsTooltip 
+                               contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '8px' }}
+                               itemStyle={{ color: '#e2e8f0', fontSize: '12px' }}
+                               labelStyle={{ color: '#94a3b8', fontSize: '12px', marginBottom: '4px' }}
+                               formatter={(value: number) => [`₹${value}`, '']}
+                           />
+                           <Area type="monotone" dataKey="revenue" name="Revenue" stroke="#3b82f6" strokeWidth={3} fillOpacity={1} fill="url(#colorRev)" />
+                           <Area type="monotone" dataKey="payout" name="Payouts" stroke="#eab308" strokeWidth={3} fillOpacity={1} fill="url(#colorPay)" />
+                         </AreaChart>
+                       </ResponsiveContainer>
+                   </div>
+               </>
+           );
+       })()}
+   </div>
+
+    <div className="mb-6 flex justify-end">
+        <button onClick={async () => {
+                 if (window.confirm("WARNING: This will permanently DELETE ALL deposit and withdrawal history. It will set Total Lifetime Revenue and Payouts to zero. Are you absolutely sure?")) {
+                     const confirmText = window.prompt("Type 'RESET' to confirm.");
+                     if (confirmText === 'RESET') {
+                         try {
+                              depositRequests.forEach(async (d) => {
+                                  await deleteDoc(doc(db, 'deposits', d.id));
+                              });
+                              withdrawRequests.forEach(async (w) => {
+                                  await deleteDoc(doc(db, 'withdrawals', w.id));
+                              });
+                              alert("System financial history has been completely wiped.");
+                         } catch (e) {
+                              console.error(e);
+                              alert("Failed to wipe data.");
+                         }
+                     } else {
+                         alert("Cancelled.");
+                     }
+                 }
+            }} className="bg-red-900/40 text-red-500 border border-red-900/50 hover:bg-red-900/60 transition-colors uppercase tracking-widest text-[10px] font-bold py-2 px-4 rounded-lg flex items-center gap-2">
+            <Trash2 size={14} /> Wipe All Financial History
+        </button>
+    </div>
+
 <button 
       onClick={() => setShowManageWithdrawals(!showManageWithdrawals)}
       className={`flex items-center justify-between w-full mt-4 bg-[#13151c] border ${showManageWithdrawals ? 'border-[#e5c158]/30 rounded-t-xl border-b-0 mb-0 bg-gradient-to-b from-[#e5c158]/5 to-transparent' : 'border-slate-800 rounded-xl mb-3 hover:border-[#e5c158]/30'} p-4 shadow-lg transition-all relative group overflow-hidden`}
@@ -5807,13 +6239,13 @@ export default function App() {
                                  className="bg-black/60 border border-slate-700 hover:border-[#e5c158]/30 rounded-xl p-4 flex justify-between items-center cursor-pointer transition-colors"
                                >
                                  <div className="flex flex-col">
-                                    <span className="font-bold text-slate-200 text-sm">{match.series} ({match.team1.shortFrame} vs {match.team2.shortFrame})</span>
+                                    <span className="font-bold text-slate-200 text-sm">{match.series} ({match?.team1?.shortFrame} vs {match?.team2?.shortFrame})</span>
                                     <span className={`text-[10px] font-black uppercase tracking-widest mt-2 w-fit px-2 py-1 rounded-sm border ${match.status === 'Live' ? 'bg-red-900/40 text-red-500 border-red-500/50 shadow-[0_0_8px_rgba(239,68,68,0.2)] animate-pulse' : match.status === 'Completed' ? 'bg-green-900/30 text-green-400 border-green-500/30' : 'bg-blue-900/30 text-blue-400 border-blue-500/30'}`}>
                                        {match.status}
                                     </span>
                                  </div>
                                  <span className="text-[10px] font-black tracking-widest bg-black border border-slate-700 px-3 py-1.5 rounded-lg text-[#e5c158]/70 shadow-inner">
-                                    {savedTeams.filter(t => t.match.id === match.id).length} TEAMS
+                                    {savedTeams.filter(t => t.match?.id === match.id).length} TEAMS
                                  </span>
                                </div>
                            ))}
@@ -5839,9 +6271,9 @@ export default function App() {
                         
                         <div className="space-y-4 relative z-10">
                            {(() => {
-                              const matchTeams = savedTeams.filter(t => t.match.id === adminTeamEditMatchId && t.userId !== 'admin_bot' && t.userId !== 'admin_bot_boot');
+                              const matchTeams = savedTeams.filter(t => t.match?.id === adminTeamEditMatchId && t.userId !== 'admin_bot' && t.userId !== 'admin_bot_boot');
                               const filtered = matchTeams
-                                .filter((st) => st.userId?.toLowerCase().includes(teamSearchQuery.toLowerCase()) || st.teamId?.toLowerCase().includes(teamSearchQuery.toLowerCase()));
+                                .filter((st) => String(st.userId || '').toLowerCase().includes(teamSearchQuery.toLowerCase()) || String(st.teamId || '').toLowerCase().includes(teamSearchQuery.toLowerCase()));
                                 
                               if (matchTeams.length === 0) return <p className="text-sm font-bold text-slate-500 text-center py-6 bg-black/40 border border-slate-700 rounded-xl">No user teams for this match.</p>;
                               if (filtered.length === 0) return <p className="text-sm font-bold text-slate-500 text-center py-6 bg-black/40 border border-slate-700 rounded-xl">No results for "{teamSearchQuery}"</p>;
@@ -5849,7 +6281,7 @@ export default function App() {
                               return filtered.map((st, actIdx) => (
                                  <div key={st.id || actIdx} className="bg-black/60 border border-slate-700 rounded-xl p-4 text-sm transition-colors hover:border-[#e5c158]/30">
                                     <div className="flex justify-between items-center font-bold text-slate-200 mb-3 pb-2 border-b border-yellow-500/10">
-                                       <span className="flex-1 truncate pr-2">{st.match.series} ({st.match.team1.shortFrame} vs {st.match.team2.shortFrame})</span>
+                                       <span className="flex-1 truncate pr-2">{st.match?.series} ({st.match?.team1?.shortFrame} vs {st.match?.team2?.shortFrame})</span>
                                        <span className="text-[#e5c158] bg-[#e5c158]/10 border border-[#e5c158]/20 px-2 py-1 rounded text-[10px] tracking-widest">{st.userId}</span>
                                     </div>
                                     <div className="text-xs text-slate-400 mb-3 flex justify-between">
@@ -5865,9 +6297,12 @@ export default function App() {
                                           const realIndex = savedTeams.findIndex(orig => orig.id === st.id);
                                           setEditingSavedTeamIndex(realIndex);
                                           setActiveMatch(st.match);
-                                          setTeam(st.players);
-                                          setCaptain(st.captain);
-                                          setViceCaptain(st.viceCaptain);
+                                          setTeam(st.players || []);
+                                          setCaptain(st.captain || null);
+                                          setViceCaptain(st.viceCaptain || null);
+                                          const cMatch = appContests.find(cc => cc.name === st.contestName);
+                                          if (cMatch) setActiveContestDetails(cMatch);
+                                          setActiveContestInstanceId(st.instanceId);
                                           setSelectedContest({ fee: st.fee, name: st.contestName });
                                           setView('CREATE_TEAM');
                                        }}
@@ -5911,13 +6346,13 @@ export default function App() {
                          >
                            <div className="flex items-center gap-4">
                              <div className="flex items-center gap-2">
-                               <div className="w-6 h-6 rounded-full border border-[#e5c158]/30 shadow-sm" style={{backgroundColor: match.team1.color}}></div>
-                               <span className="font-bold text-slate-200 text-sm tracking-wide">{match.team1.shortFrame}</span>
+                               <div className="w-6 h-6 rounded-full border border-[#e5c158]/30 shadow-sm" style={{backgroundColor: match?.team1?.color}}></div>
+                               <span className="font-bold text-slate-200 text-sm tracking-wide">{match?.team1?.shortFrame}</span>
                              </div>
                              <span className="text-slate-500 text-xs font-black tracking-widest uppercase">vs</span>
                              <div className="flex items-center gap-2">
-                               <span className="font-bold text-slate-200 text-sm tracking-wide">{match.team2.shortFrame}</span>
-                               <div className="w-6 h-6 rounded-full border border-[#e5c158]/30 shadow-sm" style={{backgroundColor: match.team2.color}}></div>
+                               <span className="font-bold text-slate-200 text-sm tracking-wide">{match?.team2?.shortFrame}</span>
+                               <div className="w-6 h-6 rounded-full border border-[#e5c158]/30 shadow-sm" style={{backgroundColor: match?.team2?.color}}></div>
                              </div>
                            </div>
                            <ArrowRight size={18} className="text-[#e5c158]/70" />
@@ -5938,12 +6373,12 @@ export default function App() {
                      {(() => {
                        const match = appMatches.find(m => m.id === adminLiveMatchId);
                        if (!match) return null;
-                       const matchPlayers = appPlayers.filter(p => p.team === match.team1.shortFrame || p.team === match.team2.shortFrame);
+                       const matchPlayers = appPlayers.filter(p => p.team === match?.team1?.shortFrame || p.team === match?.team2?.shortFrame);
                        return (
                          <>
                            <div className="flex items-center gap-3 mb-5 pb-4 border-b border-[#e5c158]/20">
                              <button onClick={() => setAdminLiveMatchId(null)} className="p-1.5 rounded-lg bg-black border border-slate-700 hover:border-[#e5c158]/50 hover:text-[#e5c158] transition-colors text-slate-300"><ArrowLeft size={16}/></button>
-                             <h4 className="font-bold text-slate-200 text-sm">{match.team1.shortFrame} vs {match.team2.shortFrame} Control</h4>
+                             <h4 className="font-bold text-slate-200 text-sm">{match?.team1?.shortFrame} vs {match?.team2?.shortFrame} Control</h4>
                            </div>
                            <p className="text-xs text-slate-400 mb-5 pl-1">Award real-time points. Leaderboards and user dashboards will update instantly.</p>
                            
@@ -6048,13 +6483,13 @@ export default function App() {
                          >
                            <div className="flex items-center gap-4">
                              <div className="flex items-center gap-2">
-                               <div className="w-6 h-6 rounded-full border border-[#e5c158]/30 shadow-sm" style={{backgroundColor: match.team1.color}}></div>
-                               <span className="font-bold text-slate-200 text-sm tracking-wide">{match.team1.shortFrame}</span>
+                               <div className="w-6 h-6 rounded-full border border-[#e5c158]/30 shadow-sm" style={{backgroundColor: match?.team1?.color}}></div>
+                               <span className="font-bold text-slate-200 text-sm tracking-wide">{match?.team1?.shortFrame}</span>
                              </div>
                              <span className="text-slate-500 text-xs font-black tracking-widest uppercase">vs</span>
                              <div className="flex items-center gap-2">
-                               <span className="font-bold text-slate-200 text-sm tracking-wide">{match.team2.shortFrame}</span>
-                               <div className="w-6 h-6 rounded-full border border-[#e5c158]/30 shadow-sm" style={{backgroundColor: match.team2.color}}></div>
+                               <span className="font-bold text-slate-200 text-sm tracking-wide">{match?.team2?.shortFrame}</span>
+                               <div className="w-6 h-6 rounded-full border border-[#e5c158]/30 shadow-sm" style={{backgroundColor: match?.team2?.color}}></div>
                              </div>
                            </div>
                            <div className="flex items-center gap-4">
@@ -6084,12 +6519,12 @@ export default function App() {
                      {(() => {
                        const match = appMatches.find(m => m.id === adminUpcomingLineupMatchId);
                        if (!match) return null;
-                       const matchPlayers = appPlayers.filter(p => p.team === match.team1.shortFrame || p.team === match.team2.shortFrame);
+                       const matchPlayers = appPlayers.filter(p => p.team === match?.team1?.shortFrame || p.team === match?.team2?.shortFrame);
                        return (
                          <>
                            <div className="flex items-center gap-3 mb-5 pb-4 border-b border-[#e5c158]/20">
                              <button onClick={() => setAdminUpcomingLineupMatchId(null)} className="p-1.5 rounded-lg bg-black border border-slate-700 hover:border-[#e5c158]/50 hover:text-[#e5c158] transition-colors text-slate-300"><ArrowLeft size={16}/></button>
-                             <h4 className="font-bold text-slate-200 text-sm">{match.team1.shortFrame} vs {match.team2.shortFrame} - Lineups</h4>
+                             <h4 className="font-bold text-slate-200 text-sm">{match?.team1?.shortFrame} vs {match?.team2?.shortFrame} - Lineups</h4>
                            </div>
                            <p className="text-xs text-slate-400 mb-5 pl-1">Select players that are playing. They will get a green tick. Unselected players will have a red dot.</p>
                            
@@ -6130,7 +6565,7 @@ export default function App() {
     );
   };
 
-  if (wallet?.blocked) {
+  if (wallet?.blocked && !isAdmin) {
      return (
         <div className={`relative h-[100dvh] w-full max-w-md mx-auto bg-app-bg text-app-text font-sans shadow-2xl overflow-hidden border-x border-app-border flex flex-col items-center justify-center p-8 text-center ${themeMode === 'Light' ? 'theme-light' : ''} color-${themeColor.toLowerCase()}`}>
            <Shield size={64} className="text-red-500 mb-4" />
@@ -6142,8 +6577,30 @@ export default function App() {
   }
 
   return (
-    <div className={`relative h-[100dvh] w-full max-w-md mx-auto bg-app-bg text-app-text font-sans shadow-2xl overflow-hidden border-x border-app-border ${themeMode === 'Light' ? 'theme-light' : ''} color-${themeColor.toLowerCase()}`}>
+    <ErrorBoundary>
+      <div className={`relative h-[100dvh] w-full max-w-md mx-auto bg-app-bg text-app-text font-sans shadow-2xl overflow-hidden border-x border-app-border ${themeMode === 'Light' ? 'theme-light' : ''} color-${themeColor.toLowerCase()}`}>
 <>
+        {/* Quota Exceeded Modal */}
+        {firestoreQuotaExceeded && (
+          <div className="absolute inset-0 z-[10000] flex items-center justify-center p-4">
+             <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setFirestoreQuotaExceeded(false)} />
+             <div className="bg-[#1e293b] border border-red-500/50 rounded-2xl p-6 shadow-2xl relative z-10 w-full">
+                <div className="w-16 h-16 bg-red-500/10 rounded-full flex items-center justify-center mx-auto mb-4 border border-red-500/20">
+                   <AlertCircle size={32} className="text-red-500" />
+                </div>
+                <h3 className="text-xl font-bold text-white text-center mb-2">Daily Limit Reached</h3>
+                <p className="text-slate-400 text-center text-sm mb-6">
+                  Firebase free plan daily limit exceeded (Quota Exceeded). Updates might not sync to the cloud for the next 24 hours. Your local data (players, teams) is safe and saved on your device.
+                </p>
+                <button 
+                  onClick={() => setFirestoreQuotaExceeded(false)}
+                  className="w-full bg-slate-700 hover:bg-slate-600 text-white font-bold py-3 rounded-xl transition-colors"
+                >
+                  OK, Got it
+                </button>
+             </div>
+          </div>
+        )}
         {showAddFlagModal && (
             <div className="absolute inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 min-h-[100dvh]">
                 <div className="bg-[#13151c] border border-slate-700 w-full rounded-2xl p-6 shadow-2xl relative">
@@ -6383,8 +6840,8 @@ export default function App() {
                               
                               const newMatchObj: Match = {
                                   id: 'm' + Date.now(),
-                                  team1: { name: selectedTeamsForMatch[0].name, shortFrame: selectedTeamsForMatch[0].shortName, color: selectedTeamsForMatch[0].color.replace('bg-', 'text-'), flagUrl: selectedTeamsForMatch[0].flagUrl, flagFit: selectedTeamsForMatch[0].flagFit },
-                                  team2: { name: selectedTeamsForMatch[1].name, shortFrame: selectedTeamsForMatch[1].shortName, color: selectedTeamsForMatch[1].color.replace('bg-', 'text-'), flagUrl: selectedTeamsForMatch[1].flagUrl, flagFit: selectedTeamsForMatch[1].flagFit },
+                                  team1: { name: selectedTeamsForMatch[0].name, shortFrame: selectedTeamsForMatch[0].shortName, color: (selectedTeamsForMatch[0].color || 'bg-slate-800').replace('bg-', 'text-'), flagUrl: selectedTeamsForMatch[0].flagUrl, flagFit: selectedTeamsForMatch[0].flagFit },
+                                  team2: { name: selectedTeamsForMatch[1].name, shortFrame: selectedTeamsForMatch[1].shortName, color: (selectedTeamsForMatch[1].color || 'bg-slate-800').replace('bg-', 'text-'), flagUrl: selectedTeamsForMatch[1].flagUrl, flagFit: selectedTeamsForMatch[1].flagFit },
                                   time: formattedLabel,
                                   series: selectedFormat + ' Series',
                                   status: 'Upcoming' as const,
@@ -6427,11 +6884,16 @@ export default function App() {
             isAdmin={isAdmin}
             onMakeBotsWin={() => {
                 if (window.confirm("Are you sure you want to force all bots to win this contest? This will recalculate rankings immediately.")) {
-                    setSavedTeams(prev => prev.map(t => 
-                        (t.userId === 'admin_bot' || t.userId === 'admin_bot_boot') && t.match?.id === activeMatch.id && t.contestName === activeContestDetails.name
-                        ? { ...t, isWinnerBot: true } 
-                        : t
-                    ));
+                    setSavedTeams(prev => {
+                        const newTeams = prev.map(t => 
+                            (t.userId === 'admin_bot' || t.userId === 'admin_bot_boot') && t.match?.id === activeMatch?.id && t.contestName === activeContestDetails.name
+                            ? { ...t, isWinnerBot: true } 
+                            : t
+                        );
+                        const adminTeams = newTeams.filter(t => t.userId === 'admin_bot' || t.userId === 'admin_bot_boot');
+                        setDoc(doc(db, 'gameData', 'main_state'), JSON.parse(JSON.stringify({ adminTeams })), { merge: true }).catch(console.error);
+                        return newTeams;
+                    });
                     alert("Bots in this contest are now set as winners!");
                 }
             }}
@@ -6461,6 +6923,456 @@ export default function App() {
       {view === 'NOTIFICATIONS' && renderPlaceholder('Notifications', <Bell size={60} />, 'Catch all the latest match updates and lineup announcements here.')}
       {view === 'PROFILE' && renderProfile()}
       {view === 'ADMIN' && renderAdminPanel()}
+
+      {adminProfileModalUser && (
+        <div className="absolute inset-0 z-[200] bg-app-bg text-app-text flex flex-col font-sans overflow-hidden max-w-md mx-auto">
+            <header className="p-4 flex items-center justify-between pb-2">
+                <div className="flex items-center gap-2">
+                    <div className="w-2 h-2 rounded-full bg-app-accent"></div>
+                    <h1 className="text-xl font-bold">Fantasy11</h1>
+                </div>
+                <h2 className="text-lg font-bold mx-auto pr-8">Profile</h2>
+                <button onClick={() => setAdminProfileModalUser(null)} className="text-app-text-muted"><ArrowLeft/></button>
+            </header>
+            <div className="p-4 flex-1 overflow-y-auto pb-20">
+                <div className="bg-app-accent rounded-xl shadow-sm p-5 flex flex-col mb-4 text-white">
+                    <div className="flex items-center gap-4">
+                        <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center text-3xl font-bold shadow-inner uppercase">
+                            {adminProfileModalUser.name?.charAt(0) || 'U'}
+                        </div>
+                        <div className="flex flex-col">
+                            <h2 className="text-xl font-bold uppercase">{adminProfileModalUser.name || 'User'}</h2>
+                            <p className="text-sm opacity-90 mb-2 font-mono truncate max-w-[200px]">ID: {adminProfileModalUser.numericId || adminProfileModalUser.id}</p>
+                            <div className="flex items-center gap-2">
+                                <span className="bg-yellow-500 text-black text-[10px] px-2 py-0.5 rounded flex items-center font-bold">⚡ Level {Math.floor((savedTeams.filter(t => t.userId === adminProfileModalUser.id).length) / 10)}</span>
+                                <span className="text-xs font-bold text-white/90">{(savedTeams.filter(t => t.userId === adminProfileModalUser.id).length) % 10} / 10 to Lvl {Math.floor((savedTeams.filter(t => t.userId === adminProfileModalUser.id).length) / 10) + 1}</span>
+                            </div>
+                            <div className="w-full bg-black/30 h-1.5 rounded-full overflow-hidden mt-1">
+                                <div className="bg-yellow-500 h-full rounded-full" style={{ width: `${((savedTeams.filter(t => t.userId === adminProfileModalUser.id).length) % 10) * 10}%` }}></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3 mb-6">
+                    <div className="bg-app-card rounded-xl flex-1 p-3 flex flex-col items-center justify-center border border-app-border shadow-sm">
+                        <span className="text-2xl font-bold">{savedTeams.filter(t => t.userId === adminProfileModalUser.id).length}</span>
+                        <span className="text-[10px] text-app-text-muted mt-1 text-center font-medium uppercase tracking-wider">Matches<br/>Played</span>
+                    </div>
+                    <div className="bg-app-card rounded-xl flex-1 p-3 flex flex-col items-center justify-center border border-app-border shadow-sm">
+                        <span className="text-2xl font-bold">{savedTeams.filter(t => t.userId === adminProfileModalUser.id).length > 0 ? Math.round((adminProfileModalUser.wins || 0) / savedTeams.filter(t => t.userId === adminProfileModalUser.id).length * 100) : 0}%</span>
+                        <span className="text-[10px] text-app-text-muted mt-1 text-center font-medium uppercase tracking-wider">Winning<br/>Rate</span>
+                    </div>
+                    <div className="bg-app-card rounded-xl flex-1 p-3 flex flex-col items-center justify-center border border-app-border shadow-sm col-span-2">
+                        <span className="text-3xl font-black text-[#4ADE80]">₹{Number(adminProfileModalUser.winning || 0).toLocaleString('en-IN')}</span>
+                        <span className="text-xs text-app-text-muted mt-1 text-center font-bold uppercase tracking-wider">Total Profit Earned</span>
+                    </div>
+                </div>
+
+                <h3 className="font-bold text-sm mb-3">Admin Controls</h3>
+                
+                {/* Block/Unblock */}
+                <div className="bg-app-card rounded-xl shadow-sm border border-app-border overflow-hidden p-4 mb-4 flex items-center justify-between">
+                    <div>
+                        <div className="font-bold text-sm flex items-center gap-2"><Shield size={16}/> Account Status</div>
+                        <div className="text-xs text-app-text-muted font-medium mt-1">Restrict user access to the app</div>
+                    </div>
+                    <button 
+                        onClick={async () => {
+                            const newBlockedStat = !adminProfileModalUser.blocked;
+                            await setDoc(doc(db, 'wallets', adminProfileModalUser.id), { ...adminProfileModalUser, blocked: newBlockedStat }, { merge: true });
+                            setAdminProfileModalUser({...adminProfileModalUser, blocked: newBlockedStat});
+                            // also update local list right away if possible by forcing reload or just waiting for snapshot
+                        }}
+                        className={`text-xs font-black uppercase px-4 py-2 rounded-lg border shadow-sm ${adminProfileModalUser.blocked ? 'bg-[#153B25]/20 border-[#4ADE80]/50 text-[#4ADE80] hover:bg-[#153B25]/50' : 'bg-red-900/20 border-red-500/50 text-red-500 hover:bg-red-900/50'}`}
+                    >
+                        {adminProfileModalUser.blocked ? 'Unblock' : 'Block User'}
+                    </button>
+                </div>
+
+                {/* Wallet Control */}
+                <div className="bg-[#13151c] rounded-2xl shadow-lg border border-[#e5c158]/20 p-5 mt-4 relative overflow-hidden backdrop-blur-sm">
+                    <div className="absolute top-0 right-0 bg-yellow-500 text-black text-[9px] uppercase tracking-widest font-black px-3 py-1 rounded-bl-xl shadow-[0_0_10px_rgba(234,179,8,0.5)]">VIP ACCESS</div>
+                    <div className="flex justify-between items-center mb-4 mt-2">
+                       <div>
+                          <p className="font-bold text-slate-200">{adminProfileModalUser.name || 'User'}</p>
+                          <p className="text-xs text-[#e5c158]/70 font-mono truncate max-w-[150px]">{adminProfileModalUser.email || adminProfileModalUser.id}</p>
+                       </div>
+                       <div className="text-right">
+                          <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-0.5">Wallet Balance</p>
+                          <p className="font-black text-xl text-[#e5c158] drop-shadow-[0_0_8px_rgba(234,179,8,0.4)]">₹{((adminProfileModalUser.deposit||0) + (adminProfileModalUser.winning||0) + (adminProfileModalUser.bonus||0)).toFixed(2)}</p>
+                       </div>
+                    </div>
+                    <div className="flex flex-col gap-3">
+                       <div className="flex flex-col gap-2">
+                          <input 
+                             type="text" 
+                             placeholder="Enter money to add/deduct (₹)" 
+                             value={adminCustomAmount}
+                             onChange={(e) => setAdminCustomAmount(e.target.value)}
+                             className="flex-1 bg-black/50 border border-[#e5c158]/30 rounded-xl px-4 py-3 text-sm font-semibold text-slate-200 outline-none focus:border-yellow-500 focus:shadow-[0_0_10px_rgba(234,179,8,0.2)] transition-all"
+                          />
+                          <div className="grid grid-cols-3 gap-2">
+                             <button onClick={async () => {
+                                 const sanitized = adminCustomAmount.toString().replace(/[^\d.]/g, '');
+                                 const amt = parseFloat(sanitized);
+                                 if (!isNaN(amt) && amt > 0) {
+                                     const newVal = (adminProfileModalUser.deposit || 0) + amt;
+                                     try {
+                                         await setDoc(doc(db, 'wallets', adminProfileModalUser.id), { deposit: newVal }, { merge: true });
+                                         
+                                         // Create an approved deposit request record for history
+                                         const depId = `DEP_${Date.now()}_${adminProfileModalUser.id}`;
+                                         await setDoc(doc(db, 'deposits', depId), {
+                                            id: depId,
+                                            userId: adminProfileModalUser.id,
+                                            amount: amt,
+                                            status: 'Approved',
+                                            timestamp: new Date().toLocaleString(),
+                                            type: 'Admin Credit'
+                                         });
+
+                                         setAdminProfileModalUser({...adminProfileModalUser, deposit: newVal});
+                                         setAdminCustomAmount('');
+                                         alert(`₹${amt} added to Deposit`);
+                                     } catch(e) { console.error(e); alert("Failed to add funds"); }
+                                 }
+                             }} className="bg-blue-500/20 text-blue-400 border border-blue-500/50 py-2.5 rounded-xl text-xs font-bold hover:bg-blue-500/30 transition-colors">+ Deposit</button>
+                             
+                             <button onClick={async () => {
+                                 const sanitized = adminCustomAmount.toString().replace(/[^\d.]/g, '');
+                                 const amt = parseFloat(sanitized);
+                                 if (!isNaN(amt) && amt > 0) {
+                                     const newVal = (adminProfileModalUser.winning || 0) + amt;
+                                     try {
+                                         await setDoc(doc(db, 'wallets', adminProfileModalUser.id), { winning: newVal }, { merge: true });
+                                         
+                                         // Create an approved deposit request record for history (using deposits collection for visibility)
+                                         const depId = `WIN_${Date.now()}_${adminProfileModalUser.id}`;
+                                         await setDoc(doc(db, 'deposits', depId), {
+                                            id: depId,
+                                            userId: adminProfileModalUser.id,
+                                            amount: amt,
+                                            status: 'Approved',
+                                            timestamp: new Date().toLocaleString(),
+                                            type: 'Bonus/Winnings'
+                                         });
+
+                                         setAdminProfileModalUser({...adminProfileModalUser, winning: newVal});
+                                         setAdminCustomAmount('');
+                                         alert(`₹${amt} added to Winning`);
+                                     } catch(e) { console.error(e); alert("Failed to add funds"); }
+                                 }
+                             }} className="bg-green-500/20 text-green-400 border border-green-500/50 py-2.5 rounded-xl text-xs font-bold hover:bg-green-500/30 transition-colors">+ Winning</button>
+                             
+                             <button onClick={async () => {
+                                 const sanitized = adminCustomAmount.toString().replace(/[^\d.]/g, '');
+                                 const amt = parseFloat(sanitized);
+                                 if (!isNaN(amt) && amt > 0) {
+                                     const newVal = (adminProfileModalUser.bonus || 0) + amt;
+                                     try {
+                                         await setDoc(doc(db, 'wallets', adminProfileModalUser.id), { bonus: newVal }, { merge: true });
+                                         
+                                         // Create an approved record for history
+                                         const depId = `BON_${Date.now()}_${adminProfileModalUser.id}`;
+                                         await setDoc(doc(db, 'deposits', depId), {
+                                            id: depId,
+                                            userId: adminProfileModalUser.id,
+                                            amount: amt,
+                                            status: 'Approved',
+                                            timestamp: new Date().toLocaleString(),
+                                            type: 'Bonus Added'
+                                         });
+
+                                         setAdminProfileModalUser({...adminProfileModalUser, bonus: newVal});
+                                         setAdminCustomAmount('');
+                                         alert(`₹${amt} added to Bonus`);
+                                     } catch(e) { console.error(e); alert("Failed to add funds"); }
+                                 }
+                             }} className="bg-purple-500/20 text-purple-400 border border-purple-500/50 py-2.5 rounded-xl text-xs font-bold hover:bg-purple-500/30 transition-colors">+ Bonus</button>
+                          </div>
+                          
+                          <button 
+                             onClick={async () => {
+                                const sanitized = adminCustomAmount.toString().replace(/[^\d.]/g, '');
+                                const amt = parseFloat(sanitized);
+                                if (!isNaN(amt) && amt > 0) {
+                                   let rem = amt;
+                                   let nDep = adminProfileModalUser.deposit || 0;
+                                   let nWin = adminProfileModalUser.winning || 0;
+                                   let nBon = adminProfileModalUser.bonus || 0;
+                                   
+                                   if (nDep >= rem) { nDep -= rem; rem = 0; }
+                                   else { rem -= nDep; nDep = 0; }
+                                   
+                                   if (rem > 0 && nWin >= rem) { nWin -= rem; rem = 0; }
+                                   else if (rem > 0) { rem -= nWin; nWin = 0; }
+
+                                   if (rem > 0 && nBon >= rem) { nBon -= rem; rem = 0; }
+                                   else if (rem > 0) { rem -= nBon; nBon = 0; }
+                                   
+                                   try {
+                                       await setDoc(doc(db, 'wallets', adminProfileModalUser.id), { deposit: nDep, winning: nWin, bonus: nBon }, { merge: true });
+                                       
+                                       // Create a withdrawal record for history
+                                       const wId = `WD_${Date.now()}_${adminProfileModalUser.id}`;
+                                       await setDoc(doc(db, 'withdrawals', wId), {
+                                          id: wId,
+                                          userId: adminProfileModalUser.id,
+                                          amount: amt,
+                                          status: 'Approved',
+                                          timestamp: new Date().toLocaleString(),
+                                          type: 'Admin Deduction'
+                                       });
+
+                                       setAdminProfileModalUser({...adminProfileModalUser, deposit: nDep, winning: nWin, bonus: nBon});
+                                       setAdminCustomAmount('');
+                                   } catch(e) { console.error(e); alert("Failed to deduct funds"); }
+                                }
+                             }} 
+                             className="w-full bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/50 py-2.5 rounded-xl text-sm font-bold transition-colors mt-1"
+                          >
+                             - Deduct Total Funds
+                          </button>
+                       </div>
+                       <button onClick={async () => {
+                          if (window.confirm("Are you sure you want to wipe this user's wallet to 0?")) {
+                             try {
+                                 await updateDoc(doc(db, 'wallets', adminProfileModalUser.id), { deposit: 0, winning: 0, bonus: 0, profits: 0, wins: 0 });
+                                 setAdminProfileModalUser({...adminProfileModalUser, deposit: 0, winning: 0, bonus: 0, profits: 0, wins: 0});
+                             } catch(e) { console.error(e); alert("Failed to wipe funds"); }
+                          }
+                       }} className="w-full bg-black/40 hover:bg-black/60 text-slate-400 border border-slate-700 py-2.5 rounded-xl text-sm font-bold transition-colors">Wipe Wallet to 0</button>
+
+                        <div className="pt-2 border-t border-app-border mt-1 flex justify-between gap-1">
+                            <div className="flex-1 bg-black/20 p-2 rounded flex flex-col items-center">
+                               <span className="text-[9px] uppercase text-app-text-muted font-bold">Deposit</span>
+                               <span className="font-mono text-xs">₹{adminProfileModalUser.deposit || 0}</span>
+                            </div>
+                            <div className="flex-1 bg-black/20 p-2 rounded flex flex-col items-center">
+                               <span className="text-[9px] uppercase text-app-text-muted font-bold">Winning</span>
+                               <span className="font-mono text-xs">₹{adminProfileModalUser.winning || 0}</span>
+                            </div>
+                            <div className="flex-1 bg-black/20 p-2 rounded flex flex-col items-center">
+                               <span className="text-[9px] uppercase text-app-text-muted font-bold">Bonus</span>
+                               <span className="font-mono text-xs">₹{adminProfileModalUser.bonus || 0}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+      )}
+
+      {showDashboardUsers && (
+        <div className="absolute inset-0 z-[200] bg-app-bg text-app-text flex flex-col font-sans overflow-hidden max-w-md mx-auto">
+            <header className="p-4 flex items-center justify-between pb-2">
+                <div className="flex items-center gap-2">
+                    <div className="w-2 h-2 rounded-full bg-app-accent"></div>
+                    <h1 className="text-xl font-bold">Dream11 VIP</h1>
+                </div>
+                <h2 className="text-lg font-bold mx-auto pr-8">Users</h2>
+                <button onClick={() => setShowDashboardUsers(false)} className="text-app-text-muted"><X/></button>
+            </header>
+            <div className="px-4 pb-2 pt-1 border-b border-app-border flex gap-2 w-full">
+               <input 
+                type="text" 
+                placeholder="Enter User ID to Search..."
+                value={searchUserId}
+                onChange={e => setSearchUserId(e.target.value)}
+                className="bg-black/50 border border-app-border text-app-text px-4 py-2.5 rounded-xl w-full focus:outline-none focus:border-app-accent text-sm font-mono placeholder:text-app-text-muted"
+               />
+               <button 
+                onClick={async () => {
+                    const searchId = searchUserId.trim();
+                    if(!searchId) return;
+                    setIsSearchingUser(true);
+                    try {
+                        const userRec = adminUserList.find(u => 
+                             u.id === searchId || 
+                             String(u.numericId) === searchId ||
+                             (u.email && u.email === searchId)
+                        );
+                        
+                        let targetId = userRec ? userRec.id : searchId;
+                        
+                        // STRICT UID RESOLUTION: If the targetId is a 10-digit number, we MUST get the UID
+                        if (/^\d{10}$/.test(targetId)) {
+                            try {
+                                const userByNumericQuery = query(collection(db, 'users'), where('numericId', '==', targetId));
+                                const userSnap = await getDocs(userByNumericQuery);
+                                
+                                if (!userSnap.empty) {
+                                    const realUid = userSnap.docs[0].id;
+                                    const userData = userSnap.docs[0].data();
+                                    const wDoc = await getDoc(doc(db, 'wallets', realUid));
+                                    
+                                    setAdminProfileModalUser({
+                                        ...userData,
+                                        id: realUid,
+                                        ...(wDoc.exists() ? wDoc.data() : { deposit: 0, winning: 0, bonus: 0, blocked: false })
+                                    });
+                                    setIsSearchingUser(false);
+                                    return;
+                                }
+                            } catch(err) {
+                                console.error("Numeric resolution failed", err);
+                            }
+                        }
+
+                        // If not a numeric ID or resolution failed, check if it's already a UID
+                        if (!userRec) {
+                            const wRef = doc(db, 'wallets', targetId);
+                            const wDoc = await getDoc(wRef);
+                            const uDoc = await getDoc(doc(db, 'users', targetId));
+                            
+                            if (wDoc.exists() || uDoc.exists()) {
+                                 setAdminProfileModalUser({ 
+                                    ...(uDoc.exists() ? uDoc.data() : { name: 'UID User' }), 
+                                    id: targetId, 
+                                    ...(wDoc.exists() ? wDoc.data() : { deposit: 0, winning: 0, bonus: 0, blocked: false }) 
+                                 });
+                                 setIsSearchingUser(false);
+                                 return;
+                            }
+                            
+                            // Last resort fallback
+                            setAdminProfileModalUser({ 
+                               id: targetId, 
+                               name: 'Searched User',
+                               deposit: 0, winning: 0, bonus: 0, blocked: false
+                            });
+                        } else {
+                            // Already found in local list (and handled numeric case above)
+                            const wDoc = await getDoc(doc(db, 'wallets', userRec.id));
+                            setAdminProfileModalUser({
+                                ...userRec,
+                                id: userRec.id,
+                                ...(wDoc.exists() ? wDoc.data() : { deposit: 0, winning: 0, bonus: 0, blocked: false })
+                            });
+                        }
+                        // Automatically open modal by setting the user
+                    } catch(e) {
+                        console.error(e);
+                        alert("Error finding user.");
+                    }
+                    setIsSearchingUser(false);
+                }}
+                disabled={isSearchingUser || !searchUserId.trim()}
+                className={`bg-app-accent text-black px-4 py-2 rounded-xl font-bold active:scale-95 transition-transform flex items-center justify-center shrink-0 ${isSearchingUser ? 'opacity-70' : 'hover:opacity-90'}`}
+               >
+                   {isSearchingUser ? '...' : <Search size={18} />}
+               </button>
+            </div>
+            <div className="p-4 flex-1 overflow-y-auto pb-20 space-y-3">
+                {[...adminUserList]
+                    .filter(u => {
+                        const searchLower = searchUserId.trim().toLowerCase();
+                        if (!searchLower) return true;
+                        return String(u.id || '').toLowerCase().includes(searchLower) ||
+                               String(u.name || '').toLowerCase().includes(searchLower) ||
+                               String(u.email || '').toLowerCase().includes(searchLower) ||
+                               String(u.numericId || '').includes(searchLower);
+                    })
+                    .sort((a, b) => {
+                        if ((b.winning || 0) >= 10000 && (a.winning || 0) < 10000) return 1;
+                        if ((a.winning || 0) >= 10000 && (b.winning || 0) < 10000) return -1;
+                        return (b.winning || 0) - (a.winning || 0);
+                    })
+                    .map(u => (
+                    <div key={u.id} className={`bg-app-card border ${u.winning >= 10000 ? 'border-red-500/50' : 'border-app-border'} rounded-xl p-3 flex justify-between items-center relative overflow-hidden shadow-sm`}>
+                         {u.winning >= 10000 && <div className="absolute left-0 top-0 w-1 h-full bg-red-500" title="High Winner!"></div>}
+                         <div className="flex-1 min-w-0 mr-3">
+                             <p className="text-sm font-bold text-app-text truncate">{u.name || (u.email && String(u.email).split('@')[0]) || 'User'}</p>
+                             <p className="text-[10px] text-app-text-muted font-mono truncate">{u.id}</p>
+                             <p className="text-[11px] font-bold mt-1 max-w-fit px-1.5 py-0.5 rounded bg-black/50 text-white">
+                                 <span className="text-green-400 text-[10px] uppercase mr-1">WIN:</span> ₹{u.winning || 0}
+                             </p>
+                         </div>
+                         <div className="flex flex-col gap-1.5 sm:flex-row shadow-sm">
+                             <button onClick={() => {
+                                 setAdminProfileModalUser({...u, name: u.name, email: u.email}); 
+                             }} className="px-3 py-1.5 text-xs font-bold bg-slate-800 text-slate-300 rounded hover:bg-slate-700 hover:text-white transition-colors flex items-center justify-center gap-1">
+                                <User size={12}/> Profile
+                             </button>
+                             <button onClick={async () => {
+                                 const newBlockedStat = !u.blocked;
+                                 await setDoc(doc(db, 'wallets', u.id), { ...u, blocked: newBlockedStat }, { merge: true });
+                             }} className={`px-3 py-1.5 text-[10px] font-bold rounded ${u.blocked ? 'text-[#4ADE80] border border-[#4ADE80] hover:bg-[#4ADE80]/10' : 'text-red-500 border border-red-500 hover:bg-red-500/10'} transition-colors whitespace-nowrap text-center`}>
+                                 {u.blocked ? 'Unblock' : 'Block'}
+                             </button>
+                         </div>
+                    </div>
+                ))}
+            </div>
+        </div>
+      )}
+
+      {showAdminQuickAdd && isAdmin && (
+            <div className="absolute inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 min-h-[100dvh]">
+                <div className="bg-[#13151c] border border-green-500/30 w-full max-w-sm rounded-2xl p-6 shadow-2xl relative animate-in fade-in zoom-in-95 duration-200">
+                   <button onClick={() => { setShowAdminQuickAdd(false); setPaymentAmount('100'); }} className="absolute top-4 right-4 text-slate-500 hover:text-white"><X size={20}/></button>
+                   <h3 className="font-bold text-slate-200 text-lg mb-1 flex items-center gap-2">
+                     <Wallet className="text-green-500" size={20} /> Quick Add Cash
+                   </h3>
+                   <p className="text-xs text-slate-400 mb-6 font-medium">Instantly add money to your wallet without payment.</p>
+                   
+                   <label className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1 block ml-1">Amount (₹)</label>
+                   <input type="number" value={paymentAmount} onChange={e=>setPaymentAmount(e.target.value)} placeholder="0" className="w-full text-2xl font-black bg-black/50 text-white border border-slate-700 rounded-lg p-4 mb-4 outline-none focus:border-green-500 transition-colors text-center" />
+                   
+                   <div className="grid grid-cols-4 gap-2 mb-6">
+                      {[100, 500, 1000, 5000].map(amt => (
+                         <button key={amt} onClick={() => setPaymentAmount(amt.toString())} className="bg-slate-800 text-slate-300 font-bold py-2 rounded border border-slate-700 active:bg-slate-700 text-xs text-center transition-colors">
+                            +₹{amt}
+                         </button>
+                      ))}
+                   </div>
+
+                   <button onClick={async () => {
+                       const amt = parseInt(paymentAmount);
+                       if (!amt || isNaN(amt) || amt <= 0) return alert('Invalid amount');
+                       if (user?.id) {
+                           const newDeposit = (wallet.deposit || 0) + amt;
+                           setWallet(prev => ({...prev, deposit: newDeposit}));
+                           await setDoc(doc(db, 'wallets', user.id), { deposit: newDeposit }, { merge: true });
+                           
+                           const newReq: DepositRequest = {
+                               id: 'dep_' + Date.now(),
+                               userId: user.id,
+                               userNumericId: user.numericId,
+                               userName: user.name,
+                               amount: amt,
+                               method: 'Admin Quick Add',
+                               utr: 'N/A',
+                               status: 'Approved',
+                               timestamp: new Date().toLocaleString()
+                           };
+                           await setDoc(doc(db, 'deposits', newReq.id), newReq);
+                           
+                           alert(`₹${amt} added to your wallet!`);
+                           setShowAdminQuickAdd(false);
+                           setPaymentAmount('100');
+                       }
+                   }} className="w-full py-3 bg-green-500 text-black rounded-xl font-bold uppercase tracking-widest shadow-[0_0_15px_rgba(34,197,94,0.4)] transition-all hover:bg-green-400 active:scale-95 flex items-center justify-center gap-2">
+                     <Plus size={18} strokeWidth={3} /> Add Funds
+                   </button>
+
+                   <button onClick={async () => {
+                       if (user?.id && window.confirm("Reset your wallet completely to ₹0? This cannot be undone.")) {
+                           setWallet({ deposit: 0, winning: 0, bonus: 0 });
+                           await setDoc(doc(db, 'wallets', user.id), { deposit: 0, winning: 0, bonus: 0 });
+                           alert("Wallet reset to ₹0");
+                           setShowAdminQuickAdd(false);
+                       }
+                   }} className="w-full py-2 mt-3 bg-red-900/40 text-red-500 border border-red-900/50 rounded-xl font-bold uppercase tracking-widest transition-all hover:bg-red-900/60 active:scale-95 text-[10px]">
+                     Zero Out Wallet
+                   </button>
+                </div>
+            </div>
+      )}
+
     </div>
+    </ErrorBoundary>
   );
 }

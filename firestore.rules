@@ -14,23 +14,17 @@ service cloud.firestore {
       let data = incoming();
       return data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
              data.email is string && data.email.size() >= 0 && data.email.size() < 200 &&
-             data.isPremium is bool &&
-             data.editsCount is int && data.editsCount >= 0 &&
-             data.createdAt is timestamp;
+             (!('numericId' in data) || data.numericId is string) &&
+             (!('firstName' in data) || data.firstName is string) &&
+             (!('lastName' in data) || data.lastName is string);
     }
 
     match /users/{userId} {
       allow get, list: if isAdmin() || (isSignedIn() && request.auth.uid == userId && isValidId(userId));
       
-      allow create: if isSignedIn() && request.auth.uid == userId && isValidId(userId) && isValidUser() && 
-                    incoming().isPremium == false &&
-                    incoming().editsCount == 0;
+      allow create: if isSignedIn() && request.auth.uid == userId && isValidId(userId) && isValidUser();
                     
-      allow update: if isAdmin() || (isSignedIn() && request.auth.uid == userId && isValidId(userId) && isValidUser() && (
-                      incoming().diff(existing()).affectedKeys().hasOnly(['editsCount']) ||
-                      incoming().diff(existing()).affectedKeys().hasOnly(['isPremium']) ||
-                      incoming().diff(existing()).affectedKeys().hasOnly(['isPremium', 'editsCount'])
-                    ));
+      allow update: if isAdmin() || (isSignedIn() && request.auth.uid == userId && isValidId(userId) && isValidUser());
     }
 
     function isValidPayment() {

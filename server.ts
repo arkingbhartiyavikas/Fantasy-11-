@@ -87,6 +87,45 @@ async function startServer() {
     }
   });
 
+  // API Routes for Cricket API (Proxy to hide API key)
+  app.get('/api/cricket/match_info', async (req, res) => {
+    try {
+      const apiKey = process.env.CRIC_API_KEY;
+      if (!apiKey) {
+        return res.status(500).json({ error: "Cricket API Key not configured on the server." });
+      }
+      const matchId = req.query.id;
+      const apiRes = await fetch(`https://api.cricapi.com/v1/match_info?apikey=${apiKey}&id=${matchId}`);
+      if (!apiRes.ok) {
+        throw new Error(`API returned ${apiRes.status}`);
+      }
+      const data = await apiRes.json();
+      res.json(data);
+    } catch (e: any) {
+      console.error("Match info proxy error:", e);
+      res.status(500).json({ error: e.message || "Failed to fetch match info" });
+    }
+  });
+
+  app.get('/api/cricket/currentMatches', async (req, res) => {
+    try {
+      const apiKey = process.env.CRIC_API_KEY;
+      if (!apiKey) {
+        return res.status(500).json({ error: "Cricket API Key not configured on the server." });
+      }
+      const offset = req.query.offset || 0;
+      const apiRes = await fetch(`https://api.cricapi.com/v1/currentMatches?apikey=${apiKey}&offset=${offset}`);
+      if (!apiRes.ok) {
+        throw new Error(`API returned ${apiRes.status}`);
+      }
+      const data = await apiRes.json();
+      res.json(data);
+    } catch (e: any) {
+      console.error("Current matches proxy error:", e);
+      res.status(500).json({ error: e.message || "Failed to fetch current matches" });
+    }
+  });
+
   // Vite middleware for development
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({

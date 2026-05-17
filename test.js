@@ -1,0 +1,1 @@
+try { return saved ? JSON.parse(saved) : null; } catch(e) { return null; }
