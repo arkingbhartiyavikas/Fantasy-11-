@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback, Component } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef, Component } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import Cropper from 'react-easy-crop';
 import { Trophy, Clock, Users, ArrowLeft, Home, User, Wallet, Bell, PlayCircle, Shield, Plus, Minus, Info, Receipt, Settings, MessageSquare, Copy, PlusCircle, Edit2, ArrowDownToLine, ArrowDownLeft, ArrowRight, Check, X, ChevronUp, ChevronDown, Search, ChevronLeft, ChevronRight, Trash2, Download, BarChart2, Image as ImageIcon, ZoomIn, RefreshCw, AlertCircle } from 'lucide-react';
@@ -731,13 +731,22 @@ export default function App() {
   const isAdmin = user?.email === 'arkingbhartiyavikas@gmail.com';
 
   const [firestoreQuotaExceeded, setFirestoreQuotaExceeded] = useState(false);
+  const [hasDismissedQuota, setHasDismissedQuota] = useState(false);
 
   const handleFsError = (e: any, operation?: string, path?: string) => {
      console.error(`Firestore Error [${operation || 'unknown'} @ ${path || 'unknown'}]:`, e);
-     if (e.message?.includes('resource-exhausted') || e.message?.includes('Quota exceeded') || e.code === 'resource-exhausted') {
+     const msg = (e.message || '').toLowerCase();
+     if (msg.includes('resource-exhausted') || msg.includes('quota exceeded') || e.code === 'resource-exhausted' || (msg.includes('limit') && msg.includes('exhausted'))) {
         setFirestoreQuotaExceeded(true);
+        sessionStorage.setItem('fs_quota_exceeded', 'true');
      }
   };
+
+  useEffect(() => {
+    if (sessionStorage.getItem('fs_quota_exceeded') === 'true') {
+      setFirestoreQuotaExceeded(true);
+    }
+  }, []);
 
   const [appPlayers, setAppPlayers] = useState<Player[]>(() => {
     const saved = localStorage.getItem('dreamApp_players');
@@ -881,7 +890,7 @@ export default function App() {
                 });
             }
         } catch (e) {
-            console.error("Failed to load user profile from DB", e);
+            handleFsError(e, 'fetch_profile', firebaseUser.uid);
             if (!numericId) {
                 numericId = Math.floor(1000000000 + Math.random() * 9000000000).toString();
             }
@@ -910,6 +919,7 @@ export default function App() {
   const [walletLoadedUser, setWalletLoadedUser] = useState<string | null>(null);
 
   useEffect(() => {
+    if (firestoreQuotaExceeded) return;
     if (!user?.id) {
         setWallet({ deposit: 0, winning: 0, bonus: 0, profits: 0, wins: 0 });
         return;
@@ -927,7 +937,7 @@ export default function App() {
              setDoc(doc(db, 'wallets', user.id), init);
              if (isSubscribed) setWallet(init);
         }
-    });
+    }, (e) => handleFsError(e, 'listen_wallet', user.id));
 
     // Listen to deposits
     const depQuery = isAdmin 
@@ -935,7 +945,7 @@ export default function App() {
       : query(collection(db, 'deposits'), where('userId', '==', user.id));
     const unsubDep = onSnapshot(depQuery, (snap) => {
         if (isSubscribed) setDepositRequests(snap.docs.map(d => d.data() as DepositRequest));
-    });
+    }, (e) => handleFsError(e, 'listen_deposits'));
 
     // Listen to withdrawals
     const wdQuery = isAdmin
@@ -943,7 +953,7 @@ export default function App() {
       : query(collection(db, 'withdrawals'), where('userId', '==', user.id));
     const unsubWd = onSnapshot(wdQuery, (snap) => {
         if (isSubscribed) setWithdrawRequests(snap.docs.map(d => d.data() as WithdrawRequest));
-    });
+    }, (e) => handleFsError(e, 'listen_withdrawals'));
 
     // Listen to KYC
     const kycQuery = isAdmin
@@ -951,7 +961,7 @@ export default function App() {
       : query(collection(db, 'kyc'), where('userId', '==', user.id));
     const unsubKyc = onSnapshot(kycQuery, (snap) => {
         if (isSubscribed) setKycRequests(snap.docs.map(d => d.data() as any));
-    });
+    }, (e) => handleFsError(e, 'listen_kyc'));
 
     // Listen to Bank Accounts
     const bankQuery = isAdmin
@@ -959,11 +969,11 @@ export default function App() {
       : query(collection(db, 'bankAccounts'), where('userId', '==', user.id));
     const unsubBank = onSnapshot(bankQuery, (snap) => {
         if (isSubscribed) setBankAccounts(snap.docs.map(d => d.data() as BankAccount));
-    });
+    }, (e) => handleFsError(e, 'listen_banks'));
 
-    const teamsQuery = isAdmin 
-      ? collection(db, 'userTeams')
-      : query(collection(db, 'userTeams'), where('userId', '==', user.id));
+    // Optimization: Standard users only listen to their own teams.
+    // Admin should NOT listen to the entire userTeams collection in real-time as it kills quota.
+    const teamsQuery = query(collection(db, 'userTeams'), where('userId', '==', user.id));
 
     const unsubUserTeams = onSnapshot(teamsQuery, (snap) => {
         if (!isSubscribed) return;
@@ -985,7 +995,7 @@ export default function App() {
 
     let unsubAdminUsers = () => {};
     let unsubAdminUserMeta = () => {};
-    if (isAdmin) {
+    if (isAdmin && view === 'ADMIN' && !firestoreQuotaExceeded) {
         let metaDocs: Record<string, any> = {};
         let walletDocs: Record<string, any> = {};
         const updateList = () => {
@@ -1024,14 +1034,20 @@ export default function App() {
              });
              setAdminUserList(list);
         };
-        unsubAdminUsers = onSnapshot(collection(db, 'wallets'), (snap) => {
-            snap.docs.forEach(d => { walletDocs[d.id] = d.data(); });
+        const fetchAdminData = async () => {
+          try {
+            const [wSnap, uSnap] = await Promise.all([
+               getDocs(collection(db, 'wallets')),
+               getDocs(collection(db, 'users'))
+            ]);
+            wSnap.docs.forEach(d => { walletDocs[d.id] = d.data(); });
+            uSnap.docs.forEach(d => { metaDocs[d.id] = d.data(); });
             if (isSubscribed) updateList();
-        });
-        unsubAdminUserMeta = onSnapshot(collection(db, 'users'), (snap) => {
-            snap.docs.forEach(d => { metaDocs[d.id] = d.data(); });
-            if (isSubscribed) updateList();
-        });
+          } catch (e: any) {
+             handleFsError(e, 'admin_fetch');
+          }
+        };
+        fetchAdminData();
     }
 
     return () => { 
@@ -1045,7 +1061,7 @@ export default function App() {
         unsubAdminUsers();
         unsubAdminUserMeta();
     };
-  }, [user?.id, isAdmin]);
+  }, [user?.id, isAdmin, firestoreQuotaExceeded, view]);
 
   // Hook to save local wallet edits to DB (e.g. from playing contests)
   useEffect(() => {
@@ -1064,12 +1080,7 @@ export default function App() {
          setTimeout(() => {
              if (user?.id) {
                 setDoc(doc(db, 'wallets', user.id), next, { merge: true }).catch(e => {
-                  if (e.message.includes('Quota exceeded')) {
-                    setFirestoreQuotaExceeded(true);
-                    console.warn("Firestore Quota Exceeded. Wallet state only saved locally for now.");
-                  } else {
-                    console.error(e);
-                  }
+                  handleFsError(e, 'sync_wallet_local', user.id);
                 });
              }
          }, 10);
@@ -1104,15 +1115,16 @@ export default function App() {
   const [adminUpiQR, setAdminUpiQR] = useState<string>('');
 
   useEffect(() => {
+     if (firestoreQuotaExceeded) return;
      const unsubSettings = onSnapshot(doc(db, 'gameData', 'settings'), (docS) => {
          if (docS.exists()) {
              const data = docS.data();
              if (data.adminUPI) setAdminUPI(data.adminUPI);
              if (data.adminUpiQR) setAdminUpiQR(data.adminUpiQR);
          }
-     });
+     }, (e) => handleFsError(e, 'listen_settings'));
      return () => unsubSettings();
-  }, []);
+  }, [firestoreQuotaExceeded]);
 
   const [withdrawAmount, setWithdrawAmount] = useState<number>(0);
   const [withdrawAccountId, setWithdrawAccountId] = useState<string>('');
@@ -1429,12 +1441,20 @@ export default function App() {
     localStorage.setItem('dreamApp_matches', JSON.stringify(appMatches));
   }, [appMatches]);
 
+  const lastLoadTs = useRef(0);
+  const isInitialLoad = useRef(true);
+
   useEffect(() => {
+    if (firestoreQuotaExceeded) return;
+
     const loadCategoryInChunks = async (key: string) => {
+      if (firestoreQuotaExceeded) return null;
       try {
         const metaDoc = await getDoc(doc(db, 'gameData', `${key}_meta`));
         if (metaDoc.exists()) {
           const { count } = metaDoc.data();
+          if (count === 0) return [];
+          
           const promises = [];
           for (let i = 0; i < count; i++) {
             promises.push(getDoc(doc(db, 'gameData', `${key}_chunk_${i}`)));
@@ -1442,41 +1462,77 @@ export default function App() {
           const chunkDocs = await Promise.all(promises);
           return chunkDocs.flatMap(d => d.exists() ? d.data().data : []);
         }
-      } catch (e) { console.error(`Failed to load ${key}:`, e); }
+      } catch (e: any) { 
+        handleFsError(e, `load_${key}`);
+      }
       return null;
     };
 
     const unsubSyncMeta = onSnapshot(doc(db, 'gameData', 'sync_meta'), async (snap) => {
       if (!snap.exists()) return;
+      const metaData = snap.data();
+      const stype = metaData.type || 'all';
+      const curTs = metaData.lastUpdate || 0;
       
-      const [matchesData, contestsData, playersData, adminTeamsData] = await Promise.all([
-          loadCategoryInChunks('matches'),
-          loadCategoryInChunks('contests'),
-          loadCategoryInChunks('players'),
-          loadCategoryInChunks('adminTeams')
-      ]);
+      // Critical optimization: ignore updates we already have
+      if (!isInitialLoad.current && curTs <= lastLoadTs.current) return;
+      lastLoadTs.current = curTs;
+      isInitialLoad.current = false;
+      
+      const reloadBots = async () => {
+          const adminTeamsData = await loadCategoryInChunks('adminTeams');
+          if (adminTeamsData) {
+              setSavedTeams(prev => {
+                const userTeams = prev.filter(t => t.userId !== 'admin_bot' && t.userId !== 'admin_bot_boot');
+                const newTeams = [...userTeams, ...adminTeamsData];
+                return Array.from(new Map(newTeams.map(item => [item.id, item])).values());
+              });
+          }
+      };
 
-      if (matchesData && matchesData.length > 0) setAppMatches(matchesData);
-      if (contestsData && contestsData.length > 0) setAppContests(contestsData);
-      
-      if (playersData) {
-          const dataStr = JSON.stringify(playersData);
-          setAppPlayers(prev => {
-              if (JSON.stringify(prev) !== dataStr) {
-                  lastCloudPlayers.current = dataStr;
-                  return playersData;
-              }
-              return prev;
-          });
+      if (stype === 'bots') {
+          await reloadBots();
+          return;
       }
-      if (adminTeamsData) {
-          setSavedTeams(prev => {
-            const userTeams = prev.filter(t => t.userId !== 'admin_bot' && t.userId !== 'admin_bot_boot');
-            const newTeams = [...userTeams, ...adminTeamsData];
-            const uniqueTeams = Array.from(new Map(newTeams.map(item => [item.id, item])).values());
-            return uniqueTeams;
-          });
+
+      try {
+        const [matchesData, contestsData, playersData, adminTeamsData] = await Promise.all([
+            loadCategoryInChunks('matches'),
+            loadCategoryInChunks('contests'),
+            loadCategoryInChunks('players'),
+            loadCategoryInChunks('adminTeams')
+        ]);
+
+        if (matchesData && matchesData.length > 0) setAppMatches(matchesData);
+        if (contestsData && contestsData.length > 0) setAppContests(contestsData);
+        
+        if (playersData) {
+            const dataStr = JSON.stringify(playersData);
+            setAppPlayers(prev => {
+                if (JSON.stringify(prev) !== dataStr) {
+                    lastCloudPlayers.current = dataStr;
+                    return playersData;
+                }
+                return prev;
+            });
+        }
+        if (adminTeamsData) {
+            setSavedTeams(prev => {
+              const userTeams = prev.filter(t => t.userId !== 'admin_bot' && t.userId !== 'admin_bot_boot');
+              const newTeams = [...userTeams, ...adminTeamsData];
+              const uniqueTeams = Array.from(new Map(newTeams.map(item => [item.id, item])).values());
+              return uniqueTeams;
+            });
+        }
+      } catch (e: any) {
+         if (e.message?.includes('quota')) {
+            console.error("Sync blocked by Quota limits.");
+         }
       }
+    }, (error) => {
+       if (error.message?.includes('quota')) {
+          console.warn("Real-time sync paused: Quota limit reached.");
+       }
     });
 
     const unsubBanners = onSnapshot(doc(db, 'gameData', 'banners'), (snap) => {
@@ -1484,7 +1540,7 @@ export default function App() {
         const data = snap.data().data;
         if (Array.isArray(data)) setAppBanners(data);
       }
-    });
+    }, (e) => handleFsError(e, 'listen_banners'));
 
     // Fallback for older data structure or backward compatibility
     const unsubMain = onSnapshot(doc(db, 'gameData', 'main_state'), (snapshot) => {
@@ -1495,16 +1551,20 @@ export default function App() {
                  setAppPlayers(data.players);
              }
         }
-    });
+    }, (e) => handleFsError(e, 'listen_main_fallback'));
 
     return () => {
       unsubSyncMeta();
       unsubBanners();
       unsubMain();
     };
-  }, []);
+  }, [firestoreQuotaExceeded]);
 
   const distributePrizes = async (matchId: string) => {
+    if (firestoreQuotaExceeded) {
+       console.error("Cannot distribute prizes: Firestore quota exceeded.");
+       return;
+    }
     let anyWonInfo = "";
     
     // Calculate off the latest state directly. Since it's a synchronous map to build the batch, it's fine.
@@ -1810,7 +1870,7 @@ export default function App() {
 
   // Real-time listener for the user being edited in the admin modal
   useEffect(() => {
-    if (!adminProfileModalUser || !adminProfileModalUser.id) return;
+    if (!adminProfileModalUser || !adminProfileModalUser.id || firestoreQuotaExceeded) return;
     
     // Subscribe to the wallet of the user being edited to ensure real-time balance updates
     const unsub = onSnapshot(doc(db, 'wallets', adminProfileModalUser.id), (docS) => {
@@ -1819,10 +1879,10 @@ export default function App() {
         // Use functional update to avoid stale state issues
         setAdminProfileModalUser(prev => prev && prev.id === adminProfileModalUser.id ? { ...prev, ...walletData } : prev);
       }
-    });
+    }, (e) => handleFsError(e, 'listen_modal_wallet', adminProfileModalUser.id));
     
     return () => unsub();
-  }, [adminProfileModalUser?.id]);
+  }, [adminProfileModalUser?.id, firestoreQuotaExceeded]);
   const [walletSaveStatus, setWalletSaveStatus] = useState<{[key: string]: 'idle' | 'saving' | 'success'}>({});
   const [isSearchingUser, setIsSearchingUser] = useState<boolean>(false);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -2109,8 +2169,7 @@ export default function App() {
             }
             return t;
          });
-         const adminTeams = newTeams.filter(t => t.userId === 'admin_bot' || t.userId === 'admin_bot_boot');
-         syncActiveDataToCloud();
+         // Cloud sync is now manual via the Update button for better performance
          return newTeams;
       });
       
@@ -2400,50 +2459,44 @@ export default function App() {
     const BOT_NAMES = ['Rahul', 'Amit', 'Rohit', 'Virat', 'Mahi', 'Suresh', 'Dinesh', 'Sachin', 'Kapil', 'Virender', 'Ravi', 'Ramesh', 'Sanjay', 'Vicky', 'Raju', 'Ajay', 'Vijay', 'Sumit', 'Karan', 'Arjun', 'Pooja', 'Neha', 'Priya', 'Anjali', 'Kavita'];
     
     let safeAmount = Math.max(1, isNaN(amount) ? 1 : amount);
-    if (safeAmount > 1000000) safeAmount = 1000000;
+    if (safeAmount > 10000) safeAmount = 10000; // Limit to 10k as requested
     
-    if (savedTeams.length + safeAmount > 2000000) {
-       alert("Maximum limits reached! Cannot add more teams total. Clean up old matches first.");
+    if (savedTeams.length + safeAmount > 1000000) {
+       alert("Maximum limit of 1 Million teams reached! Clean up old matches.");
        return;
     }
     
-    // Instead of activeMatch with all players, use a lightweight match object payload to save JS memory
-    const liteMatch = { id: activeMatch?.id, status: activeMatch?.status, team1: activeMatch.team1, team2: activeMatch.team2 };
+    // Minimal match payload
+    const liteMatch = { id: activeMatch?.id };
     
-    // figure out initial instance id offset based on current teams
     const sameContestTeams = savedTeams.filter(t => t.match?.id === activeMatch?.id && t.contestName === contest.name);
     const instanceSpots = contest.spots > 0 ? contest.spots : 2;
     let baseCount = sameContestTeams.length;
 
     const newBots = [];
+    const timestamp = Date.now();
     for(let i=0; i<safeAmount; i++) {
-        const randomName = BOT_NAMES[Math.floor(Math.random() * BOT_NAMES.length)] + Math.floor(Math.random() * 9999).toString();
+        const randomName = BOT_NAMES[Math.floor(Math.random() * BOT_NAMES.length)] + Math.floor(Math.random() * 999).toString();
         const bp = variations[Math.floor(Math.random() * variations.length)];
         const currentInstanceId = Math.floor(baseCount / instanceSpots);
         baseCount++;
         
         newBots.push({
-           id: Date.now().toString() + Math.random().toString(36).substring(2, 5) + i,
+           id: `bot_${timestamp}_${i}_${Math.random().toString(36).substring(2, 5)}`,
            match: liteMatch,
-           teamId: type === 'BOOT' ? `BOT-${Date.now().toString().slice(-4)}${i}` : `T${Math.floor(Math.random() * 8999) + 1000}`,
-           players: bp.players,
+           teamId: type === 'BOOT' ? `BOT-${timestamp.toString().slice(-4)}${i}` : `T${Math.floor(Math.random() * 89999) + 10000}`,
+           players: bp.players.map((p: any) => ({ id: p.id })), // Only store IDs to save memory/payload
            captain: bp.captain,
            viceCaptain: bp.viceCaptain,
-           botVariationId: bp.vId, // Track variation for grouped caching
            contestName: contest.name,
            fee: contest.entryFee,
            userId: type === 'BOOT' ? 'admin_bot_boot' : 'admin_bot',
-           userName: type === 'BOOT' ? `BOOT ${Date.now().toString().slice(-3)}${i}` : randomName,
+           userName: type === 'BOOT' ? `BOOT ${timestamp.toString().slice(-3)}${i}` : randomName,
            instanceId: currentInstanceId
         });
     }
     
-    setSavedTeams(prev => {
-        const newTeams = [...prev, ...newBots] as any;
-        const adminTeams = newTeams.filter((t: any) => t.userId === 'admin_bot' || t.userId === 'admin_bot_boot');
-        // syncActiveDataToCloud(); // Call main sync button instead to avoid document size errors
-        return newTeams;
-    });
+    setSavedTeams(prev => [...prev, ...newBots]);
   };
 
   const handleRemoveBot = (e: React.MouseEvent, contest: Contest, type: 'AUTO' | 'BOOT' = 'AUTO', amount: number = 1) => {
@@ -2454,7 +2507,7 @@ export default function App() {
         const botsToRemove = bots.slice(-amount).map(b => b.id); // remove the last 'amount' added
         const newTeams = prev.filter(t => !botsToRemove.includes(t.id));
         const adminTeams = newTeams.filter(t => t.userId === 'admin_bot' || t.userId === 'admin_bot_boot');
-        syncActiveDataToCloud();
+        // Bot sync is manual via Update button
         return newTeams;
      });
   };
@@ -2483,10 +2536,10 @@ export default function App() {
                     <div className="text-[9px] font-bold text-[#f0b90b] flex items-center gap-1 justify-center text-center px-1 rounded pb-1">
                       <span>Auto Team {botCountAuto > 0 ? `(${botCountAuto.toLocaleString('en-IN')})` : ''}</span> 
                     </div>
-                    <div className="flex items-center mt-1">
+                    <div className="flex items-center mt-1 gap-0.5">
                        <input 
                          type="number" 
-                         className="w-14 h-5 text-center text-[10px] bg-black border border-app-border rounded-l outline-none text-white font-bold placeholder-slate-600 focus:border-[#f0b90b]"
+                         className="w-12 h-5 text-center text-[10px] bg-black border border-app-border rounded-l outline-none text-white font-bold placeholder-slate-600 focus:border-[#f0b90b]"
                          placeholder="Qty"
                          value={botInputAuto[contest.id] || ''}
                          onChange={(e) => setBotInputAuto({...botInputAuto, [contest.id]: e.target.value})}
@@ -2495,7 +2548,7 @@ export default function App() {
                          onClick={(e) => {
                            const qty = parseInt(botInputAuto[contest.id]);
                            if (qty > 0) {
-                              handleAddBot(e, contest, 'AUTO', qty);
+                              handleAddBot(e, contest, 'AUTO', Math.min(qty, 10000));
                               setBotInputAuto({...botInputAuto, [contest.id]: ''});
                            }
                          }} 
@@ -2511,9 +2564,20 @@ export default function App() {
                               setBotInputAuto({...botInputAuto, [contest.id]: ''});
                            }
                          }} 
-                         className="h-5 px-1 bg-red-500/20 text-red-400 hover:bg-red-500 hover:text-white rounded-r font-bold text-[10px] transition-colors"
+                         className="h-5 px-1 bg-red-500/20 text-red-400 hover:bg-red-500 hover:text-white font-bold text-[10px] transition-colors border-r border-white/5"
                        >
                          Rem
+                       </button>
+                       <button 
+                         onClick={(e) => {
+                           e.stopPropagation();
+                           handleSyncBotsOnly();
+                         }} 
+                         disabled={isSyncing}
+                         className={`h-5 px-1 ${isSyncing ? 'bg-slate-800 text-slate-500 animate-pulse' : 'bg-[#e5c158]/20 text-[#e5c158] hover:bg-[#e5c158] hover:text-black'} flex items-center gap-1 rounded-r font-bold text-[10px] transition-colors active:scale-95`}
+                       >
+                         {isSyncing ? <RefreshCw size={8} className="animate-spin" /> : null}
+                         Update
                        </button>
                     </div>
                  </div>
@@ -3959,6 +4023,7 @@ export default function App() {
           await signInWithEmailAndPassword(auth, loginEmail, authPassword);
         }
       } catch (err: any) {
+        handleFsError(err, 'auth_action');
         console.error("Auth error", err);
         let msg = err.message;
         if (err.code === 'auth/email-already-in-use') msg = "Email already registered! Please use a different email or login.";
@@ -4124,17 +4189,13 @@ export default function App() {
 
   if (!user) return renderLogin();
   
-  const syncActiveDataToCloud = async () => {
+  const syncBotsOnlyToCloud = async () => {
     if (!isAdmin) return;
     try {
       const ts = Date.now();
-      // Keep all matches and contests to avoid data loss.
-      // Chunks will handle the payload size issue.
-      const allMatches = [...appMatches];
-      const allContests = [...appContests];
       const adminTeams = savedTeams.filter(t => t.userId === 'admin_bot' || t.userId === 'admin_bot_boot');
 
-      const saveChunks = async (key: string, data: any[], itemsPerChunk = 50) => {
+      const saveChunks = async (key: string, data: any[], itemsPerChunk = 1000) => {
           const CHUNK_SIZE = itemsPerChunk; 
           const chunks = [];
           for (let i = 0; i < data.length; i += CHUNK_SIZE) {
@@ -4145,27 +4206,102 @@ export default function App() {
           if (metaSnap.exists()) {
               const prevCount = metaSnap.data().count || 0;
               if (prevCount > chunks.length) {
+                  const deletePromises = [];
                   for (let i = chunks.length; i < prevCount; i++) {
-                      await deleteDoc(doc(db, 'gameData', `${key}_chunk_${i}`)).catch(() => {});
+                      deletePromises.push(deleteDoc(doc(db, 'gameData', `${key}_chunk_${i}`)).catch(() => {}));
                   }
+                  await Promise.all(deletePromises);
               }
           }
           await setDoc(metaRef, { count: chunks.length, timestamp: ts, total: data.length });
           
-          // Use sequential writes to avoid payload limits issues with too many parallel promises
-          for (let i = 0; i < chunks.length; i++) {
-              await setDoc(doc(db, 'gameData', `${key}_chunk_${i}`), { data: JSON.parse(JSON.stringify(chunks[i])), timestamp: ts });
+          const BATCH_SIZE = 5;
+          for (let i = 0; i < chunks.length; i += BATCH_SIZE) {
+              const batch = chunks.slice(i, i + BATCH_SIZE).map((chunk, idx) => 
+                  setDoc(doc(db, 'gameData', `${key}_chunk_${i + idx}`), { data: JSON.parse(JSON.stringify(chunk)), timestamp: ts })
+              );
+              await Promise.all(batch);
+          }
+      };
+
+      // bots have lightweight payload, so 800-1000 per chunk is very safe and efficient
+      await saveChunks('adminTeams', adminTeams, 800);
+      lastLoadTs.current = ts; // Update local TS to avoid self-reload
+      await setDoc(doc(db, 'gameData', 'sync_meta'), { lastUpdate: ts, type: 'bots' });
+      console.log("Cloud sync successful (Bots Only)");
+    } catch (e: any) {
+      console.error("Cloud bot sync failed:", e);
+      if (e.message?.includes('quota')) {
+         throw new Error("Firestore free limit reached for today. Please wait for quota to reset.");
+      }
+      throw e;
+    }
+  };
+
+  const handleSyncBotsOnly = async () => {
+    if (isSyncing) return;
+    setIsSyncing(true);
+    setSyncMessage(null);
+    try {
+      await syncBotsOnlyToCloud();
+      setSyncMessage({type: 'success', text: '✅ Bot update successful!'});
+    } catch (e: any) {
+      console.error(e);
+      alert("❌ Bot Update Failed: " + e.message);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  const syncActiveDataToCloud = async () => {
+    if (!isAdmin) return;
+    try {
+      const ts = Date.now();
+      // Keep all matches and contests to avoid data loss.
+      // Chunks will handle the payload size issue.
+      const allMatches = [...appMatches];
+      const allContests = [...appContests];
+      const adminTeams = savedTeams.filter(t => t.userId === 'admin_bot' || t.userId === 'admin_bot_boot');
+
+      const saveChunks = async (key: string, data: any[], itemsPerChunk = 500) => {
+          const CHUNK_SIZE = itemsPerChunk; 
+          const chunks = [];
+          for (let i = 0; i < data.length; i += CHUNK_SIZE) {
+              chunks.push(data.slice(i, i + CHUNK_SIZE));
+          }
+          const metaRef = doc(db, 'gameData', `${key}_meta`);
+          const metaSnap = await getDoc(metaRef);
+          if (metaSnap.exists()) {
+              const prevCount = metaSnap.data().count || 0;
+              if (prevCount > chunks.length) {
+                  const deletePromises = [];
+                  for (let i = chunks.length; i < prevCount; i++) {
+                      deletePromises.push(deleteDoc(doc(db, 'gameData', `${key}_chunk_${i}`)).catch(() => {}));
+                  }
+                  await Promise.all(deletePromises);
+              }
+          }
+          await setDoc(metaRef, { count: chunks.length, timestamp: ts, total: data.length });
+          
+          // Speed up writes by using small parallel batches (10 at a time)
+          const BATCH_SIZE = 5;
+          for (let i = 0; i < chunks.length; i += BATCH_SIZE) {
+              const batch = chunks.slice(i, i + BATCH_SIZE).map((chunk, idx) => 
+                  setDoc(doc(db, 'gameData', `${key}_chunk_${i + idx}`), { data: JSON.parse(JSON.stringify(chunk)), timestamp: ts })
+              );
+              await Promise.all(batch);
           }
       };
 
       await Promise.all([
-          saveChunks('matches', allMatches, 20), 
-          saveChunks('contests', allContests, 30), 
+          saveChunks('matches', allMatches, 200), 
+          saveChunks('contests', allContests, 200), 
           setDoc(doc(db, 'gameData', 'banners'), { data: JSON.parse(JSON.stringify(appBanners)), timestamp: ts }),
-          saveChunks('players', appPlayers, 25), 
-          saveChunks('adminTeams', adminTeams, 15), 
-          setDoc(doc(db, 'gameData', 'sync_meta'), { lastUpdate: ts })
+          saveChunks('players', appPlayers, 1000), 
+          saveChunks('adminTeams', adminTeams, 800)
       ]);
+      lastLoadTs.current = ts;
+      await setDoc(doc(db, 'gameData', 'sync_meta'), { lastUpdate: ts });
       console.log("Cloud sync successful (All Data)");
     } catch (e) {
       console.error("Cloud sync failed:", e);
@@ -4229,15 +4365,7 @@ export default function App() {
              <div className="absolute top-0 right-0 w-64 h-64 bg-[#e5c158]/10 rounded-full blur-[80px] -translate-y-1/2 translate-x-1/2 pointer-events-none"></div>
              <div className="flex items-center justify-between relative z-10">
                  <div className="flex items-center gap-3">
-                   <button 
-                     onClick={handleSyncToCloud}
-                     disabled={isSyncing}
-                     className={`px-4 py-2 text-[10px] sm:text-xs font-black uppercase tracking-widest rounded-xl transition-all flex items-center gap-2 border shadow-lg active:scale-95 ${isSyncing ? 'bg-slate-800 border-slate-700 text-slate-500 animate-pulse' : 'bg-gradient-to-r from-green-600 to-emerald-600 border-green-500/50 text-white shadow-green-900/20 hover:shadow-green-500/20 hover:border-green-400'}`}
-                   >
-                     <RefreshCw size={14} className={isSyncing ? 'animate-spin' : ''} />
-                     {isSyncing ? 'Updating...' : 'Update Apps & Player'}
-                   </button>
-                   <h2 className="font-black text-transparent bg-clip-text bg-gradient-to-r from-[#e5c158] to-[#f0b90b] uppercase tracking-widest text-lg drop-shadow-[0_0_12px_rgba(229,193,88,0.4)] hidden xs:block">VIP</h2>
+                    <h2 className="font-black text-transparent bg-clip-text bg-gradient-to-r from-[#e5c158] to-[#f0b90b] uppercase tracking-widest text-lg drop-shadow-[0_0_12px_rgba(229,193,88,0.4)]">VIP</h2>
                  </div>
                  <div className="flex items-center gap-2">
                     <button onClick={() => setShowDashboardUsers(true)} className="w-9 h-9 rounded-xl bg-[#e5c158]/10 border border-[#e5c158]/30 flex items-center justify-center text-[#e5c158] overflow-hidden shadow-[0_0_10px_rgba(229,193,88,0.2)] hover:bg-[#e5c158]/20 transition-colors cursor-pointer">
@@ -5734,7 +5862,7 @@ export default function App() {
                                               // Removed main_state write to avoid 1MB error.
                                               // Use "Update Apps & Player" button to sync all scores.
                                           } else {
-                                              await syncActiveDataToCloud();
+                                              // await syncActiveDataToCloud();
                                           }
                                         } catch (e) {
                                           console.error("Could not sync to cloud automatically", e);
@@ -6709,27 +6837,6 @@ export default function App() {
   return (
     <div className={`relative h-[100dvh] w-full max-w-md mx-auto bg-app-bg text-app-text font-sans shadow-2xl overflow-hidden border-x border-app-border ${themeMode === 'Light' ? 'theme-light' : ''} color-${themeColor.toLowerCase()}`}>
 <>
-        {/* Quota Exceeded Modal */}
-        {firestoreQuotaExceeded && (
-          <div className="absolute inset-0 z-[10000] flex items-center justify-center p-4">
-             <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setFirestoreQuotaExceeded(false)} />
-             <div className="bg-[#1e293b] border border-red-500/50 rounded-2xl p-6 shadow-2xl relative z-10 w-full">
-                <div className="w-16 h-16 bg-red-500/10 rounded-full flex items-center justify-center mx-auto mb-4 border border-red-500/20">
-                   <AlertCircle size={32} className="text-red-500" />
-                </div>
-                <h3 className="text-xl font-bold text-white text-center mb-2">Daily Limit Reached</h3>
-                <p className="text-slate-400 text-center text-sm mb-6">
-                  Firebase free plan daily limit exceeded (Quota Exceeded). Updates might not sync to the cloud for the next 24 hours. Your local data (players, teams) is safe and saved on your device.
-                </p>
-                <button 
-                  onClick={() => setFirestoreQuotaExceeded(false)}
-                  className="w-full bg-slate-700 hover:bg-slate-600 text-white font-bold py-3 rounded-xl transition-colors"
-                >
-                  OK, Got it
-                </button>
-             </div>
-          </div>
-        )}
         {showAddFlagModal && (
             <div className="absolute inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 min-h-[100dvh]">
                 <div className="bg-[#13151c] border border-slate-700 w-full rounded-2xl p-6 shadow-2xl relative">
@@ -7383,6 +7490,7 @@ export default function App() {
                         }
                         // Automatically open modal by setting the user
                     } catch(e) {
+                        handleFsError(e, 'admin_user_search');
                         console.error(e);
                         alert("Error finding user.");
                     }
