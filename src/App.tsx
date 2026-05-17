@@ -722,6 +722,7 @@ const ContestDetailsView = ({
 };
 
 export default function App() {
+  const [authInitialized, setAuthInitialized] = useState(false);
   const [user, setUser] = useState<{email: string, id: string, name: string, numericId?: string} | null>(() => {
     const saved = localStorage.getItem('dreamApp_user');
     try { return saved ? JSON.parse(saved) : null; } catch(e) { return null; }
@@ -857,6 +858,7 @@ export default function App() {
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      setAuthInitialized(true);
       if (firebaseUser) {
         if (sessionStorage.getItem('isSigningUp') === 'true') {
           // Do nothing, let handleAuth complete the setup and sign out
@@ -934,7 +936,7 @@ export default function App() {
              setWallet(docS.data() as any);
         } else {
              // Create initial wallet if doesn't exist
-             const init = { deposit: 0, winning: 0, bonus: 24, profits: 0, wins: 0 };
+             const init = { deposit: 0, winning: 24, bonus: 100, profits: 0, wins: 0 };
              setDoc(doc(db, 'wallets', user.id), init);
              if (isSubscribed) setWallet(init);
         }
@@ -972,7 +974,11 @@ export default function App() {
         if (isSubscribed) setBankAccounts(snap.docs.map(d => d.data() as BankAccount));
     });
 
-    const unsubUserTeams = onSnapshot(collection(db, 'userTeams'), (snap) => {
+    const teamsQuery = isAdmin 
+      ? collection(db, 'userTeams')
+      : query(collection(db, 'userTeams'), where('userId', '==', user.id));
+
+    const unsubUserTeams = onSnapshot(teamsQuery, (snap) => {
         if (!isSubscribed) return;
         const uTeams = snap.docs.map(d => d.data() as any);
         setSavedTeams(prev => {
@@ -988,7 +994,7 @@ export default function App() {
             });
             return newTeams;
         });
-    });
+    }, (e) => handleFsError(e, 'listen_teams', 'userTeams'));
 
     let unsubAdminUsers = () => {};
     let unsubAdminUserMeta = () => {};
@@ -1391,9 +1397,12 @@ export default function App() {
   });
 
   useEffect(() => {
-    if (user) localStorage.setItem('dreamApp_user', JSON.stringify(user));
-    else localStorage.removeItem('dreamApp_user');
-  }, [user]);
+    if (user) {
+      localStorage.setItem('dreamApp_user', JSON.stringify(user));
+    } else if (authInitialized) {
+      localStorage.removeItem('dreamApp_user');
+    }
+  }, [user, authInitialized]);
 
 
 
