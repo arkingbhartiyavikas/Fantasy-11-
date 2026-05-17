@@ -766,21 +766,8 @@ export default function App() {
   useEffect(() => {
     const currentStr = JSON.stringify(appPlayers);
     localStorage.setItem('dreamApp_players', currentStr);
-
-    // Prevent immediate overwrite when checking snapshot first time
-    // Only ADMIN should be able to sync local players list to the cloud main_state
-    if (!isFirstPlayersLoad && isAdmin) {
-         if (lastCloudPlayers.current !== currentStr) {
-             const timer = setTimeout(() => {
-                setDoc(doc(db, 'gameData', 'main_state'), JSON.parse(JSON.stringify({ players: appPlayers })), { merge: true })
-                  .then(() => { lastCloudPlayers.current = currentStr; })
-                  .catch(handleFsError);
-             }, 30000); // 30 second debounce to save quota
-             return () => clearTimeout(timer);
-         }
-    } else if (isFirstPlayersLoad) {
-         setIsFirstPlayersLoad(false);
-    }
+    // Auto-sync disabled to prevent main_state 1MB errors. 
+    // Admin should use "Update Apps & Player" button for cloud sync.
   }, [appPlayers, isAdmin, isFirstPlayersLoad]);
 
   const [themeMode, setThemeMode] = useState<'Dark' | 'Light'>(() => localStorage.getItem('dreamApp_themeMode') as any || 'Dark');
@@ -1443,15 +1430,79 @@ export default function App() {
   }, [appMatches]);
 
   useEffect(() => {
-    const unsub = onSnapshot(doc(db, 'gameData', 'main_state'), (snapshot) => {
+    const unsubMatches = onSnapshot(doc(db, 'gameData', 'matches'), (snap) => {
+      if (snap.exists()) {
+        const data = snap.data().data;
+        if (Array.isArray(data)) setAppMatches(data);
+      }
+    });
+    const unsubContests = onSnapshot(doc(db, 'gameData', 'contests'), (snap) => {
+      if (snap.exists()) {
+        const data = snap.data().data;
+        if (Array.isArray(data)) setAppContests(data);
+      }
+    });
+    const loadCategoryInChunks = async (key: string) => {
+      try {
+        const metaDoc = await getDoc(doc(db, 'gameData', `${key}_meta`));
+        if (metaDoc.exists()) {
+          const { count } = metaDoc.data();
+          const promises = [];
+          for (let i = 0; i < count; i++) {
+            promises.push(getDoc(doc(db, 'gameData', `${key}_chunk_${i}`)));
+          }
+          const chunkDocs = await Promise.all(promises);
+          return chunkDocs.flatMap(d => d.exists() ? d.data().data : []);
+        }
+      } catch (e) { console.error(`Failed to load ${key}:`, e); }
+      return null;
+    };
+
+    const unsubSyncMeta = onSnapshot(doc(db, 'gameData', 'sync_meta'), async (snap) => {
+      if (!snap.exists()) return;
+      
+      const [matchesData, contestsData, playersData, adminTeamsData] = await Promise.all([
+          loadCategoryInChunks('matches'),
+          loadCategoryInChunks('contests'),
+          loadCategoryInChunks('players'),
+          loadCategoryInChunks('adminTeams')
+      ]);
+
+      if (matchesData) setAppMatches(matchesData);
+      if (contestsData) setAppContests(contestsData);
+      
+      if (playersData) {
+          const dataStr = JSON.stringify(playersData);
+          setAppPlayers(prev => {
+              if (JSON.stringify(prev) !== dataStr) {
+                  lastCloudPlayers.current = dataStr;
+                  return playersData;
+              }
+              return prev;
+          });
+      }
+      if (adminTeamsData) {
+          setSavedTeams(prev => {
+            const userTeams = prev.filter(t => t.userId !== 'admin_bot' && t.userId !== 'admin_bot_boot');
+            const newTeams = [...userTeams, ...adminTeamsData];
+            const uniqueTeams = Array.from(new Map(newTeams.map(item => [item.id, item])).values());
+            return uniqueTeams;
+          });
+      }
+    });
+
+    const unsubBanners = onSnapshot(doc(db, 'gameData', 'banners'), (snap) => {
+      if (snap.exists()) {
+        const data = snap.data().data;
+        if (Array.isArray(data)) setAppBanners(data);
+      }
+    });
+
+    // Fallback for older data structure or backward compatibility
+    const unsubMain = onSnapshot(doc(db, 'gameData', 'main_state'), (snapshot) => {
         if (snapshot.exists()) {
              const data = snapshot.data();
-             if (data.matches && Array.isArray(data.matches)) {
-                 setAppMatches(prev => {
-                     if (JSON.stringify(prev) !== JSON.stringify(data.matches)) return data.matches;
-                     return prev;
-                 });
-             }
+             if (data.matches && Array.isArray(data.matches)) setAppMatches(data.matches);
              if (data.contests && Array.isArray(data.contests)) setAppContests(data.contests);
              if (data.players && Array.isArray(data.players)) {
                  const dataStr = JSON.stringify(data.players);
@@ -1468,21 +1519,20 @@ export default function App() {
                   setSavedTeams(prev => {
                       const userTeams = prev.filter(t => t.userId !== 'admin_bot' && t.userId !== 'admin_bot_boot');
                       const newTeams = [...userTeams, ...data.adminTeams];
-                      
-                      // Remove local duplicates just in case (unique ID validation)
-                      const seen = new Set();
-                      const finalTeams = newTeams.filter(t => {
-                          if (seen.has(t.id)) return false;
-                          seen.add(t.id);
-                          return true;
-                      });
-                      
-                      return finalTeams;
+                      const uniqueTeams = Array.from(new Map(newTeams.map(item => [item.id, item])).values());
+                      return uniqueTeams;
                   });
              }
         }
     });
-    return () => unsub();
+
+    return () => {
+      unsubMain();
+      unsubMatches();
+      unsubContests();
+      unsubBanners();
+      unsubSyncMeta();
+    };
   }, []);
 
   const distributePrizes = async (matchId: string) => {
@@ -2091,7 +2141,7 @@ export default function App() {
             return t;
          });
          const adminTeams = newTeams.filter(t => t.userId === 'admin_bot' || t.userId === 'admin_bot_boot');
-         setDoc(doc(db, 'gameData', 'main_state'), JSON.parse(JSON.stringify({ adminTeams })), { merge: true }).catch(console.error);
+         syncActiveDataToCloud();
          return newTeams;
       });
       
@@ -2422,7 +2472,7 @@ export default function App() {
     setSavedTeams(prev => {
         const newTeams = [...prev, ...newBots] as any;
         const adminTeams = newTeams.filter((t: any) => t.userId === 'admin_bot' || t.userId === 'admin_bot_boot');
-        setDoc(doc(db, 'gameData', 'main_state'), JSON.parse(JSON.stringify({ adminTeams })), { merge: true }).catch(console.error);
+        // syncActiveDataToCloud(); // Call main sync button instead to avoid document size errors
         return newTeams;
     });
   };
@@ -2435,7 +2485,7 @@ export default function App() {
         const botsToRemove = bots.slice(-amount).map(b => b.id); // remove the last 'amount' added
         const newTeams = prev.filter(t => !botsToRemove.includes(t.id));
         const adminTeams = newTeams.filter(t => t.userId === 'admin_bot' || t.userId === 'admin_bot_boot');
-        setDoc(doc(db, 'gameData', 'main_state'), JSON.parse(JSON.stringify({ adminTeams })), { merge: true }).catch(console.error);
+        syncActiveDataToCloud();
         return newTeams;
      });
   };
@@ -3946,6 +3996,7 @@ export default function App() {
         else if (err.code === 'auth/wrong-password' || err.code === 'auth/user-not-found' || err.code === 'auth/invalid-credential' || err.code === 'auth/invalid-login-credentials') msg = "Incorrect mobile/email or password.";
         else if (err.code === 'auth/invalid-email') msg = "Invalid email format.";
         else if (err.code === 'auth/network-request-failed') msg = "Network error. Please check your internet connection.";
+        else if (err.code === 'auth/operation-not-allowed') msg = "Firebase Error: Email/Password login mode is not enabled in your Firebase Console. Please enable it to use this app. (Firebase Console में Email/Password authentication चालू करें)";
         alert(msg);
       } finally {
         setAuthLoading(false);
@@ -4104,6 +4155,81 @@ export default function App() {
 
   if (!user) return renderLogin();
   
+  const syncActiveDataToCloud = async () => {
+    if (!isAdmin) return;
+    try {
+      const ts = Date.now();
+      const activeMatches = appMatches.filter(m => m.status !== 'Completed');
+      const activeMatchIds = new Set(activeMatches.map(m => m.id));
+      const activeContests = appContests.filter(c => activeMatchIds.has(c.matchId));
+      
+      // Filter bots: Only sync bots for active matches to save space
+      const adminTeams = savedTeams.filter(t => (t.userId === 'admin_bot' || t.userId === 'admin_bot_boot') && activeMatchIds.has(t.match?.id));
+
+      const saveChunks = async (key: string, data: any[], itemsPerChunk = 50) => {
+          const CHUNK_SIZE = itemsPerChunk; 
+          const chunks = [];
+          for (let i = 0; i < data.length; i += CHUNK_SIZE) {
+              chunks.push(data.slice(i, i + CHUNK_SIZE));
+          }
+          const metaRef = doc(db, 'gameData', `${key}_meta`);
+          const metaSnap = await getDoc(metaRef);
+          if (metaSnap.exists()) {
+              const prevCount = metaSnap.data().count || 0;
+              if (prevCount > chunks.length) {
+                  for (let i = chunks.length; i < prevCount; i++) {
+                      await deleteDoc(doc(db, 'gameData', `${key}_chunk_${i}`)).catch(() => {});
+                  }
+              }
+          }
+          await setDoc(metaRef, { count: chunks.length, timestamp: ts, total: data.length });
+          
+          // Use sequential writes to avoid payload limits issues with too many parallel promises
+          for (let i = 0; i < chunks.length; i++) {
+              await setDoc(doc(db, 'gameData', `${key}_chunk_${i}`), { data: JSON.parse(JSON.stringify(chunks[i])), timestamp: ts });
+          }
+      };
+
+      await Promise.all([
+          saveChunks('matches', activeMatches, 20), // Chunked matches
+          saveChunks('contests', activeContests, 30), // Chunked contests
+          setDoc(doc(db, 'gameData', 'banners'), { data: JSON.parse(JSON.stringify(appBanners)), timestamp: ts }),
+          saveChunks('players', appPlayers, 25), // Smaller chunks to stay under 1MB
+          saveChunks('adminTeams', adminTeams, 15), // Bots often have heavy match/team data, use very small chunks
+          setDoc(doc(db, 'gameData', 'sync_meta'), { lastUpdate: ts })
+      ]);
+      console.log("Cloud sync successful (Active Data Only)");
+    } catch (e) {
+      console.error("Cloud sync failed:", e);
+      throw e;
+    }
+  };
+
+  const handleSyncToCloud = async () => {
+    if (isSyncing) return;
+    setIsSyncing(true);
+    setSyncMessage(null);
+    try {
+      const activeMatchIds = new Set(appMatches.filter(m => m.status !== 'Completed').map(m => m.id));
+      const syncBotsCount = savedTeams.filter(t => (t.userId === 'admin_bot' || t.userId === 'admin_bot_boot') && activeMatchIds.has(t.match?.id)).length;
+      
+      await syncActiveDataToCloud();
+      
+      alert(`✅ Update Successful!\n- Active Matches/Contests synced.\n- Database cleaned of completed matches data.\n- ${appPlayers.length} Players & ${syncBotsCount} Active Bots updated.\n- Bots of completed matches are now hidden from database.`);
+      setSyncMessage({type: 'success', text: '✅ Successfully synced Active Data. Database cleaned of completed matches.'});
+    } catch (e: any) {
+      console.error(e);
+      let errorMsg = e.message;
+      if (errorMsg.includes('payload size exceeds the limit')) {
+        errorMsg = "Data size issue. Automated cleaning of old data recommended. (डेटा बहुत बड़ा है, पुराना डेटा ऑटोमैटिक डिलीट करने की सलाह दी जाती है)";
+      }
+      alert("❌ Sync Failed: " + errorMsg);
+      setSyncMessage({type: 'error', text: 'Failed to sync: ' + errorMsg});
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
   const renderAdminPanel = () => {
     if (!isAdmin) return null;
 
@@ -4139,12 +4265,22 @@ export default function App() {
              <div className="absolute top-0 right-0 w-64 h-64 bg-[#e5c158]/10 rounded-full blur-[80px] -translate-y-1/2 translate-x-1/2 pointer-events-none"></div>
              <div className="flex items-center justify-between relative z-10">
                  <div className="flex items-center gap-3">
-                   <button onClick={() => setView('HOME')} className="p-1.5 -ml-1 text-slate-400 hover:text-[#e5c158] rounded-lg transition-colors bg-black/50 border border-slate-700 hover:border-[#e5c158]/50"><ArrowLeft size={18}/></button>
-                   <h2 className="font-black text-transparent bg-clip-text bg-gradient-to-r from-[#e5c158] to-[#f0b90b] uppercase tracking-widest text-lg drop-shadow-[0_0_12px_rgba(229,193,88,0.4)]">DREAM11 VIP</h2>
+                   <button 
+                     onClick={handleSyncToCloud}
+                     disabled={isSyncing}
+                     className={`px-4 py-2 text-[10px] sm:text-xs font-black uppercase tracking-widest rounded-xl transition-all flex items-center gap-2 border shadow-lg active:scale-95 ${isSyncing ? 'bg-slate-800 border-slate-700 text-slate-500 animate-pulse' : 'bg-gradient-to-r from-green-600 to-emerald-600 border-green-500/50 text-white shadow-green-900/20 hover:shadow-green-500/20 hover:border-green-400'}`}
+                   >
+                     <RefreshCw size={14} className={isSyncing ? 'animate-spin' : ''} />
+                     {isSyncing ? 'Updating...' : 'Update Apps & Player'}
+                   </button>
+                   <h2 className="font-black text-transparent bg-clip-text bg-gradient-to-r from-[#e5c158] to-[#f0b90b] uppercase tracking-widest text-lg drop-shadow-[0_0_12px_rgba(229,193,88,0.4)] hidden xs:block">VIP</h2>
                  </div>
                  <div className="flex items-center gap-2">
-                    <button onClick={() => setShowDashboardUsers(true)} className="w-8 h-8 rounded-lg bg-[#e5c158]/10 border border-[#e5c158]/30 flex items-center justify-center text-[#e5c158] overflow-hidden shadow-[0_0_10px_rgba(229,193,88,0.2)] hover:bg-[#e5c158]/20 transition-colors cursor-pointer">
-                       <User size={16} />
+                    <button onClick={() => setShowDashboardUsers(true)} className="w-9 h-9 rounded-xl bg-[#e5c158]/10 border border-[#e5c158]/30 flex items-center justify-center text-[#e5c158] overflow-hidden shadow-[0_0_10px_rgba(229,193,88,0.2)] hover:bg-[#e5c158]/20 transition-colors cursor-pointer">
+                       <User size={18} />
+                    </button>
+                    <button onClick={() => setView('HOME')} className="w-9 h-9 rounded-xl bg-slate-800/80 border border-slate-700 flex items-center justify-center text-slate-400 hover:text-white hover:border-slate-500 transition-all">
+                       <Home size={18} />
                     </button>
                  </div>
              </div>
@@ -4166,41 +4302,11 @@ export default function App() {
 {adminTab === 'DASHBOARD' && (<>
 <div className="space-y-6">
 <div className="mb-6">
-                <button 
-                  disabled={isSyncing}
-                  onClick={async () => {
-                      if (isSyncing) return;
-                      setIsSyncing(true);
-                      setSyncMessage(null);
-                      try {
-                          const adminTeams = savedTeams.filter(t => t.userId === 'admin_bot' || t.userId === 'admin_bot_boot');
-                          const syncData = JSON.parse(JSON.stringify({
-                              matches: appMatches,
-                              contests: appContests,
-                              players: appPlayers,
-                              adminTeams: adminTeams,
-                              timestamp: Date.now()
-                          }));
-                          
-                          const syncPromise = setDoc(doc(db, 'gameData', 'main_state'), syncData);
-                          const timeoutPromise = new Promise((_, reject) => 
-                              setTimeout(() => reject(new Error("Network timeout: Cloud took too long to respond. Please check your internet or try again.")), 60000)
-                          );
-                          
-                          await Promise.race([syncPromise, timeoutPromise]);
-                          
-                          setSyncMessage({type: 'success', text: '✅ Successfully synced Matches, Contests, Players, and Bots to the cloud. All phones will now update.'});
-                      } catch (e: any) {
-                          handleFsError(e);
-                          setSyncMessage({type: 'error', text: 'Failed to sync: ' + e.message});
-                      } finally {
-                          setIsSyncing(false);
-                      }
-                  }}
-                  className={`w-full ${isSyncing ? 'bg-yellow-800 cursor-not-allowed opacity-70' : 'bg-gradient-to-r from-yellow-600 to-yellow-500 active:scale-95 shadow-[0_0_20px_rgba(234,179,8,0.3)] hover:shadow-[0_0_25px_rgba(234,179,8,0.5)]'} text-black font-black uppercase tracking-wide py-3.5 rounded-xl border border-yellow-400 transition-all flex items-center justify-center gap-2`}
-                >
-                  <ArrowDownToLine size={20} className={isSyncing ? 'animate-bounce' : ''} /> {isSyncing ? 'Syncing to Cloud...' : 'Force Sync VIP Data'}
-                </button>
+                <div className="p-4 bg-yellow-500/10 border border-yellow-500/20 rounded-2xl mb-6">
+                    <p className="text-xs text-yellow-200 font-medium leading-relaxed">
+                        <span className="font-bold text-yellow-400">ADMIN TIP:</span> Use the <span className="font-black text-green-400 uppercase">"Update Apps & Player"</span> button in the top header to instantly sync matches, contests, and teams to all players' devices.
+                    </p>
+                </div>
                 {syncMessage && (
                   <div className={`mt-3 p-3 text-sm rounded-lg ${syncMessage.type === 'success' ? 'bg-green-900/50 text-green-400 border border-green-500/50' : 'bg-red-900/50 text-red-400 border border-red-500/50'}`}>
                      {syncMessage.text}
@@ -4600,7 +4706,11 @@ export default function App() {
                  </button>
                  
                  <button onClick={() => {
-                    setDoc(doc(db, 'gameData', 'main_state'), JSON.parse(JSON.stringify({ banners: appBanners })), { merge: true })
+                    const ts = Date.now();
+                    Promise.all([
+                        setDoc(doc(db, 'gameData', 'banners'), { data: JSON.parse(JSON.stringify(appBanners)), timestamp: ts }),
+                        setDoc(doc(db, 'gameData', 'sync_meta'), { lastUpdate: ts })
+                    ])
                     .then(() => alert('Banners saved to server successfully!'))
                     .catch(e => alert('Failed to save banners: ' + e));
                  }} className="w-full py-3 bg-[#e5c158] text-black rounded-xl font-bold uppercase tracking-widest text-[11px] shadow-[0_0_15px_rgba(229,193,88,0.4)] transition-all active:scale-95">Push Banners Live</button>
@@ -4949,9 +5059,7 @@ export default function App() {
                           const updatedContests = [...appContests, newContest];
                           setAppContests(updatedContests);
                           localStorage.setItem('dreamApp_contests', JSON.stringify(updatedContests));
-                          setDoc(doc(db, 'gameData', 'main_state'), JSON.parse(JSON.stringify({
-                             contests: updatedContests,
-                          })), { merge: true }).catch(err => console.error("Error saving contests to DB", err));
+                          // syncActiveDataToCloud(); // Call sync button instead to avoid payload size errors
                           
                           alert(`Successfully added ${adminContestType} contest!`);
                           setAdminContestName('');
@@ -5313,7 +5421,7 @@ export default function App() {
                           };
                           const newMatches = [newAppMatch, ...appMatches];
                           setAppMatches(newMatches);
-                          setDoc(doc(db, 'gameData', 'main_state'), JSON.parse(JSON.stringify({ matches: newMatches, players: appPlayers })), { merge: true });
+                          // Removing main_state write to avoid 1MB document size errors.
                           // Force re-render of this button
                           setApiMatches([...apiMatches]);
                        }}
@@ -5488,10 +5596,7 @@ export default function App() {
               localStorage.setItem('dreamApp_matches', JSON.stringify(updatedMatches));
               localStorage.setItem('dreamApp_players', JSON.stringify(updatedPlayers));
               
-              setDoc(doc(db, 'gameData', 'main_state'), JSON.parse(JSON.stringify({
-                 matches: updatedMatches,
-                 players: updatedPlayers
-              })), { merge: true }).catch(err => console.error("Error saving match to DB", err));
+              // syncActiveDataToCloud(); // Call sync button instead to avoid payload size errors
               
               setMatchListT1Name('');
               setMatchListT1Code('');
@@ -5662,9 +5767,10 @@ export default function App() {
                                               if (!found) {
                                                   newRemotePlayers.push({ ...p, points: finalPts });
                                               }
-                                              await updateDoc(doc(db, 'gameData', 'main_state'), JSON.parse(JSON.stringify({ players: newRemotePlayers })));
+                                              // Removed main_state write to avoid 1MB error.
+                                              // Use "Update Apps & Player" button to sync all scores.
                                           } else {
-                                              await setDoc(doc(db, 'gameData', 'main_state'), JSON.parse(JSON.stringify({ players: appPlayers.map(pl => pl.id === p.id ? { ...pl, points: finalPts } : pl) })), { merge: true });
+                                              await syncActiveDataToCloud();
                                           }
                                         } catch (e) {
                                           console.error("Could not sync to cloud automatically", e);
@@ -5715,25 +5821,28 @@ export default function App() {
                          onUpdate={(updatedMatch) => {
                             const newMatches = appMatches.map(mm => mm.id === m.id ? updatedMatch : mm);
                             setAppMatches(newMatches);
-                            setDoc(doc(db, 'gameData', 'main_state'), JSON.parse(JSON.stringify({ matches: newMatches, players: appPlayers })), { merge: true });
+                            // Removing main_state write to avoid 1MB document size errors.
+                            // Use "Update Apps & Player" button to sync.
                          }}
                          onDelete={() => {
                             const newMatches = appMatches.filter(mm => mm.id !== m.id);
                             setAppMatches(newMatches);
-                            setDoc(doc(db, 'gameData', 'main_state'), JSON.parse(JSON.stringify({ matches: newMatches, players: appPlayers })), { merge: true });
+                            // Removing main_state write to avoid 1MB document size errors.
                          }}
                          onStatusChange={(status) => {
                             if (status === 'Completed' && m.status !== 'Completed') {
                                 distributePrizes(m.id);
+                                // Remove bots of this match from local state to save device memory
+                                setSavedTeams(prev => prev.filter(t => !(t.match?.id === m.id && (t.userId === 'admin_bot' || t.userId === 'admin_bot_boot'))));
                             }
                             const newMatches = appMatches.map(mm => mm.id === m.id ? { ...mm, status } : mm);
                             setAppMatches(newMatches);
-                            setDoc(doc(db, 'gameData', 'main_state'), JSON.parse(JSON.stringify({ matches: newMatches, players: appPlayers })), { merge: true });
+                            // Removing main_state write to avoid 1MB document size errors.
                          }}
                          onLineupToggle={() => {
                             const newMatches = appMatches.map(mm => mm.id === m.id ? { ...mm, lineupStatus: mm.lineupStatus === 'OUT' ? 'NOT_OUT' : 'OUT' as const } : mm);
                             setAppMatches(newMatches);
-                            setDoc(doc(db, 'gameData', 'main_state'), JSON.parse(JSON.stringify({ matches: newMatches, players: appPlayers })), { merge: true });
+                            // Removing main_state write to avoid 1MB document size errors.
                          }}
                        />
                     ))}
@@ -6557,7 +6666,7 @@ export default function App() {
                                  e.stopPropagation();
                                  const newMatchesList = appMatches.map(m => m.id === match.id ? { ...m, lineupStatus: m.lineupStatus === 'OUT' ? 'NOT_OUT' : 'OUT' as const } : m);
                                  setAppMatches(newMatchesList);
-                                 setDoc(doc(db, 'gameData', 'main_state'), JSON.parse(JSON.stringify({ matches: newMatchesList, players: appPlayers })), { merge: true });
+                                 // Removed main_state write to avoid 1MB error. 
                                }}
                                className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${match.lineupStatus === 'OUT' ? 'bg-green-500/20 text-green-400 border border-green-500/50 shadow-[0_0_10px_rgba(34,197,94,0.2)]' : 'bg-red-500/10 text-red-500 border border-red-500/50'}`}
                              >
@@ -6908,7 +7017,7 @@ export default function App() {
                               };
                               const newMatchesList = [...appMatches, newMatchObj];
                               setAppMatches(newMatchesList);
-                              setDoc(doc(db, 'gameData', 'main_state'), JSON.parse(JSON.stringify({ matches: newMatchesList, players: appPlayers })), { merge: true });
+                              // syncActiveDataToCloud(); // Call sync button instead to avoid payload size errors
                               
                               setSelectedTeamsForMatch([]);
                               setNewMatchTimeForm('');
@@ -6949,7 +7058,7 @@ export default function App() {
                             : t
                         );
                         const adminTeams = newTeams.filter(t => t.userId === 'admin_bot' || t.userId === 'admin_bot_boot');
-                        setDoc(doc(db, 'gameData', 'main_state'), JSON.parse(JSON.stringify({ adminTeams })), { merge: true }).catch(console.error);
+                        // setDoc(doc(db, 'gameData', 'main_state'), JSON.parse(JSON.stringify({ adminTeams })), { merge: true }).catch(console.error);
                         return newTeams;
                     });
                     alert("Bots in this contest are now set as winners!");
