@@ -1,40 +1,10 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, Component } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import Cropper from 'react-easy-crop';
 import { Trophy, Clock, Users, ArrowLeft, Home, User, Wallet, Bell, PlayCircle, Shield, Plus, Minus, Info, Receipt, Settings, MessageSquare, Copy, PlusCircle, Edit2, ArrowDownToLine, ArrowDownLeft, ArrowRight, Check, X, ChevronUp, ChevronDown, Search, ChevronLeft, ChevronRight, Trash2, Download, BarChart2, Image as ImageIcon, ZoomIn, RefreshCw, AlertCircle } from 'lucide-react';
 import { auth, googleProvider, signInWithPopup, signOut as firebaseSignOut, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, db } from './lib/firebase';
 import { doc, onSnapshot, setDoc, collection, query, where, getDoc, getDocs, updateDoc, writeBatch, increment, deleteDoc } from 'firebase/firestore';
 import { AreaChart, Area, LineChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip as RechartsTooltip, ResponsiveContainer, CartesianGrid, Legend } from 'recharts';
-
-class ErrorBoundary extends React.Component<{children: React.ReactNode}, {hasError: boolean, error: any}> {
-  constructor(props: any) {
-    super(props);
-    this.state = { hasError: false, error: null };
-  }
-  static getDerivedStateFromError(error: any) {
-    return { hasError: true, error };
-  }
-  componentDidCatch(error: any, errorInfo: any) {
-    console.error("ErrorBoundary caught an error", error, errorInfo);
-  }
-  render() {
-    if (this.state.hasError) {
-      return (
-        <div className="flex flex-col items-center justify-center h-screen bg-[#090b10] text-[#e5c158] p-8 text-center" style={{ zIndex: 9999 }}>
-          <div className="bg-red-500/10 p-6 rounded-3xl border border-red-500/30 mb-6">
-            <h1 className="text-2xl font-black mb-2">Something went wrong</h1>
-            <p className="text-xs text-slate-400 max-w-md mx-auto">{this.state.error?.message || "An unexpected error occurred in the UI."}</p>
-          </div>
-          <button 
-            onClick={() => window.location.reload()}
-            className="bg-[#e5c158] text-black font-black px-6 py-3 rounded-xl hover:bg-yellow-500 transition-all uppercase tracking-widest text-xs"
-          >Reload App</button>
-        </div>
-      );
-    }
-    return this.props.children;
-  }
-}
 
 const createImage = (url: string): Promise<HTMLImageElement> =>
   new Promise((resolve, reject) => {
@@ -843,8 +813,10 @@ export default function App() {
   const [authMode, setAuthMode] = useState<'LOGIN' | 'SIGNUP'>('SIGNUP');
   const [authInput, setAuthInput] = useState('');
   const [authPassword, setAuthPassword] = useState('');
-  const [authFirstName, setAuthFirstName] = useState('');
-  const [authLastName, setAuthLastName] = useState('');
+  const [authFullName, setAuthFullName] = useState('');
+  const [authEmail, setAuthEmail] = useState('');
+  const [authMobile, setAuthMobile] = useState('');
+  const [authError, setAuthError] = useState('');
   const [authLoading, setAuthLoading] = useState(false);
 
   const [winningPercentage, setWinningPercentage] = useState<number>(() => {
@@ -3886,48 +3858,85 @@ export default function App() {
 
     const handleAuth = async (e: React.FormEvent) => {
       e.preventDefault();
-      if (!authInput || !authPassword) return alert("Please enter mobile/email and password");
       
-      if (authMode === 'SIGNUP' && (!authFirstName.trim() || !authLastName.trim())) {
-         return alert("Please enter your First Name and Last Name");
+      if (authMode === 'SIGNUP') {
+        if (!authFullName || !authEmail || !authMobile || !authPassword) {
+          return alert("Please fill all fields: Name, Email, Mobile and Password");
+        }
+        if (!/^\d{10}$/.test(authMobile.trim())) {
+          return alert("Please enter a valid 10-digit mobile number");
+        }
+        if (!authEmail.includes('@')) {
+          return alert("Please enter a valid email address");
+        }
+      } else {
+        if (!authInput || !authPassword) return alert("Please enter mobile/email and password");
       }
-
-      const parsedEmail = /^\d{10}$/.test(authInput.trim()) 
-        ? `${authInput.trim()}@dreamapp.com` 
-        : authInput.trim();
 
       setAuthLoading(true);
       try {
         if (authMode === 'SIGNUP') {
+          // 1. Check if mobile already exists in Firestore
+          const usersRef = collection(db, 'users');
+          const mobileQuery = query(usersRef, where('mobile', '==', authMobile.trim()));
+          const mobileSnap = await getDocs(mobileQuery);
+          
+          if (!mobileSnap.empty) {
+            setAuthLoading(false);
+            return alert("This mobile number is already registered! Please login.");
+          }
+
           sessionStorage.setItem('isSigningUp', 'true');
-          const cred = await createUserWithEmailAndPassword(auth, parsedEmail, authPassword);
-          const fullName = `${authFirstName.trim()} ${authLastName.trim()}`;
+          const cred = await createUserWithEmailAndPassword(auth, authEmail.trim(), authPassword);
           const numericId = Math.floor(1000000000 + Math.random() * 9000000000).toString();
+          
           await setDoc(doc(db, 'users', cred.user.uid), {
-             firstName: authFirstName.trim(),
-             lastName: authLastName.trim(),
-             name: fullName,
+             name: authFullName.trim(),
+             mobile: authMobile.trim(),
+             email: authEmail.trim().toLowerCase(),
              numericId: numericId,
-             email: parsedEmail
+             createdAt: new Date().toISOString(),
+             balance: 0,
+             winnings: 0,
+             bonus: 100, // Welcome bonus
+             isBot: false
           });
           
           sessionStorage.removeItem('isSigningUp');
+          localStorage.setItem('dreamApp_hasSignedUp', 'true');
           await firebaseSignOut(auth);
           
-          alert("Signup successful! Please login below to continue.");
+          alert("Signup successful! Now please login to your account.");
           setAuthMode('LOGIN');
           setAuthPassword('');
-          setAuthFirstName('');
-          setAuthLastName('');
+          setAuthFullName('');
+          setAuthEmail('');
+          setAuthMobile('');
         } else {
-          await signInWithEmailAndPassword(auth, parsedEmail, authPassword);
+          let loginEmail = authInput.trim();
+          
+          // If input is mobile number, find corresponding email
+          if (/^\d{10}$/.test(loginEmail)) {
+            const usersRef = collection(db, 'users');
+            const q = query(usersRef, where('mobile', '==', loginEmail));
+            const snap = await getDocs(q);
+            
+            if (snap.empty) {
+              setAuthLoading(false);
+              return alert("No account found with this mobile number.");
+            }
+            loginEmail = snap.docs[0].data().email;
+          }
+          
+          await signInWithEmailAndPassword(auth, loginEmail, authPassword);
         }
       } catch (err: any) {
         console.error("Auth error", err);
         let msg = err.message;
-        if (err.code === 'auth/email-already-in-use') msg = "Account already exists! Please login instead.";
-        else if (err.code === 'auth/wrong-password' || err.code === 'auth/user-not-found' || err.code === 'auth/invalid-credential') msg = "Incorrect mobile/email or password.";
-        else if (err.code === 'auth/invalid-email') msg = "Invalid format for mobile number or email.";
+        if (err.code === 'auth/email-already-in-use') msg = "Email already registered! Please use a different email or login.";
+        else if (err.code === 'auth/wrong-password' || err.code === 'auth/user-not-found' || err.code === 'auth/invalid-credential' || err.code === 'auth/invalid-login-credentials') msg = "Incorrect mobile/email or password.";
+        else if (err.code === 'auth/invalid-email') msg = "Invalid email format.";
+        else if (err.code === 'auth/network-request-failed') msg = "Network error. Please check your internet connection.";
         alert(msg);
       } finally {
         setAuthLoading(false);
@@ -3937,111 +3946,152 @@ export default function App() {
 
     return (
     <div className={`relative h-[100dvh] w-full max-w-md mx-auto bg-app-bg text-app-text font-sans shadow-2xl overflow-hidden border-x border-app-border flex flex-col ${themeMode === 'Light' ? 'theme-light' : ''} color-${themeColor.toLowerCase()}`}>
-       <div className="flex-1 flex flex-col items-center justify-center p-8">
-          <div className="w-24 h-24 bg-app-accent rounded-3xl mb-6 flex items-center justify-center shadow-lg rotate-3">
-             <Trophy size={48} className="text-app-text" />
+       <div className="flex-1 flex flex-col items-center justify-center p-8 overflow-y-auto">
+          <div className="w-20 h-20 bg-app-accent rounded-2xl mb-6 flex items-center justify-center shadow-lg rotate-3 shrink-0">
+             <Trophy size={40} className="text-white" />
           </div>
-          <h1 className="text-4xl font-black tracking-tight italic mb-2 text-app-text">Fantasy<span className="text-app-accent">11</span></h1>
-          <p className="text-app-text-muted font-semibold mb-8 text-center text-sm">Play Fantasy Sports & Win Cash Prizes!</p>
+          <h1 className="text-3xl font-black tracking-tight italic mb-1 text-app-text">Fantasy<span className="text-app-accent">11</span></h1>
+          <p className="text-app-text-muted font-bold mb-8 text-center text-[10px] uppercase tracking-widest leading-none">Play Fantasy Sports & Win Cash Prizes!</p>
           
-          <div className="w-full space-y-4">
-             <form onSubmit={handleAuth} className="flex flex-col gap-3">
-               {authMode === 'SIGNUP' && (
+          <div className="w-full">
+             <form onSubmit={handleAuth} className="flex flex-col gap-3.5">
+               {authMode === 'SIGNUP' ? (
                  <>
-                   <div>
-                      <input 
-                        type="text" 
-                        placeholder="First Name" 
-                        value={authFirstName}
-                        onChange={e => setAuthFirstName(e.target.value)}
-                        className="w-full bg-app-card border border-app-border text-app-text px-4 py-3 rounded-xl outline-none focus:border-app-accent font-medium"
-                      />
+                   <div className="space-y-3.5">
+                      <div className="relative">
+                        <User size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-app-text-muted" />
+                        <input 
+                          type="text" 
+                          placeholder="Full Name" 
+                          value={authFullName}
+                          onChange={e => setAuthFullName(e.target.value)}
+                          className="w-full bg-app-card border border-app-border text-app-text pl-12 pr-4 py-3.5 rounded-xl outline-none focus:border-app-accent font-bold text-sm transition-all"
+                        />
+                      </div>
+                      <div className="relative">
+                        <Bell size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-app-text-muted rotate-12" />
+                        <input 
+                          type="email" 
+                          placeholder="Email Address" 
+                          value={authEmail}
+                          onChange={e => setAuthEmail(e.target.value)}
+                          className="w-full bg-app-card border border-app-border text-app-text pl-12 pr-4 py-3.5 rounded-xl outline-none focus:border-app-accent font-bold text-sm transition-all"
+                        />
+                      </div>
+                      <div className="relative">
+                        <PlayCircle size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-app-text-muted" />
+                        <input 
+                          type="tel" 
+                          placeholder="Mobile Number (10 digits)" 
+                          maxLength={10}
+                          value={authMobile}
+                          onChange={e => setAuthMobile(e.target.value.replace(/\D/g, ''))}
+                          className="w-full bg-app-card border border-app-border text-app-text pl-12 pr-4 py-3.5 rounded-xl outline-none focus:border-app-accent font-bold text-sm transition-all"
+                        />
+                      </div>
+                      <div className="relative">
+                        <Settings size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-app-text-muted" />
+                        <input 
+                          type="password" 
+                          placeholder="Password" 
+                          value={authPassword}
+                          onChange={e => setAuthPassword(e.target.value)}
+                          className="w-full bg-app-card border border-app-border text-app-text pl-12 pr-4 py-3.5 rounded-xl outline-none focus:border-app-accent font-bold text-sm transition-all"
+                        />
+                      </div>
                    </div>
-                   <div>
-                      <input 
-                        type="text" 
-                        placeholder="Last Name" 
-                        value={authLastName}
-                        onChange={e => setAuthLastName(e.target.value)}
-                        className="w-full bg-app-card border border-app-border text-app-text px-4 py-3 rounded-xl outline-none focus:border-app-accent font-medium"
-                      />
+                 </>
+               ) : (
+                 <>
+                   <div className="space-y-3.5">
+                      <div className="relative">
+                        <User size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-app-text-muted" />
+                        <input 
+                          type="text" 
+                          placeholder="Mobile Number or Email" 
+                          value={authInput}
+                          onChange={e => setAuthInput(e.target.value)}
+                          className="w-full bg-app-card border border-app-border text-app-text pl-12 pr-4 py-3.5 rounded-xl outline-none focus:border-app-accent font-bold text-sm transition-all"
+                        />
+                      </div>
+                      <div className="relative">
+                        <Settings size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-app-text-muted" />
+                        <input 
+                          type="password" 
+                          placeholder="Password" 
+                          value={authPassword}
+                          onChange={e => setAuthPassword(e.target.value)}
+                          className="w-full bg-app-card border border-app-border text-app-text pl-12 pr-4 py-3.5 rounded-xl outline-none focus:border-app-accent font-bold text-sm transition-all"
+                        />
+                      </div>
                    </div>
                  </>
                )}
-               <div>
-                  <input 
-                    type="text" 
-                    placeholder="Mobile Number (10 digits) or Email" 
-                    value={authInput}
-                    onChange={e => setAuthInput(e.target.value)}
-                    className="w-full bg-app-card border border-app-border text-app-text px-4 py-3 rounded-xl outline-none focus:border-app-accent font-medium"
-                  />
-               </div>
-               <div>
-                  <input 
-                    type="password" 
-                    placeholder="Password" 
-                    value={authPassword}
-                    onChange={e => setAuthPassword(e.target.value)}
-                    className="w-full bg-app-card border border-app-border text-app-text px-4 py-3 rounded-xl outline-none focus:border-app-accent font-medium"
-                  />
-               </div>
+               
                <button 
                  type="submit"
                  disabled={authLoading}
-                 className="w-full bg-app-accent text-white font-bold py-3.5 rounded-xl shadow-md hover:bg-app-accent active:scale-[0.98] transition-all disabled:opacity-70 mt-2"
+                 className="w-full bg-app-accent text-white font-black py-4 rounded-xl shadow-lg shadow-app-accent/20 hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-70 mt-2 uppercase tracking-widest text-sm"
                >
-                 {authLoading ? 'Processing...' : (authMode === 'LOGIN' ? 'Login' : 'Sign Up')}
+                 {authLoading ? 'Authenticating...' : (authMode === 'LOGIN' ? 'Login' : 'Create Account')}
                </button>
              </form>
 
-             {!hasSignedUp && (
-               <div className="text-center pb-2">
-                 <button 
-                   type="button"
-                   onClick={() => setAuthMode(prev => prev === 'LOGIN' ? 'SIGNUP' : 'LOGIN')}
-                   className="text-sm text-app-text-muted font-bold hover:text-app-text underline underline-offset-2"
-                 >
-                   {authMode === 'LOGIN' ? "Don't have an account? Sign Up" : "Already have an account? Login"}
-                 </button>
-               </div>
-             )}
+             <div className="text-center mt-6">
+               <button 
+                 type="button"
+                 onClick={() => {
+                   setAuthMode(prev => prev === 'LOGIN' ? 'SIGNUP' : 'LOGIN');
+                   setAuthError('');
+                 }}
+                 className="group text-xs text-app-text-muted font-bold transition-all"
+               >
+                 {authMode === 'LOGIN' ? (
+                    <>New here? <span className="text-app-accent group-hover:underline ml-1">Create an account</span></>
+                 ) : (
+                    <>Already have an account? <span className="text-app-accent group-hover:underline ml-1">Login now</span></>
+                 )}
+               </button>
+             </div>
 
-             <div className="relative flex items-center py-2">
+             <div className="relative flex items-center py-6">
                 <div className="flex-grow border-t border-app-border"></div>
-                <span className="flex-shrink-0 mx-4 text-app-text-muted text-xs font-bold uppercase">Or</span>
+                <span className="flex-shrink-0 mx-4 text-app-text-muted text-[10px] font-black uppercase tracking-widest">OR</span>
                 <div className="flex-grow border-t border-app-border"></div>
              </div>
 
              <button 
                 onClick={async () => {
                    try {
+                     setAuthLoading(true);
                      await signInWithPopup(auth, googleProvider);
                    } catch (error) {
                      console.error("Login popup failed", error);
+                     alert("Google login failed. Please try again.");
+                   } finally {
+                     setAuthLoading(false);
                    }
                 }}
-                className={`w-full flex items-center justify-center gap-4 border-2 border-app-border font-bold text-[15px] py-3.5 rounded-xl shadow-sm active:scale-[0.98] transition-all ${hasSignedUp ? 'bg-app-card hover:border-app-border-hover text-app-text' : 'bg-app-card-inner hover:bg-app-bg text-app-text'}`}
+                disabled={authLoading}
+                className="w-full flex items-center justify-center gap-3 bg-app-card border border-app-border font-bold text-sm py-3.5 rounded-xl shadow-sm hover:border-app-accent/50 active:scale-95 transition-all disabled:opacity-50"
              >
-                {hasSignedUp && (
-                    <svg className="w-6 h-6" viewBox="0 0 24 24">
-                       <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
-                       <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
-                       <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
-                       <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
-                    </svg>
-                )}
-                Login with Google
+                <svg className="w-5 h-5 shrink-0" viewBox="0 0 24 24">
+                   <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                   <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                   <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
+                   <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
+                </svg>
+                <span className="text-app-text">Continue with Google</span>
              </button>
           </div>
 
-          <p className="text-xs text-app-text-muted text-center mt-8 px-4">
-             By continuing, you agree to our Terms & Conditions and Privacy Policy.
+          <p className="text-[10px] text-app-text-muted text-center mt-12 px-6 leading-relaxed">
+             By joining, you agree to our <span className="text-app-text font-bold">Terms of Service</span> and <span className="text-app-text font-bold">Privacy Policy</span>. Responsible gaming only.
           </p>
        </div>
     </div>
-  );
-  }
+    );
+  };
 
   if (!user) return renderLogin();
   
@@ -6577,8 +6627,7 @@ export default function App() {
   }
 
   return (
-    <ErrorBoundary>
-      <div className={`relative h-[100dvh] w-full max-w-md mx-auto bg-app-bg text-app-text font-sans shadow-2xl overflow-hidden border-x border-app-border ${themeMode === 'Light' ? 'theme-light' : ''} color-${themeColor.toLowerCase()}`}>
+    <div className={`relative h-[100dvh] w-full max-w-md mx-auto bg-app-bg text-app-text font-sans shadow-2xl overflow-hidden border-x border-app-border ${themeMode === 'Light' ? 'theme-light' : ''} color-${themeColor.toLowerCase()}`}>
 <>
         {/* Quota Exceeded Modal */}
         {firestoreQuotaExceeded && (
@@ -7373,6 +7422,5 @@ export default function App() {
       )}
 
     </div>
-    </ErrorBoundary>
   );
 }
