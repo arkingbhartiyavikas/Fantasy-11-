@@ -1430,18 +1430,6 @@ export default function App() {
   }, [appMatches]);
 
   useEffect(() => {
-    const unsubMatches = onSnapshot(doc(db, 'gameData', 'matches'), (snap) => {
-      if (snap.exists()) {
-        const data = snap.data().data;
-        if (Array.isArray(data)) setAppMatches(data);
-      }
-    });
-    const unsubContests = onSnapshot(doc(db, 'gameData', 'contests'), (snap) => {
-      if (snap.exists()) {
-        const data = snap.data().data;
-        if (Array.isArray(data)) setAppContests(data);
-      }
-    });
     const loadCategoryInChunks = async (key: string) => {
       try {
         const metaDoc = await getDoc(doc(db, 'gameData', `${key}_meta`));
@@ -1468,8 +1456,8 @@ export default function App() {
           loadCategoryInChunks('adminTeams')
       ]);
 
-      if (matchesData) setAppMatches(matchesData);
-      if (contestsData) setAppContests(contestsData);
+      if (matchesData && matchesData.length > 0) setAppMatches(matchesData);
+      if (contestsData && contestsData.length > 0) setAppContests(contestsData);
       
       if (playersData) {
           const dataStr = JSON.stringify(playersData);
@@ -1502,36 +1490,17 @@ export default function App() {
     const unsubMain = onSnapshot(doc(db, 'gameData', 'main_state'), (snapshot) => {
         if (snapshot.exists()) {
              const data = snapshot.data();
-             if (data.matches && Array.isArray(data.matches)) setAppMatches(data.matches);
-             if (data.contests && Array.isArray(data.contests)) setAppContests(data.contests);
-             if (data.players && Array.isArray(data.players)) {
-                 const dataStr = JSON.stringify(data.players);
-                 setAppPlayers(prev => {
-                     if (JSON.stringify(prev) !== dataStr) {
-                         lastCloudPlayers.current = dataStr;
-                         return data.players;
-                     }
-                     return prev;
-                 });
-             }
-             if (data.banners && Array.isArray(data.banners)) setAppBanners(data.banners);
-             if (data.adminTeams && Array.isArray(data.adminTeams)) {
-                  setSavedTeams(prev => {
-                      const userTeams = prev.filter(t => t.userId !== 'admin_bot' && t.userId !== 'admin_bot_boot');
-                      const newTeams = [...userTeams, ...data.adminTeams];
-                      const uniqueTeams = Array.from(new Map(newTeams.map(item => [item.id, item])).values());
-                      return uniqueTeams;
-                  });
+             // Only fallback for players/banners if chunked sync not ready
+             if (!lastCloudPlayers.current && data.players && Array.isArray(data.players)) {
+                 setAppPlayers(data.players);
              }
         }
     });
 
     return () => {
-      unsubMain();
-      unsubMatches();
-      unsubContests();
-      unsubBanners();
       unsubSyncMeta();
+      unsubBanners();
+      unsubMain();
     };
   }, []);
 
@@ -4159,12 +4128,11 @@ export default function App() {
     if (!isAdmin) return;
     try {
       const ts = Date.now();
-      const activeMatches = appMatches.filter(m => m.status !== 'Completed');
-      const activeMatchIds = new Set(activeMatches.map(m => m.id));
-      const activeContests = appContests.filter(c => activeMatchIds.has(c.matchId));
-      
-      // Filter bots: Only sync bots for active matches to save space
-      const adminTeams = savedTeams.filter(t => (t.userId === 'admin_bot' || t.userId === 'admin_bot_boot') && activeMatchIds.has(t.match?.id));
+      // Keep all matches and contests to avoid data loss.
+      // Chunks will handle the payload size issue.
+      const allMatches = [...appMatches];
+      const allContests = [...appContests];
+      const adminTeams = savedTeams.filter(t => t.userId === 'admin_bot' || t.userId === 'admin_bot_boot');
 
       const saveChunks = async (key: string, data: any[], itemsPerChunk = 50) => {
           const CHUNK_SIZE = itemsPerChunk; 
@@ -4191,14 +4159,14 @@ export default function App() {
       };
 
       await Promise.all([
-          saveChunks('matches', activeMatches, 20), // Chunked matches
-          saveChunks('contests', activeContests, 30), // Chunked contests
+          saveChunks('matches', allMatches, 20), 
+          saveChunks('contests', allContests, 30), 
           setDoc(doc(db, 'gameData', 'banners'), { data: JSON.parse(JSON.stringify(appBanners)), timestamp: ts }),
-          saveChunks('players', appPlayers, 25), // Smaller chunks to stay under 1MB
-          saveChunks('adminTeams', adminTeams, 15), // Bots often have heavy match/team data, use very small chunks
+          saveChunks('players', appPlayers, 25), 
+          saveChunks('adminTeams', adminTeams, 15), 
           setDoc(doc(db, 'gameData', 'sync_meta'), { lastUpdate: ts })
       ]);
-      console.log("Cloud sync successful (Active Data Only)");
+      console.log("Cloud sync successful (All Data)");
     } catch (e) {
       console.error("Cloud sync failed:", e);
       throw e;
@@ -4210,13 +4178,9 @@ export default function App() {
     setIsSyncing(true);
     setSyncMessage(null);
     try {
-      const activeMatchIds = new Set(appMatches.filter(m => m.status !== 'Completed').map(m => m.id));
-      const syncBotsCount = savedTeams.filter(t => (t.userId === 'admin_bot' || t.userId === 'admin_bot_boot') && activeMatchIds.has(t.match?.id)).length;
-      
       await syncActiveDataToCloud();
-      
-      alert(`✅ Update Successful!\n- Active Matches/Contests synced.\n- Database cleaned of completed matches data.\n- ${appPlayers.length} Players & ${syncBotsCount} Active Bots updated.\n- Bots of completed matches are now hidden from database.`);
-      setSyncMessage({type: 'success', text: '✅ Successfully synced Active Data. Database cleaned of completed matches.'});
+      alert(`✅ Update Successful!\n- All Matches, Contests & Price Pools synced.\n- Data split into small chunks to prevent size errors.\n- Everything is now up to date for all players.`);
+      setSyncMessage({type: 'success', text: '✅ Successfully synced all data to cloud.'});
     } catch (e: any) {
       console.error(e);
       let errorMsg = e.message;
@@ -5832,8 +5796,6 @@ export default function App() {
                          onStatusChange={(status) => {
                             if (status === 'Completed' && m.status !== 'Completed') {
                                 distributePrizes(m.id);
-                                // Remove bots of this match from local state to save device memory
-                                setSavedTeams(prev => prev.filter(t => !(t.match?.id === m.id && (t.userId === 'admin_bot' || t.userId === 'admin_bot_boot'))));
                             }
                             const newMatches = appMatches.map(mm => mm.id === m.id ? { ...mm, status } : mm);
                             setAppMatches(newMatches);
