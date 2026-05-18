@@ -4,6 +4,8 @@ import nodemailer from 'nodemailer';
 import path from 'path';
 import dotenv from 'dotenv';
 
+import { handleTeamEdit } from './teamQueueHandler.js';
+
 dotenv.config();
 
 async function startServer() {
@@ -12,6 +14,10 @@ async function startServer() {
 
   // Increase payload limit for base64 image uploads
   app.use(express.json({ limit: '50mb' }));
+
+  // API route for team edit queue (Handles 20k+ concurrent users)
+  app.post('/api/team/edit', handleTeamEdit);
+
 
   // API route to send email
   app.post('/api/notify-admin', async (req, res) => {

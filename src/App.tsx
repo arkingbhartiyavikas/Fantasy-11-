@@ -1553,10 +1553,31 @@ export default function App() {
         }
     }, (e) => handleFsError(e, 'listen_main_fallback'));
 
+    // Listen to real-time points updates from admin
+    const unsubPoints = onSnapshot(doc(db, 'gameData', 'live_player_points'), (snapshot) => {
+        if (snapshot.exists()) {
+             const livePts = snapshot.data();
+             if (livePts) {
+                 setAppPlayers(prev => {
+                     let changed = false;
+                     const newPlayers = prev.map(p => {
+                         if (livePts[p.id] !== undefined && p.points !== livePts[p.id]) {
+                             changed = true;
+                             return { ...p, points: livePts[p.id] };
+                         }
+                         return p;
+                     });
+                     return changed ? newPlayers : prev;
+                 });
+             }
+        }
+    }, (e) => handleFsError(e, 'listen_live_points'));
+
     return () => {
       unsubSyncMeta();
       unsubBanners();
       unsubMain();
+      unsubPoints();
     };
   }, [firestoreQuotaExceeded]);
 
@@ -5845,27 +5866,9 @@ export default function App() {
                                         
                                         // Also sync to cloud db immediately if possible
                                         try {
-                                          const parentDoc = await getDoc(doc(db, 'gameData', 'main_state'));
-                                          if (parentDoc.exists()) {
-                                              const remotePlayers = parentDoc.data().players || [];
-                                              let found = false;
-                                              const newRemotePlayers = remotePlayers.map(pl => {
-                                                  if (pl.id === p.id) {
-                                                      found = true;
-                                                      return { ...pl, points: finalPts };
-                                                  }
-                                                  return pl;
-                                              });
-                                              if (!found) {
-                                                  newRemotePlayers.push({ ...p, points: finalPts });
-                                              }
-                                              // Removed main_state write to avoid 1MB error.
-                                              // Use "Update Apps & Player" button to sync all scores.
-                                          } else {
-                                              // await syncActiveDataToCloud();
-                                          }
+                                          await setDoc(doc(db, 'gameData', 'live_player_points'), { [p.id]: finalPts }, { merge: true });
                                         } catch (e) {
-                                          console.error("Could not sync to cloud automatically", e);
+                                          console.error("Could not sync point update to cloud immediately", e);
                                         }
 
                                         setUpdateSuccessIds(prev => ({...prev, [p.id]: true}));
