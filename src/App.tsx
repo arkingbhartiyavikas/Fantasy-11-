@@ -807,7 +807,7 @@ export default function App() {
   const [activeContestDetails, setActiveContestDetails] = useState<Contest | null>(null);
   const [activeContestInstanceId, setActiveContestInstanceId] = useState<number | null>(null);
   
-  const [authMode, setAuthMode] = useState<'LOGIN' | 'SIGNUP'>('SIGNUP');
+  const [authMode, setAuthMode] = useState<'LOGIN' | 'SIGNUP' | 'OTP'>('SIGNUP');
   const [authInput, setAuthInput] = useState('');
   const [authPassword, setAuthPassword] = useState('');
   const [authFullName, setAuthFullName] = useState('');
@@ -815,6 +815,11 @@ export default function App() {
   const [authMobile, setAuthMobile] = useState('');
   const [authError, setAuthError] = useState('');
   const [authLoading, setAuthLoading] = useState(false);
+  const [sentOtp, setSentOtp] = useState('');
+  const [enteredOtp, setEnteredOtp] = useState('');
+  const [tempFirebaseUser, setTempFirebaseUser] = useState<any>(null);
+  const [showPhonePermissionDialog, setShowPhonePermissionDialog] = useState(false);
+  const [phonePermissionGranted, setPhonePermissionGranted] = useState(() => localStorage.getItem('dreamApp_phonePermission') === 'true');
 
   const [winningPercentage, setWinningPercentage] = useState<number>(() => {
     const saved = localStorage.getItem('dreamApp_winningRate');
@@ -859,6 +864,11 @@ export default function App() {
         if (sessionStorage.getItem('isSigningUp') === 'true') {
           // Do nothing, let handleAuth complete the setup and sign out
           return;
+        }
+        
+        if (sessionStorage.getItem('isPendingOtp') === 'true') {
+           // Wait until OTP is verified. Store the UID temporarily if needed, but do not set 'user'.
+           return;
         }
         
         let numericId = localStorage.getItem(`dreamApp_numericId_${firebaseUser.uid}`) || '';
@@ -2259,7 +2269,30 @@ export default function App() {
     };
 
     // Save the created team to "My Matches"
-    setSavedTeams(prev => [...prev, newTeamMeta]);
+    setSavedTeams(prev => {
+       const userTeams = prev.filter(t => t.userId === (user?.id || 'guest'));
+       let newState = [...prev];
+       
+       // If user has 10 or more teams, delete the oldest one(s) of this user
+       if (userTeams.length >= 10) {
+          // Sort user teams by creation time (ascending)
+          const sortedUserTeams = [...userTeams].sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+          // Delete teams until we have 9 left (so we can add the 10th)
+          const teamsToDelete = sortedUserTeams.slice(0, userTeams.length - 9);
+          const idsToDelete = teamsToDelete.map(t => t.id);
+          
+          newState = newState.filter(t => !idsToDelete.includes(t.id));
+          
+          // Also optionally delete from cloud for consistency
+          if (user?.id) {
+             idsToDelete.forEach(id => {
+                deleteDoc(doc(db, 'userTeams', id)).catch(e => console.error("Could not delete old team", e));
+             });
+          }
+       }
+       return [...newState, newTeamMeta];
+    });
+    
     if (user?.id) {
        const userTeamPath = `userTeams/${newId}`;
        setDoc(doc(db, 'userTeams', newId), newTeamMeta).catch(e => handleFsError(e, 'save_user_team', userTeamPath));
@@ -3969,21 +4002,59 @@ export default function App() {
        setAuthMode('LOGIN');
     }
 
-    const handleAuth = async (e: React.FormEvent) => {
-      e.preventDefault();
+    const handleAuth = async (e?: React.FormEvent) => {
+      if (e) e.preventDefault();
+      
+      if (!phonePermissionGranted && authMode !== 'OTP') {
+         setShowPhonePermissionDialog(true);
+         return;
+      }
+      
+      if (authMode === 'OTP') {
+        if (!enteredOtp || enteredOtp !== sentOtp) {
+          return alert("Invalid OTP entered. Please try again.");
+        }
+        
+        sessionStorage.removeItem('isPendingOtp');
+               
+        // Complete the login sequence successfully
+        let numericId = localStorage.getItem(`dreamApp_numericId_${tempFirebaseUser.uid}`) || '';
+        let fullName = tempFirebaseUser.displayName || 'Fantasy Player';
+        
+        const userDocRef = doc(db, 'users', tempFirebaseUser.uid);
+        const userDoc = await getDoc(userDocRef);
+        if (userDoc.exists()) {
+           const data = userDoc.data();
+           numericId = data.numericId || numericId;
+           fullName = data.name || fullName;
+        }
+        
+        if (numericId) {
+            localStorage.setItem(`dreamApp_numericId_${tempFirebaseUser.uid}`, numericId);
+        }
+        
+        localStorage.setItem('dreamApp_hasSignedUp', 'true');
+        const newUser = {
+          email: tempFirebaseUser.email || '',
+          name: fullName,
+          id: tempFirebaseUser.uid,
+          numericId: numericId
+        };
+        localStorage.setItem('dreamApp_user', JSON.stringify(newUser));
+        setUser(newUser);
+        setTempFirebaseUser(null);
+        return;
+      }
       
       if (authMode === 'SIGNUP') {
-        if (!authFullName || !authEmail || !authMobile || !authPassword) {
-          return alert("Please fill all fields: Name, Email, Mobile and Password");
+        if (!authFullName || !authMobile || !authPassword) {
+          return alert("Please fill all fields: Name, Mobile and Password");
         }
         if (!/^\d{10}$/.test(authMobile.trim())) {
           return alert("Please enter a valid 10-digit mobile number");
         }
-        if (!authEmail.includes('@')) {
-          return alert("Please enter a valid email address");
-        }
-      } else {
-        if (!authInput || !authPassword) return alert("Please enter mobile/email and password");
+      } else if (authMode === 'LOGIN') {
+        if (!authInput || !authPassword) return alert("Please enter mobile number and password");
       }
 
       setAuthLoading(true);
@@ -4000,13 +4071,14 @@ export default function App() {
           }
 
           sessionStorage.setItem('isSigningUp', 'true');
-          const cred = await createUserWithEmailAndPassword(auth, authEmail.trim(), authPassword);
+          const pseudoEmail = `${authMobile.trim()}@dreamapp.com`;
+          const cred = await createUserWithEmailAndPassword(auth, pseudoEmail, authPassword);
           const numericId = Math.floor(1000000000 + Math.random() * 9000000000).toString();
           
           await setDoc(doc(db, 'users', cred.user.uid), {
              name: authFullName.trim(),
              mobile: authMobile.trim(),
-             email: authEmail.trim().toLowerCase(),
+             email: pseudoEmail,
              numericId: numericId,
              createdAt: new Date().toISOString(),
              balance: 0,
@@ -4023,13 +4095,13 @@ export default function App() {
           setAuthMode('LOGIN');
           setAuthPassword('');
           setAuthFullName('');
-          setAuthEmail('');
           setAuthMobile('');
-        } else {
+        } else if (authMode === 'LOGIN') {
           let loginEmail = authInput.trim();
           
-          // If input is mobile number, find corresponding email
+          // If input is mobile number, find corresponding email or use pseudo
           if (/^\d{10}$/.test(loginEmail)) {
+            // First check if user exists with standard format
             const usersRef = collection(db, 'users');
             const q = query(usersRef, where('mobile', '==', loginEmail));
             const snap = await getDocs(q);
@@ -4038,20 +4110,29 @@ export default function App() {
               setAuthLoading(false);
               return alert("No account found with this mobile number.");
             }
-            loginEmail = snap.docs[0].data().email;
+            loginEmail = snap.docs[0].data().email || `${loginEmail}@dreamapp.com`;
           }
           
-          await signInWithEmailAndPassword(auth, loginEmail, authPassword);
+          sessionStorage.setItem('isPendingOtp', 'true');
+          const userCredential = await signInWithEmailAndPassword(auth, loginEmail, authPassword);
+          setTempFirebaseUser(userCredential.user);
+          
+          // Generate 6-digit OTP
+          const newOtp = Math.floor(100000 + Math.random() * 900000).toString();
+          setSentOtp(newOtp);
+          setAuthMode('OTP');
+          
+          // Simulate sending SMS via alert/snackbar for demo purposes
+          alert(`DEMO OTP: Your 6-digit login code is ${newOtp}`);
         }
       } catch (err: any) {
         handleFsError(err, 'auth_action');
         console.error("Auth error", err);
         let msg = err.message;
-        if (err.code === 'auth/email-already-in-use') msg = "Email already registered! Please use a different email or login.";
-        else if (err.code === 'auth/wrong-password' || err.code === 'auth/user-not-found' || err.code === 'auth/invalid-credential' || err.code === 'auth/invalid-login-credentials') msg = "Incorrect mobile/email or password.";
-        else if (err.code === 'auth/invalid-email') msg = "Invalid email format.";
+        if (err.code === 'auth/email-already-in-use') msg = "Mobile number already registered! Please login.";
+        else if (err.code === 'auth/wrong-password' || err.code === 'auth/user-not-found' || err.code === 'auth/invalid-credential' || err.code === 'auth/invalid-login-credentials') msg = "Incorrect mobile number or password.";
+        else if (err.code === 'auth/invalid-email') msg = "Invalid format.";
         else if (err.code === 'auth/network-request-failed') msg = "Network error. Please check your internet connection.";
-        else if (err.code === 'auth/operation-not-allowed') msg = "Firebase Error: Email/Password login mode is not enabled in your Firebase Console. Please enable it to use this app. (Firebase Console में Email/Password authentication चालू करें)";
         alert(msg);
       } finally {
         setAuthLoading(false);
@@ -4070,26 +4151,33 @@ export default function App() {
           
           <div className="w-full">
              <form onSubmit={handleAuth} className="flex flex-col gap-3.5">
-               {authMode === 'SIGNUP' ? (
+               {authMode === 'OTP' ? (
+                 <>
+                   <p className="text-sm font-bold text-center text-app-text mb-4">Enter the 6-digit OTP sent to your mobile number.</p>
+                   <div className="space-y-3.5">
+                      <div className="relative">
+                        <User size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-app-text-muted" />
+                        <input 
+                          type="text" 
+                          placeholder="Enter 6-digit OTP" 
+                          maxLength={6}
+                          value={enteredOtp}
+                          onChange={e => setEnteredOtp(e.target.value.replace(/\D/g, ''))}
+                          className="w-full bg-app-card border border-app-border text-app-text pl-12 pr-4 py-3.5 rounded-xl outline-none focus:border-app-accent font-bold text-sm transition-all tracking-[0.5em] text-center"
+                        />
+                      </div>
+                   </div>
+                 </>
+               ) : authMode === 'SIGNUP' ? (
                  <>
                    <div className="space-y-3.5">
                       <div className="relative">
                         <User size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-app-text-muted" />
                         <input 
                           type="text" 
-                          placeholder="Full Name" 
+                          placeholder="First & Last Name" 
                           value={authFullName}
                           onChange={e => setAuthFullName(e.target.value)}
-                          className="w-full bg-app-card border border-app-border text-app-text pl-12 pr-4 py-3.5 rounded-xl outline-none focus:border-app-accent font-bold text-sm transition-all"
-                        />
-                      </div>
-                      <div className="relative">
-                        <Bell size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-app-text-muted rotate-12" />
-                        <input 
-                          type="email" 
-                          placeholder="Email Address" 
-                          value={authEmail}
-                          onChange={e => setAuthEmail(e.target.value)}
                           className="w-full bg-app-card border border-app-border text-app-text pl-12 pr-4 py-3.5 rounded-xl outline-none focus:border-app-accent font-bold text-sm transition-all"
                         />
                       </div>
@@ -4108,7 +4196,7 @@ export default function App() {
                         <Settings size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-app-text-muted" />
                         <input 
                           type="password" 
-                          placeholder="Password" 
+                          placeholder="Create Password" 
                           value={authPassword}
                           onChange={e => setAuthPassword(e.target.value)}
                           className="w-full bg-app-card border border-app-border text-app-text pl-12 pr-4 py-3.5 rounded-xl outline-none focus:border-app-accent font-bold text-sm transition-all"
@@ -4122,10 +4210,10 @@ export default function App() {
                       <div className="relative">
                         <User size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-app-text-muted" />
                         <input 
-                          type="text" 
-                          placeholder="Mobile Number or Email" 
+                          type="tel" 
+                          placeholder="Mobile Number" 
                           value={authInput}
-                          onChange={e => setAuthInput(e.target.value)}
+                          onChange={e => setAuthInput(e.target.value.replace(/\D/g, ''))}
                           className="w-full bg-app-card border border-app-border text-app-text pl-12 pr-4 py-3.5 rounded-xl outline-none focus:border-app-accent font-bold text-sm transition-all"
                         />
                       </div>
@@ -4148,26 +4236,28 @@ export default function App() {
                  disabled={authLoading}
                  className="w-full bg-app-accent text-white font-black py-4 rounded-xl shadow-lg shadow-app-accent/20 hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-70 mt-2 uppercase tracking-widest text-sm"
                >
-                 {authLoading ? 'Authenticating...' : (authMode === 'LOGIN' ? 'Login' : 'Create Account')}
+                 {authLoading ? 'Authenticating...' : (authMode === 'OTP' ? 'Verify OTP' : (authMode === 'LOGIN' ? 'Login' : 'Create Account'))}
                </button>
              </form>
 
-             <div className="text-center mt-6">
-               <button 
-                 type="button"
-                 onClick={() => {
-                   setAuthMode(prev => prev === 'LOGIN' ? 'SIGNUP' : 'LOGIN');
-                   setAuthError('');
-                 }}
-                 className="group text-xs text-app-text-muted font-bold transition-all"
-               >
-                 {authMode === 'LOGIN' ? (
-                    <>New here? <span className="text-app-accent group-hover:underline ml-1">Create an account</span></>
-                 ) : (
-                    <>Already have an account? <span className="text-app-accent group-hover:underline ml-1">Login now</span></>
-                 )}
-               </button>
-             </div>
+             {authMode !== 'OTP' && (
+               <div className="text-center mt-6">
+                 <button 
+                   type="button"
+                   onClick={() => {
+                     setAuthMode(prev => prev === 'LOGIN' ? 'SIGNUP' : 'LOGIN');
+                     setAuthError('');
+                   }}
+                   className="group text-xs text-app-text-muted font-bold transition-all"
+                 >
+                   {authMode === 'LOGIN' ? (
+                      <>New here? <span className="text-app-accent group-hover:underline ml-1">Create an account</span></>
+                   ) : (
+                      <>Already have an account? <span className="text-app-accent group-hover:underline ml-1">Login now</span></>
+                   )}
+                 </button>
+               </div>
+             )}
 
              <div className="relative flex items-center py-6">
                 <div className="flex-grow border-t border-app-border"></div>
@@ -4204,6 +4294,40 @@ export default function App() {
              By joining, you agree to our <span className="text-app-text font-bold">Terms of Service</span> and <span className="text-app-text font-bold">Privacy Policy</span>. Responsible gaming only.
           </p>
        </div>
+       
+       {showPhonePermissionDialog && (
+         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+           <div className="bg-app-card rounded-2xl w-full max-w-sm p-6 shadow-2xl border border-app-border animate-in fade-in zoom-in duration-200">
+              <div className="w-16 h-16 bg-blue-500/10 rounded-full flex items-center justify-center mb-4 mx-auto">
+                 <Shield size={32} className="text-blue-500" />
+              </div>
+              <h3 className="text-xl font-black text-center text-app-text mb-2 tracking-tight">Phone Access Required</h3>
+              <p className="text-sm text-center text-app-text-muted mb-6 leading-relaxed">
+                 Fantasy11 needs permission to access your phone state and SMS to securely send and verify your OTP for login.
+              </p>
+              
+              <div className="flex gap-3">
+                 <button 
+                   onClick={() => setShowPhonePermissionDialog(false)}
+                   className="flex-1 py-3 bg-app-card-inner text-app-text rounded-xl font-bold border border-app-border hover:bg-app-bg"
+                 >
+                   Deny
+                 </button>
+                 <button 
+                   onClick={() => {
+                     setPhonePermissionGranted(true);
+                     localStorage.setItem('dreamApp_phonePermission', 'true');
+                     setShowPhonePermissionDialog(false);
+                     // Let them click the login/signup again, or we can auto-submit
+                   }}
+                   className="flex-1 py-3 bg-blue-600 text-white rounded-xl font-bold shadow-lg shadow-blue-600/20 active:scale-95"
+                 >
+                   Allow
+                 </button>
+              </div>
+           </div>
+         </div>
+       )}
     </div>
     );
   };
