@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback, useRef, Component } f
 import { motion, AnimatePresence } from 'motion/react';
 import Cropper from 'react-easy-crop';
 import { Trophy, Clock, Users, ArrowLeft, Home, User, Wallet, Bell, PlayCircle, Shield, Plus, Minus, Info, Receipt, Settings, MessageSquare, Copy, PlusCircle, Edit2, ArrowDownToLine, ArrowDownLeft, ArrowRight, Check, X, ChevronUp, ChevronDown, Search, ChevronLeft, ChevronRight, Trash2, Download, BarChart2, Image as ImageIcon, ZoomIn, RefreshCw, AlertCircle } from 'lucide-react';
-import { auth, googleProvider, signInWithPopup, signOut as firebaseSignOut, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, db } from './lib/firebase';
+import { auth, googleProvider, signInWithPopup, signOut as firebaseSignOut, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, RecaptchaVerifier, signInWithPhoneNumber, db } from './lib/firebase';
 import { doc, onSnapshot, setDoc, collection, query, where, getDoc, getDocs, updateDoc, writeBatch, increment, deleteDoc } from 'firebase/firestore';
 import { AreaChart, Area, LineChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip as RechartsTooltip, ResponsiveContainer, CartesianGrid, Legend } from 'recharts';
 
@@ -4005,14 +4005,30 @@ export default function App() {
     const handleAuth = async (e?: React.FormEvent) => {
       if (e) e.preventDefault();
       
-      if (!phonePermissionGranted && authMode !== 'OTP') {
+      const hasPermission = localStorage.getItem('dreamApp_phonePermission') === 'true';
+      if (!hasPermission && authMode !== 'OTP') {
          setShowPhonePermissionDialog(true);
          return;
       }
       
       if (authMode === 'OTP') {
-        if (!enteredOtp || enteredOtp !== sentOtp) {
-          return alert("Invalid OTP entered. Please try again.");
+        if (!enteredOtp) return alert("Please enter the OTP.");
+        
+        setAuthLoading(true);
+        try {
+           if ((window as any).confirmationResult) {
+              await (window as any).confirmationResult.confirm(enteredOtp);
+              // Successfully verified via Firebase
+           } else {
+              if (enteredOtp !== sentOtp) {
+                 setAuthLoading(false);
+                 return alert("Invalid OTP entered. Please try again.");
+              }
+           }
+        } catch(e) {
+           console.error("OTP Verification failed", e);
+           setAuthLoading(false);
+           return alert("Invalid OTP or verification expired.");
         }
         
         sessionStorage.removeItem('isPendingOtp');
@@ -4117,13 +4133,26 @@ export default function App() {
           const userCredential = await signInWithEmailAndPassword(auth, loginEmail, authPassword);
           setTempFirebaseUser(userCredential.user);
           
-          // Generate 6-digit OTP
-          const newOtp = Math.floor(100000 + Math.random() * 900000).toString();
-          setSentOtp(newOtp);
-          setAuthMode('OTP');
-          
-          // Simulate sending SMS via alert/snackbar for demo purposes
-          alert(`DEMO OTP: Your 6-digit login code is ${newOtp}`);
+          try {
+             if (!(window as any).recaptchaVerifier) {
+               (window as any).recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
+                 'size': 'invisible'
+               });
+             }
+             const appVerifier = (window as any).recaptchaVerifier;
+             const phoneNumber = '+91' + authInput.trim();
+             const confirmationResult = await signInWithPhoneNumber(auth, phoneNumber, appVerifier);
+             (window as any).confirmationResult = confirmationResult;
+             setAuthMode('OTP');
+             alert("OTP has been sent to your mobile number via Firebase.");
+          } catch(err: any) {
+             console.error("Firebase Phone Auth failed:", err);
+             // Fallback to demo OTP if Firebase domain is not authorized
+             const newOtp = Math.floor(100000 + Math.random() * 900000).toString();
+             setSentOtp(newOtp);
+             setAuthMode('OTP');
+             alert(`Notice: Firebase SMS failed (domain not authorized in Firebase Console). Using DEMO OTP: ${newOtp}`);
+          }
         }
       } catch (err: any) {
         handleFsError(err, 'auth_action');
@@ -4239,6 +4268,7 @@ export default function App() {
                  {authLoading ? 'Authenticating...' : (authMode === 'OTP' ? 'Verify OTP' : (authMode === 'LOGIN' ? 'Login' : 'Create Account'))}
                </button>
              </form>
+             <div id="recaptcha-container"></div>
 
              {authMode !== 'OTP' && (
                <div className="text-center mt-6">
@@ -4318,7 +4348,10 @@ export default function App() {
                      setPhonePermissionGranted(true);
                      localStorage.setItem('dreamApp_phonePermission', 'true');
                      setShowPhonePermissionDialog(false);
-                     // Let them click the login/signup again, or we can auto-submit
+                     // Need a tiny delay for state to sync before handleAuth checks phonePermissionGranted
+                     setTimeout(() => {
+                        handleAuth();
+                     }, 100);
                    }}
                    className="flex-1 py-3 bg-blue-600 text-white rounded-xl font-bold shadow-lg shadow-blue-600/20 active:scale-95"
                  >
