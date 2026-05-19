@@ -852,7 +852,7 @@ export default function App() {
   useEffect(() => {
     if (!supabase) return;
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-       if (event === 'SIGNED_IN' && session?.user) {
+       if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && session?.user) {
          setAuthInitialized(true);
          const supaUser = session.user;
          
@@ -904,6 +904,8 @@ export default function App() {
          };
          localStorage.setItem('dreamApp_user', JSON.stringify(newUser));
          setUser(newUser);
+       } else if (event === 'SIGNED_OUT') {
+         setUser(null);
        }
     });
 
@@ -975,7 +977,14 @@ export default function App() {
         localStorage.setItem('dreamApp_user', JSON.stringify(newUser));
         setUser(newUser);
       } else {
-        setUser(null);
+        if (supabase) {
+           const { data: { session } } = await supabase.auth.getSession();
+           if (!session) {
+              setUser(null);
+           }
+        } else {
+           setUser(null);
+        }
       }
     });
     return () => unsubscribe();
@@ -4169,25 +4178,39 @@ export default function App() {
 
           sessionStorage.setItem('isSigningUp', 'true');
           const pseudoEmail = `${authMobile.trim()}@dreamapp.com`;
-          const cred = await createUserWithEmailAndPassword(auth, pseudoEmail, authPassword);
+          
+          const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+            email: pseudoEmail,
+            password: authPassword,
+            options: {
+              data: {
+                full_name: authFullName.trim(),
+                mobile: authMobile.trim()
+              }
+            }
+          });
+          
+          if (signUpError) throw signUpError;
+          const user = signUpData.user;
           const numericId = Math.floor(1000000000 + Math.random() * 9000000000).toString();
           
-          await setDoc(doc(db, 'users', cred.user.uid), {
-             name: authFullName.trim(),
-             mobile: authMobile.trim(),
-             email: pseudoEmail,
-             numericId: numericId,
-             createdAt: new Date().toISOString(),
-             balance: 0,
-             winnings: 0,
-             bonus: 100, // Welcome bonus
-             isBot: false
-          });
+          if (user) {
+            await setDoc(doc(db, 'users', user.id), {
+               name: authFullName.trim(),
+               mobile: authMobile.trim(),
+               email: pseudoEmail,
+               numericId: numericId,
+               createdAt: new Date().toISOString(),
+               balance: 0,
+               winnings: 0,
+               bonus: 100, // Welcome bonus
+               isBot: false
+            });
+          }
           
           sessionStorage.removeItem('isSigningUp');
           localStorage.setItem('dreamApp_hasSignedUp', 'true');
           if (supabase) await supabase.auth.signOut();
-          await firebaseSignOut(auth);
           
           alert("Signup successful! Now please login to your account.");
           setAuthMode('LOGIN');
@@ -4211,30 +4234,13 @@ export default function App() {
             loginEmail = snap.docs[0].data().email || `${loginEmail}@dreamapp.com`;
           }
           
-          sessionStorage.setItem('isPendingOtp', 'true');
-          const userCredential = await signInWithEmailAndPassword(auth, loginEmail, authPassword);
-          setTempFirebaseUser(userCredential.user);
+          const { error: signInError } = await supabase.auth.signInWithPassword({
+            email: loginEmail,
+            password: authPassword
+          });
           
-          try {
-             if (!(window as any).recaptchaVerifier) {
-               (window as any).recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
-                 'size': 'invisible'
-               });
-             }
-             const appVerifier = (window as any).recaptchaVerifier;
-             const phoneNumber = '+91' + authInput.trim();
-             const confirmationResult = await signInWithPhoneNumber(auth, phoneNumber, appVerifier);
-             (window as any).confirmationResult = confirmationResult;
-             setAuthMode('OTP');
-             alert("OTP has been sent to your mobile number via Firebase.");
-          } catch(err: any) {
-             console.error("Firebase Phone Auth failed:", err);
-             // Fallback to demo OTP if Firebase domain is not authorized
-             const newOtp = Math.floor(100000 + Math.random() * 900000).toString();
-             setSentOtp(newOtp);
-             setAuthMode('OTP');
-             alert(`Notice: Firebase SMS failed (domain not authorized in Firebase Console). Using DEMO OTP: ${newOtp}`);
-          }
+          if (signInError) throw signInError;
+          // onAuthStateChange in useEffect will catch this and log the user in!
         }
       } catch (err: any) {
         handleFsError(err, 'auth_action');
@@ -4382,10 +4388,11 @@ export default function App() {
                    try {
                      setAuthLoading(true);
                      if (!supabase) {
-                       console.warn("Falling back to Firebase Google Auth");
-                       await signInWithPopup(auth, googleProvider);
+                       console.error("Supabase is missing!", { supabaseUrl: process.env.SUPABASE_URL });
+                       alert("Supabase integration is under configuration... please try again shortly!");
                        return;
                      }
+                     console.log("Using Supabase for Google login...");
                      const { data, error } = await supabase.auth.signInWithOAuth({
                        provider: 'google',
                        options: {
