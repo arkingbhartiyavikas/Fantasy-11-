@@ -2443,9 +2443,9 @@ export default function App() {
             <button 
               onClick={handleSyncToCloud}
               disabled={isSyncing}
-              className={`bg-green-500/20 text-green-500 border border-green-500/50 px-2 py-0.5 rounded text-[10px] uppercase font-bold transition-colors hover:bg-green-500/30 flex items-center gap-1 ml-1 ${isSyncing ? 'opacity-50' : ''}`}
+              className={`bg-green-500/20 text-green-500 border border-green-500/50 px-1.5 py-[2px] rounded text-[8px] uppercase font-bold transition-colors hover:bg-green-500/30 flex items-center gap-[2px] ml-1 ${isSyncing ? 'opacity-50' : ''}`}
             >
-              {isSyncing ? <RefreshCw size={10} className="animate-spin" /> : <RefreshCw size={10} />}
+              {isSyncing ? <RefreshCw size={8} className="animate-spin" /> : <RefreshCw size={8} />}
               Update
             </button>
           )}
@@ -2456,9 +2456,11 @@ export default function App() {
              <span className="bg-yellow-500 text-black text-[10px] px-1.5 py-0.5 rounded flex items-center font-bold">⚡ Lvl 3</span>
           </div>
           <div className="flex items-center gap-2 mt-1">
-             <button onClick={() => setShowAdminQuickAdd(true)} className="bg-green-500/20 text-green-500 border border-green-500/50 px-2 py-0.5 rounded text-[10px] uppercase font-black transition-colors hover:bg-green-500/30 flex items-center gap-1">
-                <Plus size={10} strokeWidth={4} /> Wallet
-             </button>
+             {isAdmin && (
+               <button onClick={() => setShowAdminQuickAdd(true)} className="bg-green-500/20 text-green-500 border border-green-500/50 px-1.5 py-[2px] rounded text-[8px] uppercase font-black transition-colors hover:bg-green-500/30 flex items-center gap-[2px]">
+                  <Plus size={8} strokeWidth={4} /> Wallet
+               </button>
+             )}
              <button onClick={() => setView('WALLET')} className="flex items-center gap-1 bg-app-card/80 border border-app-border px-2 py-0.5 rounded text-[10px] font-bold text-app-text transition-colors hover:bg-app-card-hover">
                 <Wallet size={10} />
                 ₹{balance.toLocaleString('en-IN', {maximumFractionDigits:0})}
