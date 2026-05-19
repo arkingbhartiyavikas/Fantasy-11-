@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import Cropper from 'react-easy-crop';
 import { Trophy, Clock, Users, ArrowLeft, Home, User, Wallet, Bell, PlayCircle, Shield, Plus, Minus, Info, Receipt, Settings, MessageSquare, Copy, PlusCircle, Edit2, ArrowDownToLine, ArrowDownLeft, ArrowRight, Check, X, ChevronUp, ChevronDown, Search, ChevronLeft, ChevronRight, Trash2, Download, BarChart2, Image as ImageIcon, ZoomIn, RefreshCw, AlertCircle } from 'lucide-react';
 import { auth, googleProvider, signInWithPopup, signOut as firebaseSignOut, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, RecaptchaVerifier, signInWithPhoneNumber, db } from './lib/firebase';
+import { supabase } from './lib/supabase';
 import { doc, onSnapshot, setDoc, collection, query, where, getDoc, getDocs, updateDoc, writeBatch, increment, deleteDoc } from 'firebase/firestore';
 import { AreaChart, Area, LineChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip as RechartsTooltip, ResponsiveContainer, CartesianGrid, Legend } from 'recharts';
 
@@ -847,6 +848,68 @@ export default function App() {
       }
     }
   }, [claimedLevels, user?.id, claimedLevelsLoaded]);
+
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+       if (event === 'SIGNED_IN' && session?.user) {
+         setAuthInitialized(true);
+         const supaUser = session.user;
+         
+         let numericId = localStorage.getItem(`dreamApp_numericId_${supaUser.id}`) || '';
+         let fullName = supaUser.user_metadata?.full_name || 'Fantasy Player';
+         
+         try {
+             // Link Supabase user to Firestore backend seamlessly
+             const userDocRef = doc(db, 'users', supaUser.id);
+             const userDoc = await getDoc(userDocRef);
+             if (userDoc.exists()) {
+                 const data = userDoc.data();
+                 numericId = data.numericId || numericId || '';
+                 fullName = data.name || fullName;
+                 
+                 if (!data.numericId) {
+                     if (!numericId) {
+                         numericId = Math.floor(1000000000 + Math.random() * 9000000000).toString();
+                     }
+                     await setDoc(userDocRef, { numericId }, { merge: true });
+                 }
+             } else {
+                 if (!numericId) {
+                     numericId = Math.floor(1000000000 + Math.random() * 9000000000).toString();
+                 }
+                 await setDoc(userDocRef, {
+                     name: fullName,
+                     numericId: numericId,
+                     email: supaUser.email || ''
+                 });
+             }
+         } catch (e) {
+             handleFsError(e, 'fetch_profile', supaUser.id);
+             if (!numericId) {
+                 numericId = Math.floor(1000000000 + Math.random() * 9000000000).toString();
+             }
+         }
+
+         if (numericId) {
+             localStorage.setItem(`dreamApp_numericId_${supaUser.id}`, numericId);
+         }
+
+         localStorage.setItem('dreamApp_hasSignedUp', 'true');
+         const newUser = {
+           email: supaUser.email || '',
+           name: fullName,
+           id: supaUser.id,
+           numericId: numericId
+         };
+         localStorage.setItem('dreamApp_user', JSON.stringify(newUser));
+         setUser(newUser);
+       }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
@@ -3892,6 +3955,7 @@ export default function App() {
            <button 
              onClick={async () => {
                 try {
+                  await supabase.auth.signOut();
                   await firebaseSignOut(auth);
                   setUser(null);
                   setView('HOME');
@@ -4121,6 +4185,7 @@ export default function App() {
           
           sessionStorage.removeItem('isSigningUp');
           localStorage.setItem('dreamApp_hasSignedUp', 'true');
+          await supabase.auth.signOut();
           await firebaseSignOut(auth);
           
           alert("Signup successful! Now please login to your account.");
@@ -4315,9 +4380,15 @@ export default function App() {
                 onClick={async () => {
                    try {
                      setAuthLoading(true);
-                     await signInWithPopup(auth, googleProvider);
+                     const { data, error } = await supabase.auth.signInWithOAuth({
+                       provider: 'google',
+                       options: {
+                         redirectTo: window.location.origin
+                       }
+                     });
+                     if (error) throw error;
                    } catch (error) {
-                     console.error("Login popup failed", error);
+                     console.error("Supabase Google login failed", error);
                      alert("Google login failed. Please try again.");
                    } finally {
                      setAuthLoading(false);
@@ -7005,7 +7076,7 @@ export default function App() {
            <Shield size={64} className="text-red-500 mb-4" />
            <h2 className="text-2xl font-black mb-2 text-red-500">Account Blocked</h2>
            <p className="text-sm font-bold text-app-text-muted mb-8">Your account has been restricted by the admin. Please contact support.</p>
-           <button onClick={() => firebaseSignOut(auth)} className="bg-red-600 hover:bg-red-700 font-bold px-6 py-2 rounded-xl text-white shadow-lg active:scale-95 transition-transform">Logout</button>
+           <button onClick={async () => { await supabase.auth.signOut(); await firebaseSignOut(auth); }} className="bg-red-600 hover:bg-red-700 font-bold px-6 py-2 rounded-xl text-white shadow-lg active:scale-95 transition-transform">Logout</button>
         </div>
      );
   }
