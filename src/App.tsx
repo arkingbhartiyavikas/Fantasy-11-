@@ -850,6 +850,17 @@ export default function App() {
   }, [claimedLevels, user?.id, claimedLevelsLoaded]);
 
   useEffect(() => {
+    // Check for Supabase OAuth errors in URL
+    const hash = window.location.hash;
+    if (hash && hash.includes('error_description=')) {
+      const params = new URLSearchParams(hash.substring(1));
+      const errorDesc = params.get('error_description');
+      if (errorDesc) {
+        alert("Login failed: " + decodeURIComponent(errorDesc).replace(/\+/g, ' '));
+        window.history.replaceState(null, '', window.location.pathname);
+      }
+    }
+    
     if (!supabase) return;
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
        if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && session?.user) {
@@ -857,44 +868,12 @@ export default function App() {
          const supaUser = session.user;
          
          let numericId = localStorage.getItem(`dreamApp_numericId_${supaUser.id}`) || '';
-         let fullName = supaUser.user_metadata?.full_name || 'Fantasy Player';
-         
-         try {
-             // Link Supabase user to Firestore backend seamlessly
-             const userDocRef = doc(db, 'users', supaUser.id);
-             const userDoc = await getDoc(userDocRef);
-             if (userDoc.exists()) {
-                 const data = userDoc.data();
-                 numericId = data.numericId || numericId || '';
-                 fullName = data.name || fullName;
-                 
-                 if (!data.numericId) {
-                     if (!numericId) {
-                         numericId = Math.floor(1000000000 + Math.random() * 9000000000).toString();
-                     }
-                     await setDoc(userDocRef, { numericId }, { merge: true });
-                 }
-             } else {
-                 if (!numericId) {
-                     numericId = Math.floor(1000000000 + Math.random() * 9000000000).toString();
-                 }
-                 await setDoc(userDocRef, {
-                     name: fullName,
-                     numericId: numericId,
-                     email: supaUser.email || ''
-                 });
-             }
-         } catch (e) {
-             handleFsError(e, 'fetch_profile', supaUser.id);
-             if (!numericId) {
-                 numericId = Math.floor(1000000000 + Math.random() * 9000000000).toString();
-             }
-         }
-
-         if (numericId) {
+         if (!numericId) {
+             numericId = Math.floor(1000000000 + Math.random() * 9000000000).toString();
              localStorage.setItem(`dreamApp_numericId_${supaUser.id}`, numericId);
          }
-
+         let fullName = supaUser.user_metadata?.full_name || 'Fantasy Player';
+         
          localStorage.setItem('dreamApp_hasSignedUp', 'true');
          const newUser = {
            email: supaUser.email || '',
@@ -902,8 +881,40 @@ export default function App() {
            id: supaUser.id,
            numericId: numericId
          };
+         
+         // Set user immediately so UI updates instantly!
          localStorage.setItem('dreamApp_user', JSON.stringify(newUser));
          setUser(newUser);
+
+         // Sync to Firestore in background without awaiting
+         (async () => {
+             try {
+                 const userDocRef = doc(db, 'users', supaUser.id);
+                 const userDoc = await getDoc(userDocRef);
+                 if (userDoc.exists()) {
+                     const data = userDoc.data();
+                     const existingNumericId = data.numericId;
+                     
+                     if (existingNumericId && existingNumericId !== numericId) {
+                        numericId = existingNumericId;
+                        localStorage.setItem(`dreamApp_numericId_${supaUser.id}`, existingNumericId);
+                        setUser(prev => prev ? {...prev, numericId: existingNumericId, name: data.name || prev.name} : prev);
+                     }
+                     
+                     if (!data.numericId) {
+                         await setDoc(userDocRef, { numericId }, { merge: true });
+                     }
+                 } else {
+                     await setDoc(userDocRef, {
+                         name: fullName,
+                         numericId: numericId,
+                         email: supaUser.email || ''
+                     });
+                 }
+             } catch (e) {
+                 handleFsError(e, 'fetch_profile', supaUser.id);
+             }
+         })();
        } else if (event === 'SIGNED_OUT') {
          setUser(null);
        }
@@ -977,12 +988,7 @@ export default function App() {
         localStorage.setItem('dreamApp_user', JSON.stringify(newUser));
         setUser(newUser);
       } else {
-        if (supabase) {
-           const { data: { session } } = await supabase.auth.getSession();
-           if (!session) {
-              setUser(null);
-           }
-        } else {
+        if (!supabase) {
            setUser(null);
         }
       }
