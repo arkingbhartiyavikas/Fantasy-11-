@@ -2439,6 +2439,16 @@ export default function App() {
         <div className="flex items-center gap-2">
           <div className="w-2 h-2 rounded-full bg-app-accent"></div>
           <h1 className="text-xl font-bold text-app-text">Fantasy11</h1>
+          {isAdmin && (
+            <button 
+              onClick={handleSyncToCloud}
+              disabled={isSyncing}
+              className={`bg-green-500/20 text-green-500 border border-green-500/50 px-2 py-0.5 rounded text-[10px] uppercase font-bold transition-colors hover:bg-green-500/30 flex items-center gap-1 ml-1 ${isSyncing ? 'opacity-50' : ''}`}
+            >
+              {isSyncing ? <RefreshCw size={10} className="animate-spin" /> : <RefreshCw size={10} />}
+              Update
+            </button>
+          )}
         </div>
         <div className="flex flex-col items-end">
           <div className="flex items-center gap-2 cursor-pointer" onClick={() => setView('PROFILE')}>
