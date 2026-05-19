@@ -2,9 +2,9 @@ import React, { useState, useEffect, useMemo, useCallback, useRef, Component } f
 import { motion, AnimatePresence } from 'motion/react';
 import Cropper from 'react-easy-crop';
 import { Trophy, Clock, Users, ArrowLeft, Home, User, Wallet, Bell, PlayCircle, Shield, Plus, Minus, Info, Receipt, Settings, MessageSquare, Copy, PlusCircle, Edit2, ArrowDownToLine, ArrowDownLeft, ArrowRight, Check, X, ChevronUp, ChevronDown, Search, ChevronLeft, ChevronRight, Trash2, Download, BarChart2, Image as ImageIcon, ZoomIn, RefreshCw, AlertCircle } from 'lucide-react';
-import { auth, googleProvider, signInWithPopup, signOut as firebaseSignOut, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, RecaptchaVerifier, signInWithPhoneNumber, db } from './lib/firebase';
+import { auth, googleProvider, signInWithPopup, signOut as firebaseSignOut, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, RecaptchaVerifier, signInWithPhoneNumber } from './lib/firebase';
 import { supabase } from './lib/supabase';
-import { doc, onSnapshot, setDoc, collection, query, where, getDoc, getDocs, updateDoc, writeBatch, increment, deleteDoc } from 'firebase/firestore';
+import { db, doc, onSnapshot, setDoc, collection, query, where, getDoc, getDocs, updateDoc, writeBatch, increment, deleteDoc } from './lib/supabase-firestore';
 import { AreaChart, Area, LineChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip as RechartsTooltip, ResponsiveContainer, CartesianGrid, Legend } from 'recharts';
 
 const createImage = (url: string): Promise<HTMLImageElement> =>
@@ -718,26 +718,15 @@ export default function App() {
 
   const isAdmin = user?.email === 'arkingbhartiyavikas@gmail.com';
 
-  const [firestoreQuotaExceeded, setFirestoreQuotaExceeded] = useState(false);
+  const [firestoreQuotaExceeded, setFirestoreQuotaExceeded] = useState(false); // Deprecated
   const [hasDismissedQuota, setHasDismissedQuota] = useState(false);
 
   const handleFsError = (e: any, operation?: string, path?: string) => {
-     const msg = (e.message || '').toLowerCase();
-     if (msg.includes('resource-exhausted') || msg.includes('quota exceeded') || e.code === 'resource-exhausted' || (msg.includes('limit') && msg.includes('exhausted'))) {
-        if (!firestoreQuotaExceeded) {
-             console.warn(`⚠️ Firestore Quota Exceeded [${operation}]: Reached free tier database daily limits. The app will enter offline/degraded mode.`);
-             setFirestoreQuotaExceeded(true);
-             sessionStorage.setItem('fs_quota_exceeded', 'true');
-        }
-     } else {
-        console.error(`Firestore Error [${operation || 'unknown'} @ ${path || 'unknown'}]:`, e);
-     }
+     console.error(`Supabase wrapper Error [${operation || 'unknown'} @ ${path || 'unknown'}]:`, e);
   };
 
   useEffect(() => {
-    if (sessionStorage.getItem('fs_quota_exceeded') === 'true') {
-      setFirestoreQuotaExceeded(true);
-    }
+    // quota exceeded flag no longer needed since we are on Supabase
   }, []);
 
   const [appPlayers, setAppPlayers] = useState<Player[]>(() => {
