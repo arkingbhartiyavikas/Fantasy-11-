@@ -13,7 +13,7 @@ export async function syncData(collection: string, id: string, data: any) {
   const promises = [];
 
   // 1. Redis (Cache/Queue Database)
-  if (redis) {
+  if (redis && redis.status === 'ready') {
     promises.push(
       redis.set(`${collection}:${id}`, JSON.stringify(data)).then(() => {
         console.log(`✅ Synced to Redis [${collection}:${id}]`);
@@ -73,7 +73,7 @@ export async function syncData(collection: string, id: string, data: any) {
 
 export async function getSyncedData(collection: string, id: string) {
    // Try Redis first
-   if (redis) {
+   if (redis && redis.status === 'ready') {
        const cached = await redis.get(`${collection}:${id}`);
        if (cached) {
            console.log(`⚡ Retrieved from Redis [${collection}:${id}]`);
@@ -87,7 +87,7 @@ export async function getSyncedData(collection: string, id: string) {
        if (!error && data) {
            console.log(`⚡ Retrieved from Supabase [${collection}:${id}]`);
            // Cache it back to Redis
-           if (redis) redis.set(`${collection}:${id}`, JSON.stringify(data));
+           if (redis && redis.status === 'ready') redis.set(`${collection}:${id}`, JSON.stringify(data));
            return data;
        }
    }
@@ -99,7 +99,7 @@ export async function getSyncedData(collection: string, id: string) {
            console.log(`⚡ Retrieved from Firestore [${collection}:${id}]`);
            const data = docSnap.data();
            // Cache it back to Redis
-           if (redis) redis.set(`${collection}:${id}`, JSON.stringify(data));
+           if (redis && redis.status === 'ready') redis.set(`${collection}:${id}`, JSON.stringify(data));
            return data;
        }
    }

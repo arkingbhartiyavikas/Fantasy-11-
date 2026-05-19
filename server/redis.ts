@@ -34,7 +34,7 @@ if (redis) {
   redis.on('error', (err) => {
     // Only log once and don't crash
     if (!redis.status || redis.status === 'connecting') {
-      console.error('❌ Redis Connection Error (suppressed further logs).');
+      // Redis is not running or accessible, silently fall back
       redis.disconnect();
     }
   });

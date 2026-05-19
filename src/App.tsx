@@ -850,6 +850,7 @@ export default function App() {
   }, [claimedLevels, user?.id, claimedLevelsLoaded]);
 
   useEffect(() => {
+    if (!supabase) return;
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
        if (event === 'SIGNED_IN' && session?.user) {
          setAuthInitialized(true);
@@ -3955,7 +3956,7 @@ export default function App() {
            <button 
              onClick={async () => {
                 try {
-                  await supabase.auth.signOut();
+                  if (supabase) await supabase.auth.signOut();
                   await firebaseSignOut(auth);
                   setUser(null);
                   setView('HOME');
@@ -4185,7 +4186,7 @@ export default function App() {
           
           sessionStorage.removeItem('isSigningUp');
           localStorage.setItem('dreamApp_hasSignedUp', 'true');
-          await supabase.auth.signOut();
+          if (supabase) await supabase.auth.signOut();
           await firebaseSignOut(auth);
           
           alert("Signup successful! Now please login to your account.");
@@ -4380,6 +4381,11 @@ export default function App() {
                 onClick={async () => {
                    try {
                      setAuthLoading(true);
+                     if (!supabase) {
+                       console.warn("Falling back to Firebase Google Auth");
+                       await signInWithPopup(auth, googleProvider);
+                       return;
+                     }
                      const { data, error } = await supabase.auth.signInWithOAuth({
                        provider: 'google',
                        options: {
@@ -7076,7 +7082,7 @@ export default function App() {
            <Shield size={64} className="text-red-500 mb-4" />
            <h2 className="text-2xl font-black mb-2 text-red-500">Account Blocked</h2>
            <p className="text-sm font-bold text-app-text-muted mb-8">Your account has been restricted by the admin. Please contact support.</p>
-           <button onClick={async () => { await supabase.auth.signOut(); await firebaseSignOut(auth); }} className="bg-red-600 hover:bg-red-700 font-bold px-6 py-2 rounded-xl text-white shadow-lg active:scale-95 transition-transform">Logout</button>
+           <button onClick={async () => { if (supabase) await supabase.auth.signOut(); await firebaseSignOut(auth); }} className="bg-red-600 hover:bg-red-700 font-bold px-6 py-2 rounded-xl text-white shadow-lg active:scale-95 transition-transform">Logout</button>
         </div>
      );
   }
