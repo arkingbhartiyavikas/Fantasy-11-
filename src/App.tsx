@@ -2436,32 +2436,34 @@ export default function App() {
   const renderHome = () => (
     <div className="flex flex-col h-full bg-app-bg">
       <header className="p-4 flex items-center justify-between pb-2 bg-app-bg relative">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 shrink-0">
           <div className="w-2 h-2 rounded-full bg-app-accent"></div>
           <h1 className="text-xl font-bold text-app-text">Fantasy11</h1>
-          {isAdmin && (
-            <button 
-              onClick={handleSyncToCloud}
-              disabled={isSyncing}
-              className={`bg-green-500/20 text-green-500 border border-green-500/50 px-1.5 py-[2px] rounded text-[8px] uppercase font-bold transition-colors hover:bg-green-500/30 flex items-center gap-[2px] ml-1 ${isSyncing ? 'opacity-50' : ''}`}
-            >
-              {isSyncing ? <RefreshCw size={8} className="animate-spin" /> : <RefreshCw size={8} />}
-              Update
-            </button>
-          )}
         </div>
-        <div className="flex flex-col items-end">
-          <div className="flex items-center gap-2 cursor-pointer" onClick={() => setView('PROFILE')}>
-             <span className="font-bold text-sm text-app-text">Hey {user ? String(user.name || user.email || '').split(' ')[0].split('@')[0].toUpperCase() : 'ARKING'}</span>
-             <span className="bg-yellow-500 text-black text-[10px] px-1.5 py-0.5 rounded flex items-center font-bold">⚡ Lvl 3</span>
+        <div className="flex items-center gap-1.5 shrink-0">
+          <div className="flex flex-col items-end">
+             <div className="flex items-center gap-1.5 cursor-pointer" onClick={() => setView('PROFILE')}>
+                <span className="font-bold text-sm text-app-text truncate max-w-[100px]">Hey {user ? String(user.name || user.email || '').split(' ')[0].split('@')[0].toUpperCase() : 'ARKING'}</span>
+                <span className="bg-yellow-500 text-black text-[10px] px-1.5 py-0.5 rounded flex items-center font-bold shrink-0">⚡ Lvl 3</span>
+             </div>
           </div>
-          <div className="flex items-center gap-2 mt-1">
+          <div className="flex items-center gap-1.5">
              {isAdmin && (
-               <button onClick={() => setShowAdminQuickAdd(true)} className="bg-green-500/20 text-green-500 border border-green-500/50 px-1.5 py-[2px] rounded text-[8px] uppercase font-black transition-colors hover:bg-green-500/30 flex items-center gap-[2px]">
+               <button 
+                 onClick={handleSyncToCloud}
+                 disabled={isSyncing}
+                 className={`bg-green-500/20 text-green-500 border border-green-500/50 px-1.5 py-[2px] rounded text-[8px] uppercase font-bold transition-colors hover:bg-green-500/30 flex items-center gap-1 shrink-0 ${isSyncing ? 'opacity-50' : ''}`}
+               >
+                 <RefreshCw size={8} className={isSyncing ? "animate-spin" : ""} />
+                 Update
+               </button>
+             )}
+             {isAdmin && (
+               <button onClick={() => setShowAdminQuickAdd(true)} className="bg-green-500/20 text-green-500 border border-green-500/50 px-1.5 py-[2px] rounded text-[8px] uppercase font-black transition-colors hover:bg-green-500/30 flex items-center gap-[2px] shrink-0">
                   <Plus size={8} strokeWidth={4} /> Wallet
                </button>
              )}
-             <button onClick={() => setView('WALLET')} className="flex items-center gap-1 bg-app-card/80 border border-app-border px-2 py-0.5 rounded text-[10px] font-bold text-app-text transition-colors hover:bg-app-card-hover">
+             <button onClick={() => setView('WALLET')} className="flex items-center gap-1 bg-app-card/80 border border-app-border px-1.5 py-[2px] rounded text-[10px] font-bold text-app-text transition-colors hover:bg-app-card-hover shrink-0">
                 <Wallet size={10} />
                 ₹{balance.toLocaleString('en-IN', {maximumFractionDigits:0})}
              </button>
