@@ -5,6 +5,9 @@ import path from 'path';
 import dotenv from 'dotenv';
 
 import { handleTeamEdit } from './teamQueueHandler.js';
+import { supabase } from './server/supabase.js';
+import { redis } from './server/redis.js';
+import { syncData, getSyncedData } from './server/sync.js';
 
 dotenv.config();
 
@@ -12,12 +15,46 @@ async function startServer() {
   const app = express();
   const PORT = 3000;
 
+  // Initialize Redis Connection (optional to do it here, but good for early fail checks)
+  try {
+    if (redis) {
+      await redis.connect();
+    }
+  } catch (err) {
+    console.log("Redis not configured/started, skipping local connection await...");
+  }
+
   // Increase payload limit for base64 image uploads
   app.use(express.json({ limit: '50mb' }));
 
   // API route for team edit queue (Handles 20k+ concurrent users)
   app.post('/api/team/edit', handleTeamEdit);
 
+  // Triple-Sync API Endpoints
+  app.post('/api/sync', async (req, res) => {
+    try {
+      const { collection, id, data } = req.body;
+      if (!collection || !id || !data) {
+        return res.status(400).json({ error: "Missing collection, id, or data" });
+      }
+      await syncData(collection, id, data);
+      res.json({ success: true, message: `Synced to Redis, Supabase, and Firebase` });
+    } catch (e: any) {
+      console.error("Triple Sync Error:", e);
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.get('/api/sync/:collection/:id', async (req, res) => {
+    try {
+      const { collection, id } = req.params;
+      const data = await getSyncedData(collection, id);
+      if (!data) return res.status(404).json({ error: "Not found in any DB" });
+      res.json({ success: true, data });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
 
   // API route to send email
   app.post('/api/notify-admin', async (req, res) => {

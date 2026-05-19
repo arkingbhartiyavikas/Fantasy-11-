@@ -101,6 +101,21 @@ interface DepositRequest {
   timestamp: string;
 }
 
+// Triple-Sync Helper (sync to Redis, Supabase, Firestore)
+export const syncWalletToBackend = async (dbInstance: any, userId: string, data: any) => {
+  try {
+    const res = await fetch('/api/sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ collection: 'wallets', id: userId, data })
+    });
+    if (!res.ok) throw new Error('API Sync Failed');
+  } catch (err) {
+    console.warn("Triple-sync request failed, updating firestore directly:", err);
+    await setDoc(doc(dbInstance, 'wallets', userId), data, { merge: true });
+  }
+};
+
 interface Player {
   id: string;
   name: string;
@@ -113,35 +128,7 @@ interface Player {
 }
 
 // --- Mock Data ---
-const DEFAULT_MATCHES: Match[] = [
-  {
-    id: 'm1',
-    series: 'TATA IPL 2026',
-    team1: { name: 'Chennai', shortFrame: 'CSK', color: 'bg-yellow-500' },
-    team2: { name: 'Mumbai', shortFrame: 'MI', color: 'bg-blue-600' },
-    time: '2h 15m',
-    totalPrize: '₹50 Crores',
-    status: 'Upcoming'
-  },
-  {
-    id: 'm2',
-    series: 'TATA IPL 2026',
-    team1: { name: 'Bengaluru', shortFrame: 'RCB', color: 'bg-red-600' },
-    team2: { name: 'Kolkata', shortFrame: 'KKR', color: 'bg-purple-800' },
-    time: 'Tomorrow, 7:30 PM',
-    totalPrize: '₹40 Crores',
-    status: 'Upcoming'
-  },
-  {
-    id: 'm3',
-    series: 'TATA IPL 2026',
-    team1: { name: 'Hyderabad', shortFrame: 'SRH', color: 'bg-orange-500' },
-    team2: { name: 'Rajasthan', shortFrame: 'RR', color: 'bg-pink-600' },
-    time: 'Sunday, 3:30 PM',
-    totalPrize: '₹35 Crores',
-    status: 'Upcoming'
-  }
-];
+const DEFAULT_MATCHES: Match[] = [];
 
 // Using MOCK_PLAYERS as default, state is managed in app
 export const MOCK_PLAYERS: Player[] = [
@@ -734,11 +721,15 @@ export default function App() {
   const [hasDismissedQuota, setHasDismissedQuota] = useState(false);
 
   const handleFsError = (e: any, operation?: string, path?: string) => {
-     console.error(`Firestore Error [${operation || 'unknown'} @ ${path || 'unknown'}]:`, e);
      const msg = (e.message || '').toLowerCase();
      if (msg.includes('resource-exhausted') || msg.includes('quota exceeded') || e.code === 'resource-exhausted' || (msg.includes('limit') && msg.includes('exhausted'))) {
-        setFirestoreQuotaExceeded(true);
-        sessionStorage.setItem('fs_quota_exceeded', 'true');
+        if (!firestoreQuotaExceeded) {
+             console.warn(`⚠️ Firestore Quota Exceeded [${operation}]: Reached free tier database daily limits. The app will enter offline/degraded mode.`);
+             setFirestoreQuotaExceeded(true);
+             sessionStorage.setItem('fs_quota_exceeded', 'true');
+        }
+     } else {
+        console.error(`Firestore Error [${operation || 'unknown'} @ ${path || 'unknown'}]:`, e);
      }
   };
 
@@ -1089,8 +1080,21 @@ export default function App() {
          // Perform DB sync OUTSIDE the setter to avoid repeated calls and side-effects in render cycle
          setTimeout(() => {
              if (user?.id) {
-                setDoc(doc(db, 'wallets', user.id), next, { merge: true }).catch(e => {
-                  handleFsError(e, 'sync_wallet_local', user.id);
+                // Call our standard backend triple-sync
+                fetch('/api/sync', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    collection: 'wallets',
+                    id: user.id,
+                    data: next
+                  })
+                }).catch(e => {
+                  console.error("Triple-sync error:", e);
+                  // Optional fallback
+                  setDoc(doc(db, 'wallets', user.id), next, { merge: true }).catch(err => {
+                    handleFsError(err, 'sync_wallet_local', user.id);
+                  });
                 });
              }
          }, 10);
@@ -1402,7 +1406,16 @@ export default function App() {
   });
   const [appMatches, setAppMatches] = useState<Match[]>(() => {
     const saved = localStorage.getItem('dreamApp_matches');
-    try { const p = JSON.parse(saved); return Array.isArray(p) ? p :  DEFAULT_MATCHES; } catch(e) { return  DEFAULT_MATCHES; }
+    try { 
+        const p = JSON.parse(saved); 
+        if (Array.isArray(p)) {
+            // Filter out old mock matches so they disappear from existing clients
+            return p.filter(m => !['m1', 'm2', 'm3'].includes(m.id));
+        }
+        return DEFAULT_MATCHES; 
+    } catch(e) { 
+        return DEFAULT_MATCHES; 
+    }
   });
 
   useEffect(() => {
@@ -3290,7 +3303,9 @@ export default function App() {
      const myUserId = user?.id || 'guest';
      const filteredTeams = savedTeams.filter(st => {
          if (st.userId !== myUserId) return false;
-         const currentMatchStatus = appMatches.find(m => m.id === st.match?.id)?.status || 'Upcoming';
+         const matchFromApp = appMatches.find(m => m.id === st.match?.id);
+         if (!matchFromApp) return false; // Hide if match was deleted
+         const currentMatchStatus = matchFromApp.status;
          return currentMatchStatus === myMatchesTab;
      });
 
@@ -3321,7 +3336,8 @@ export default function App() {
              ) : (
                  filteredTeams.map((st, i) => {
                      // Check current match status from appMatches
-                     const currentMatchStatus = appMatches.find(m => m.id === st.match?.id)?.status || 'Upcoming';
+                     const currentMatchFromApp = appMatches.find(m => m.id === st.match?.id);
+                     const currentMatchStatus = currentMatchFromApp?.status || 'Completed';
                      
                      // Calculate dynamic points
                      const totalPoints = (st.players || []).reduce((acc: number, player: Player) => {
@@ -4747,7 +4763,7 @@ export default function App() {
         <div className="flex-1">
            <p className="text-[10px] xl:text-xs text-[#e5c158] font-bold uppercase tracking-widest mb-3 border-b border-slate-800 pb-2">Upcoming Matches</p>
            
-           {appMatches.filter(m => m.status === 'UPCOMING').slice(0, 2).map((m, i) => (
+           {appMatches.filter(m => m.status === 'Upcoming').slice(0, 2).map((m, i) => (
 <div key={i} className="flex items-center justify-between bg-[#090b10] border border-slate-800 rounded-xl p-2 xl:p-3 mb-3">
               <div className="flex gap-2 xl:gap-3 items-center">
                  <div className="flex gap-1 items-center">
@@ -4766,13 +4782,13 @@ export default function App() {
               </div>
               <div className="text-right">
                  <p className="text-[8px] xl:text-[10px] text-slate-500">Status</p>
-                 <p className="text-[#e5c158] font-bold text-xs xl:text-sm">UPCOMING</p>
+                 <p className="text-[#e5c158] font-bold text-xs xl:text-sm">Upcoming</p>
               </div>
            </div>
            ))}
 
            <p className="text-[10px] xl:text-xs text-[#e5c158] font-bold uppercase tracking-widest mb-3 border-b border-slate-800 pb-2">Ongoing Matches</p>
-           {appMatches.filter(m => m.status === 'LIVE' || m.status === 'COMPLETED').slice(0, 2).map((m, i) => (
+           {appMatches.filter(m => m.status === 'Live' || m.status === 'Completed').slice(0, 2).map((m, i) => (
 <div key={i} className="flex items-center justify-between bg-[#090b10] border border-slate-800 rounded-xl p-2 xl:p-3 mb-3">
               <div className="flex gap-2 xl:gap-3 items-center">
                  <div className="flex gap-1 items-center">
@@ -7415,7 +7431,7 @@ export default function App() {
                                  if (!isNaN(amt) && amt > 0) {
                                      const newVal = (adminProfileModalUser.deposit || 0) + amt;
                                      try {
-                                         await setDoc(doc(db, 'wallets', adminProfileModalUser.id), { deposit: newVal }, { merge: true });
+                                         await syncWalletToBackend(db, adminProfileModalUser.id, { deposit: newVal });
                                          
                                          // Create an approved deposit request record for history
                                          const depId = `DEP_${Date.now()}_${adminProfileModalUser.id}`;
@@ -7441,7 +7457,7 @@ export default function App() {
                                  if (!isNaN(amt) && amt > 0) {
                                      const newVal = (adminProfileModalUser.winning || 0) + amt;
                                      try {
-                                         await setDoc(doc(db, 'wallets', adminProfileModalUser.id), { winning: newVal }, { merge: true });
+                                         await syncWalletToBackend(db, adminProfileModalUser.id, { winning: newVal });
                                          
                                          // Create an approved deposit request record for history (using deposits collection for visibility)
                                          const depId = `WIN_${Date.now()}_${adminProfileModalUser.id}`;
@@ -7467,7 +7483,7 @@ export default function App() {
                                  if (!isNaN(amt) && amt > 0) {
                                      const newVal = (adminProfileModalUser.bonus || 0) + amt;
                                      try {
-                                         await setDoc(doc(db, 'wallets', adminProfileModalUser.id), { bonus: newVal }, { merge: true });
+                                         await syncWalletToBackend(db, adminProfileModalUser.id, { bonus: newVal });
                                          
                                          // Create an approved record for history
                                          const depId = `BON_${Date.now()}_${adminProfileModalUser.id}`;
@@ -7508,7 +7524,7 @@ export default function App() {
                                    else if (rem > 0) { rem -= nBon; nBon = 0; }
                                    
                                    try {
-                                       await setDoc(doc(db, 'wallets', adminProfileModalUser.id), { deposit: nDep, winning: nWin, bonus: nBon }, { merge: true });
+                                       await syncWalletToBackend(db, adminProfileModalUser.id, { deposit: nDep, winning: nWin, bonus: nBon });
                                        
                                        // Create a withdrawal record for history
                                        const wId = `WD_${Date.now()}_${adminProfileModalUser.id}`;
