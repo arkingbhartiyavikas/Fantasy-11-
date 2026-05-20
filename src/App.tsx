@@ -4233,19 +4233,8 @@ export default function App() {
 
           const pseudoEmail = `${numericId}@dreamapp.com`;
           
-          const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-            email: pseudoEmail,
-            password: randomPass,
-            options: {
-              data: {
-                full_name: 'Fantasy Player',
-                mobile: numericId
-              }
-            }
-          });
-          
-          if (signUpError) throw signUpError;
-          const user = signUpData.user;
+          const userCredential = await createUserWithEmailAndPassword(auth, pseudoEmail, randomPass);
+          const user = userCredential.user;
           
           if (user) {
             await setDoc(doc(db, 'users', user.id), {
@@ -4284,12 +4273,9 @@ export default function App() {
              return alert("Please enter your 10-digit User ID");
           }
           
-          const { error: signInError } = await supabase.auth.signInWithPassword({
-            email: loginEmail,
-            password: authPassword
-          });
-          
-          if (signInError) {
+          try {
+            await signInWithEmailAndPassword(auth, loginEmail, authPassword);
+          } catch(signInError) {
              console.error(signInError);
              return alert("Incorrect User ID or Password.");
           }
@@ -4435,21 +4421,10 @@ export default function App() {
                 onClick={async () => {
                    try {
                      setAuthLoading(true);
-                     if (!supabase) {
-                       console.error("Supabase is missing!", { supabaseUrl: process.env.SUPABASE_URL });
-                       alert("Supabase integration is under configuration... please try again shortly!");
-                       return;
-                     }
-                     console.log("Using Supabase for Google login...");
-                     const { data, error } = await supabase.auth.signInWithOAuth({
-                       provider: 'google',
-                       options: {
-                         redirectTo: window.location.origin
-                       }
-                     });
-                     if (error) throw error;
+                     await signInWithPopup(auth, googleProvider);
+                     // onAuthStateChanged will handle the rest
                    } catch (error) {
-                     console.error("Supabase Google login failed", error);
+                     console.error("Firebase Google login failed", error);
                      alert("Google login failed. Please try again.");
                    } finally {
                      setAuthLoading(false);
