@@ -924,6 +924,10 @@ export default function App() {
           return;
         }
         
+        if (sessionStorage.getItem('isGoogleLoginInProgress') === 'true') {
+           return;
+        }
+        
         if (sessionStorage.getItem('isPendingOtp') === 'true') {
            // Wait until OTP is verified. Store the UID temporarily if needed, but do not set 'user'.
            return;
@@ -4211,6 +4215,7 @@ export default function App() {
       setAuthLoading(true);
       try {
         if (authMode === 'SIGNUP') {
+          sessionStorage.setItem('isSigningUp', 'true');
           // One Click Sign Up
           const numericId = Math.floor(1000000000 + Math.random() * 9000000000).toString(); // 10 digits
           const upperChars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
@@ -4250,6 +4255,8 @@ export default function App() {
           if (supabase) await supabase.auth.signOut();
           
           setOneClickCreds({ userId: numericId, pass: randomPass });
+          await firebaseSignOut(auth);
+          sessionStorage.removeItem('isSigningUp');
         } else if (authMode === 'LOGIN') {
           let loginEmail = authInput.trim();
           
@@ -4316,7 +4323,8 @@ export default function App() {
               </div>
 
               <button 
-                 onClick={() => {
+                 onClick={async () => {
+                    if (supabase) await supabase.auth.signOut();
                     setOneClickCreds(null);
                     setAuthMode('LOGIN');
                  }}
@@ -4416,12 +4424,72 @@ export default function App() {
                 onClick={async () => {
                    try {
                      setAuthLoading(true);
-                     await signInWithPopup(auth, googleProvider);
-                     // onAuthStateChanged will handle the rest
+                     sessionStorage.setItem('isGoogleLoginInProgress', 'true');
+                     const result = await signInWithPopup(auth, googleProvider);
+                     const fbUser = result.user;
+                     
+                     // Check if this is a new user
+                     const userDocRef = doc(db, 'users', fbUser.uid);
+                     const userDoc = await getDoc(userDocRef);
+                     
+                     if (!userDoc.exists()) {
+                         // It's a new user!
+                         const numericId = Math.floor(1000000000 + Math.random() * 9000000000).toString(); // 10 digits
+                         const upperChars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+                         const lowerChars = "abcdefghijklmnopqrstuvwxyz";
+                         const numChars = "0123456789";
+                         let randomPass = "";
+                         randomPass += upperChars.charAt(Math.floor(Math.random() * upperChars.length));
+                         randomPass += lowerChars.charAt(Math.floor(Math.random() * lowerChars.length));
+                         randomPass += numChars.charAt(Math.floor(Math.random() * numChars.length));
+                         const allChars = upperChars + lowerChars + numChars;
+                         for(let i=0; i<7; i++) randomPass += allChars.charAt(Math.floor(Math.random() * allChars.length));
+                         randomPass = randomPass.split('').sort(() => 0.5 - Math.random()).join('');
+                         
+                         await setDoc(doc(db, 'users', fbUser.uid), {
+                            name: fbUser.displayName || 'Fantasy Player',
+                            mobile: numericId, // User ID is stored in mobile field for backward compatibility
+                            email: fbUser.email,
+                            numericId: numericId,
+                            createdAt: new Date().toISOString(),
+                            balance: 0,
+                            winnings: 0,
+                            bonus: 100, // Welcome bonus
+                            isBot: false,
+                            oneClickPassword: randomPass
+                         });
+                         
+                         localStorage.setItem('dreamApp_hasSignedUp', 'true');
+                         setOneClickCreds({ userId: numericId, pass: randomPass });
+                         await firebaseSignOut(auth);
+                     } else {
+                         // Existing user.
+                         const dbData = userDoc.data();
+                         // The user has already been checked so we just log them in locally
+                         let numericId = dbData?.numericId;
+                         if (!numericId && dbData?.mobile && dbData.mobile.length === 10) {
+                             numericId = dbData.mobile;
+                         }
+                         
+                         localStorage.setItem('dreamApp_hasSignedUp', 'true');
+                         if (numericId) {
+                            localStorage.setItem(`dreamApp_numericId_${fbUser.uid}`, numericId);
+                         }
+                         
+                         const newUser = {
+                           email: fbUser.email || dbData?.email || '',
+                           name: fbUser.displayName || dbData?.name || 'Fantasy Player',
+                           id: fbUser.uid,
+                           numericId: numericId || ''
+                         };
+                         localStorage.setItem('dreamApp_user', JSON.stringify(newUser));
+                         setUser(newUser);
+                     }
                    } catch (error) {
                      console.error("Firebase Google login failed", error);
                      alert("Google login failed. Please try again.");
                    } finally {
+                     sessionStorage.removeItem('isGoogleLoginInProgress');
                      setAuthLoading(false);
                    }
                 }}
