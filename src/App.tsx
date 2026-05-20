@@ -793,6 +793,7 @@ export default function App() {
   const [authPassword, setAuthPassword] = useState('');
   const [authFullName, setAuthFullName] = useState('');
   const [authEmail, setAuthEmail] = useState('');
+  const [oneClickCreds, setOneClickCreds] = useState<{ userId: string, pass: string } | null>(null);
   const [authMobile, setAuthMobile] = useState('');
   const [authError, setAuthError] = useState('');
   const [authLoading, setAuthLoading] = useState(false);
@@ -1215,6 +1216,24 @@ export default function App() {
   
   const renderWithdraw = () => {
     const userBanks = bankAccounts.filter(b => b.userId === user?.id);
+    const userKycObj = kycRequests.find(k => k.userId === (user?.id || 'guest'));
+
+    if (!userKycObj || userKycObj.status !== 'Approved') {
+        return (
+           <div className="flex flex-col h-full bg-[#0B1221] text-white">
+              <header className="p-4 flex items-center gap-4">
+                <button onClick={() => setView('WALLET')} className="text-gray-400"><ArrowLeft /></button>
+                <h1 className="text-xl font-bold flex-1 text-center">Withdraw</h1>
+              </header>
+              <div className="flex flex-col items-center justify-center flex-1 p-6 text-center space-y-4">
+                 <Shield size={64} className="text-yellow-500 mb-4" />
+                 <h2 className="text-2xl font-bold">KYC Required</h2>
+                 <p className="text-gray-400">You must complete your KYC verification before you can withdraw funds.</p>
+                 <button onClick={() => setView('KYC')} className="mt-6 bg-app-accent text-white px-8 py-3 rounded-full font-bold shadow-lg">Complete KYC Now</button>
+              </div>
+           </div>
+        );
+    }
 
     if (showAddBankMode) {
       return (
@@ -2092,7 +2111,10 @@ export default function App() {
   const [croppedAreaPixels, setCroppedAreaPixels] = useState(null);
 
   const [aadharInput, setAadharInput] = useState('');
+  const [aadharFrontImg, setAadharFrontImg] = useState<string | null>(null);
+  const [aadharBackImg, setAadharBackImg] = useState<string | null>(null);
   const [panInput, setPanInput] = useState('');
+  const [panFrontImg, setPanFrontImg] = useState<string | null>(null);
 
   const creditsUsed = team.reduce((sum, p) => sum + p.credits, 0);
   const creditsLeft = 100 - creditsUsed;
@@ -2381,7 +2403,33 @@ export default function App() {
 
     // Optional: Deduct balance for Mega Contest
     if (balance >= fee) {
-       setBalance(prev => prev - fee);
+       updateWallet((prev: any) => {
+           let remaining = fee;
+           const newWal = { ...prev };
+           
+           if (newWal.deposit >= remaining) {
+               newWal.deposit -= remaining;
+               remaining = 0;
+           } else {
+               remaining -= newWal.deposit;
+               newWal.deposit = 0;
+           }
+
+           if (remaining > 0 && newWal.winning >= remaining) {
+               newWal.winning -= remaining;
+               remaining = 0;
+           } else if (remaining > 0) {
+               remaining -= newWal.winning;
+               newWal.winning = 0;
+           }
+
+           if (remaining > 0) {
+               newWal.bonus = Math.max(0, newWal.bonus - remaining);
+           }
+           
+           return newWal;
+       });
+
        alert(`🎉 Successfully joined the ${contestName}!\n\n₹${fee} deducted from Wallet.`);
        setView('MY_MATCHES');
     } else {
@@ -2440,14 +2488,13 @@ export default function App() {
           <div className="w-2 h-2 rounded-full bg-app-accent"></div>
           <h1 className="text-xl font-bold text-app-text">Fantasy11</h1>
         </div>
-        <div className="flex items-center gap-1.5 shrink-0">
-          <div className="flex flex-col items-end">
-             <div className="flex items-center gap-1.5 cursor-pointer" onClick={() => setView('PROFILE')}>
-                <span className="font-bold text-sm text-app-text truncate max-w-[100px]">Hey {user ? String(user.name || user.email || '').split(' ')[0].split('@')[0].toUpperCase() : 'ARKING'}</span>
-                <span className="bg-yellow-500 text-black text-[10px] px-1.5 py-0.5 rounded flex items-center font-bold shrink-0">⚡ Lvl 3</span>
-             </div>
-          </div>
-          <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-2 overflow-x-auto no-scrollbar justify-end flex-nowrap w-full ml-2">
+           <div className="flex items-center gap-1.5 cursor-pointer shrink-0" onClick={() => setView('PROFILE')}>
+              <span className="font-bold text-sm text-app-text truncate max-w-[80px]">Hey {user ? String(user.name || user.email || '').split(' ')[0].split('@')[0].toUpperCase() : 'ARKING'}</span>
+              <span className="bg-yellow-500 text-black text-[10px] px-1.5 py-0.5 rounded flex items-center font-bold shrink-0">⚡ Lvl 3</span>
+           </div>
+           
+           <div className="flex items-center gap-1.5 shrink-0 ml-1 border-l border-slate-800 pl-2">
              {isAdmin && (
                <button 
                  onClick={handleSyncToCloud}
@@ -2467,7 +2514,7 @@ export default function App() {
                 <Wallet size={10} />
                 ₹{balance.toLocaleString('en-IN', {maximumFractionDigits:0})}
              </button>
-          </div>
+           </div>
         </div>
       </header>
 
@@ -3996,8 +4043,20 @@ export default function App() {
     const isSubmitted = !!userKycObj;
 
     const handleKycSubmit = () => {
-      if (!aadharInput || !panInput) {
-        alert("Please provide both Aadhar and PAN details.");
+      if (aadharInput.length !== 12) {
+        alert("Aadhar must be exactly 12 digits.");
+        return;
+      }
+      if (!aadharFrontImg || !aadharBackImg) {
+        alert("Please upload Aadhar Front and Back photos.");
+        return;
+      }
+      if (panInput.length !== 10) {
+        alert("PAN must be exactly 10 characters.");
+        return;
+      }
+      if (!panFrontImg) {
+        alert("Please upload PAN Front photo.");
         return;
       }
       
@@ -4008,6 +4067,9 @@ export default function App() {
         userName: user?.name || String(user?.email || '').split('@')[0] || 'Guest Player',
         aadhar: aadharInput,
         pan: panInput,
+        aadharFront: aadharFrontImg,
+        aadharBack: aadharBackImg,
+        panFront: panFrontImg,
         status: 'Pending Review',
         timestamp: new Date().toLocaleString()
       };
@@ -4060,28 +4122,75 @@ export default function App() {
                  <div className="flex flex-col gap-1.5">
                     <label className="text-xs font-bold text-app-text-muted uppercase tracking-wider">Aadhar Number</label>
                     <input 
-                      type="text" 
+                      type="number" 
                       value={aadharInput}
-                      onChange={(e) => setAadharInput(e.target.value)}
+                      onChange={(e) => setAadharInput(e.target.value.substring(0, 12))}
                       placeholder="Enter 12-digit Aadhar Number"
                       className="w-full bg-app-bg border border-app-border text-app-text rounded-lg px-4 py-3 outline-none focus:border-app-accent text-sm font-medium"
                     />
                  </div>
                  
-                 <div className="flex flex-col gap-1.5">
-                    <label className="text-xs font-bold text-app-text-muted uppercase tracking-wider">PAN Card Number</label>
-                    <input 
-                      type="text" 
-                      value={panInput}
-                      onChange={(e) => setPanInput(e.target.value)}
-                      placeholder="Enter 10-character PAN"
-                      className="w-full bg-app-bg border border-app-border text-app-text rounded-lg px-4 py-3 outline-none focus:border-app-accent text-sm font-medium uppercase"
-                    />
-                 </div>
+                 {aadharInput.length === 12 && (
+                    <div className="flex flex-col gap-3 py-2 animate-in fade-in zoom-in-95 duration-300">
+                       <label className="text-xs font-bold text-app-accent uppercase tracking-wider">Aadhar Front Image</label>
+                       <input type="file" accept="image/*" onChange={(e)=>{
+                           const file = e.target.files?.[0];
+                           if(file) {
+                               if(file.size > 2048576) return alert("Image size must be less than 2MB");
+                               const reader = new FileReader();
+                               reader.onload = (re) => setAadharFrontImg(re.target?.result as string);
+                               reader.readAsDataURL(file);
+                           }
+                       }} className="w-full text-xs text-app-text file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:bg-app-accent/20 file:text-app-accent file:font-semibold" />
+                       {aadharFrontImg && <img src={aadharFrontImg} alt="Aadhar Front" className="h-20 object-contain rounded border border-app-border" />}
+
+                       <label className="text-xs font-bold text-app-accent uppercase tracking-wider mt-2">Aadhar Back Image</label>
+                       <input type="file" accept="image/*" onChange={(e)=>{
+                           const file = e.target.files?.[0];
+                           if(file) {
+                               if(file.size > 2048576) return alert("Image size must be less than 2MB");
+                               const reader = new FileReader();
+                               reader.onload = (re) => setAadharBackImg(re.target?.result as string);
+                               reader.readAsDataURL(file);
+                           }
+                       }} className="w-full text-xs text-app-text file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:bg-app-accent/20 file:text-app-accent file:font-semibold" />
+                       {aadharBackImg && <img src={aadharBackImg} alt="Aadhar Back" className="h-20 object-contain rounded border border-app-border" />}
+                    </div>
+                 )}
+
+                 {aadharInput.length === 12 && aadharFrontImg && aadharBackImg && (
+                     <div className="flex flex-col gap-1.5 mt-4 animate-in fade-in zoom-in-95 duration-300">
+                        <label className="text-xs font-bold text-app-text-muted uppercase tracking-wider">PAN Card Number</label>
+                        <input 
+                          type="text" 
+                          value={panInput}
+                          onChange={(e) => setPanInput(e.target.value.toUpperCase().substring(0, 10))}
+                          placeholder="Enter 10-character PAN"
+                          className="w-full bg-app-bg border border-app-border text-app-text rounded-lg px-4 py-3 outline-none focus:border-app-accent text-sm font-medium uppercase"
+                        />
+                     </div>
+                 )}
+
+                 {panInput.length === 10 && (
+                    <div className="flex flex-col gap-3 py-2 animate-in fade-in zoom-in-95 duration-300">
+                       <label className="text-xs font-bold text-app-accent uppercase tracking-wider">PAN Front Image</label>
+                       <input type="file" accept="image/*" onChange={(e)=>{
+                           const file = e.target.files?.[0];
+                           if(file) {
+                               if(file.size > 2048576) return alert("Image size must be less than 2MB");
+                               const reader = new FileReader();
+                               reader.onload = (re) => setPanFrontImg(re.target?.result as string);
+                               reader.readAsDataURL(file);
+                           }
+                       }} className="w-full text-xs text-app-text file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:bg-app-accent/20 file:text-app-accent file:font-semibold" />
+                       {panFrontImg && <img src={panFrontImg} alt="PAN Front" className="h-20 object-contain rounded border border-app-border" />}
+                    </div>
+                 )}
                  
                  <button 
                    onClick={handleKycSubmit}
-                   className="w-full bg-app-accent hover:bg-app-accent text-white font-bold py-3.5 rounded-lg active:scale-[0.98] mt-4 shadow-sm"
+                   disabled={aadharInput.length < 12 || panInput.length !== 10 || !aadharFrontImg || !aadharBackImg || !panFrontImg}
+                   className={`w-full hover:bg-app-accent font-bold py-3.5 rounded-lg text-center transition-colors shadow-sm ${aadharInput.length === 12 && panInput.length === 10 && aadharFrontImg && aadharBackImg && panFrontImg ? 'bg-app-accent text-white' : 'bg-gray-800 text-gray-500 cursor-not-allowed'}`}
                  >
                    Submit Documents
                  </button>
@@ -4104,143 +4213,66 @@ export default function App() {
     const handleAuth = async (e?: React.FormEvent) => {
       if (e) e.preventDefault();
       
-      const hasPermission = localStorage.getItem('dreamApp_phonePermission') === 'true';
-      if (!hasPermission && authMode !== 'OTP') {
-         setShowPhonePermissionDialog(true);
-         return;
-      }
-      
-      if (authMode === 'OTP') {
-        if (!enteredOtp) return alert("Please enter the OTP.");
-        
-        setAuthLoading(true);
-        try {
-           if ((window as any).confirmationResult) {
-              await (window as any).confirmationResult.confirm(enteredOtp);
-              // Successfully verified via Firebase
-           } else {
-              if (enteredOtp !== sentOtp) {
-                 setAuthLoading(false);
-                 return alert("Invalid OTP entered. Please try again.");
-              }
-           }
-        } catch(e) {
-           console.error("OTP Verification failed", e);
-           setAuthLoading(false);
-           return alert("Invalid OTP or verification expired.");
-        }
-        
-        sessionStorage.removeItem('isPendingOtp');
-               
-        // Complete the login sequence successfully
-        let numericId = localStorage.getItem(`dreamApp_numericId_${tempFirebaseUser.uid}`) || '';
-        let fullName = tempFirebaseUser.displayName || 'Fantasy Player';
-        
-        const userDocRef = doc(db, 'users', tempFirebaseUser.uid);
-        const userDoc = await getDoc(userDocRef);
-        if (userDoc.exists()) {
-           const data = userDoc.data();
-           numericId = data.numericId || numericId;
-           fullName = data.name || fullName;
-        }
-        
-        if (numericId) {
-            localStorage.setItem(`dreamApp_numericId_${tempFirebaseUser.uid}`, numericId);
-        }
-        
-        localStorage.setItem('dreamApp_hasSignedUp', 'true');
-        const newUser = {
-          email: tempFirebaseUser.email || '',
-          name: fullName,
-          id: tempFirebaseUser.uid,
-          numericId: numericId
-        };
-        localStorage.setItem('dreamApp_user', JSON.stringify(newUser));
-        setUser(newUser);
-        setTempFirebaseUser(null);
-        return;
-      }
-      
-      if (authMode === 'SIGNUP') {
-        if (!authFullName || !authMobile || !authPassword) {
-          return alert("Please fill all fields: Name, Mobile and Password");
-        }
-        if (!/^\d{10}$/.test(authMobile.trim())) {
-          return alert("Please enter a valid 10-digit mobile number");
-        }
-      } else if (authMode === 'LOGIN') {
-        if (!authInput || !authPassword) return alert("Please enter mobile number and password");
-      }
-
       setAuthLoading(true);
       try {
         if (authMode === 'SIGNUP') {
-          // 1. Check if mobile already exists in Firestore
-          const usersRef = collection(db, 'users');
-          const mobileQuery = query(usersRef, where('mobile', '==', authMobile.trim()));
-          const mobileSnap = await getDocs(mobileQuery);
-          
-          if (!mobileSnap.empty) {
-            setAuthLoading(false);
-            return alert("This mobile number is already registered! Please login.");
-          }
+          // One Click Sign Up
+          const numericId = Math.floor(1000000000 + Math.random() * 9000000000).toString(); // 10 digits
+          const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+          let randomPass = "";
+          for(let i=0; i<10; i++) randomPass += chars.charAt(Math.floor(Math.random() * chars.length));
 
-          sessionStorage.setItem('isSigningUp', 'true');
-          const pseudoEmail = `${authMobile.trim()}@dreamapp.com`;
+          const pseudoEmail = `${numericId}@dreamapp.com`;
           
           const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
             email: pseudoEmail,
-            password: authPassword,
+            password: randomPass,
             options: {
               data: {
-                full_name: authFullName.trim(),
-                mobile: authMobile.trim()
+                full_name: 'Fantasy Player',
+                mobile: numericId
               }
             }
           });
           
           if (signUpError) throw signUpError;
           const user = signUpData.user;
-          const numericId = Math.floor(1000000000 + Math.random() * 9000000000).toString();
           
           if (user) {
             await setDoc(doc(db, 'users', user.id), {
-               name: authFullName.trim(),
-               mobile: authMobile.trim(),
+               name: 'Fantasy Player',
+               mobile: numericId, // User ID is stored in mobile field for backward compatibility
                email: pseudoEmail,
                numericId: numericId,
                createdAt: new Date().toISOString(),
                balance: 0,
                winnings: 0,
                bonus: 100, // Welcome bonus
-               isBot: false
+               isBot: false,
+               oneClickPassword: randomPass // "aur vah kabhi bhi delete Nahin Hona chahie"
             });
           }
           
-          sessionStorage.removeItem('isSigningUp');
           localStorage.setItem('dreamApp_hasSignedUp', 'true');
           if (supabase) await supabase.auth.signOut();
           
-          alert("Signup successful! Now please login to your account.");
-          setAuthMode('LOGIN');
-          setAuthPassword('');
-          setAuthFullName('');
-          setAuthMobile('');
+          setOneClickCreds({ userId: numericId, pass: randomPass });
         } else if (authMode === 'LOGIN') {
           let loginEmail = authInput.trim();
           
-          // If input is mobile number, find corresponding email or use pseudo
           if (/^\d{10}$/.test(loginEmail)) {
-            // First check if user exists with standard format
+            // Check users by 'mobile' field since we stored UserID there
             const usersRef = collection(db, 'users');
             const q = query(usersRef, where('mobile', '==', loginEmail));
             const snap = await getDocs(q);
             
-            if (snap.empty) {
+            if (!snap.docs || snap.docs.length === 0) {
               setAuthLoading(false);
-              return alert("No account found with this mobile number.");
+              return alert("No account found with this User ID.");
             }
             loginEmail = snap.docs[0].data().email || `${loginEmail}@dreamapp.com`;
+          } else {
+             return alert("Please enter your 10-digit User ID");
           }
           
           const { error: signInError } = await supabase.auth.signInWithPassword({
@@ -4248,23 +4280,64 @@ export default function App() {
             password: authPassword
           });
           
-          if (signInError) throw signInError;
-          // onAuthStateChange in useEffect will catch this and log the user in!
+          if (signInError) {
+             console.error(signInError);
+             return alert("Incorrect User ID or Password.");
+          }
+          // onAuthStateChange catches this
         }
       } catch (err: any) {
         handleFsError(err, 'auth_action');
         console.error("Auth error", err);
-        let msg = err.message;
-        if (err.code === 'auth/email-already-in-use') msg = "Mobile number already registered! Please login.";
-        else if (err.code === 'auth/wrong-password' || err.code === 'auth/user-not-found' || err.code === 'auth/invalid-credential' || err.code === 'auth/invalid-login-credentials') msg = "Incorrect mobile number or password.";
-        else if (err.code === 'auth/invalid-email') msg = "Invalid format.";
-        else if (err.code === 'auth/network-request-failed') msg = "Network error. Please check your internet connection.";
-        alert(msg);
+        alert(err.message || "Authentication failed");
       } finally {
         setAuthLoading(false);
-        sessionStorage.removeItem('isSigningUp');
       }
     };
+
+    if (oneClickCreds) {
+       return (
+        <div className={`relative h-[100dvh] w-full max-w-md mx-auto bg-app-bg text-app-text font-sans shadow-2xl overflow-hidden border-x border-app-border flex flex-col ${themeMode === 'Light' ? 'theme-light' : ''} color-${themeColor.toLowerCase()}`}>
+           <div className="flex-1 flex flex-col items-center justify-center p-8">
+              <div className="w-20 h-20 bg-green-500 rounded-full mb-6 flex items-center justify-center shadow-lg animate-in zoom-in">
+                 <Check size={40} className="text-white" />
+              </div>
+              <h1 className="text-2xl font-black mb-2 text-center text-app-text">Account Created!</h1>
+              <p className="text-sm font-bold text-app-text-muted text-center mb-8">Please copy your ID and Password to login. Do not lose them!</p>
+              
+              <div className="w-full bg-app-card border border-app-border rounded-xl p-4 mb-4">
+                 <p className="text-xs text-app-text-muted font-bold uppercase tracking-wider mb-1">Your User ID</p>
+                 <div className="flex items-center justify-between">
+                    <span className="text-xl font-bold tracking-widest">{oneClickCreds.userId}</span>
+                    <button onClick={() => { navigator.clipboard.writeText(oneClickCreds.userId); alert('User ID Copied!'); }} className="p-2 bg-app-bg rounded border border-app-border text-app-text hover:text-white transition-colors">
+                       <Copy size={16} />
+                    </button>
+                 </div>
+              </div>
+
+              <div className="w-full bg-app-card border border-app-border rounded-xl p-4 mb-8">
+                 <p className="text-xs text-app-text-muted font-bold uppercase tracking-wider mb-1">Your Password</p>
+                 <div className="flex items-center justify-between">
+                    <span className="text-xl font-bold tracking-widest text-[#FF3B5C]">{oneClickCreds.pass}</span>
+                    <button onClick={() => { navigator.clipboard.writeText(oneClickCreds.pass); alert('Password Copied!'); }} className="p-2 bg-app-bg rounded border border-app-border text-app-text hover:text-white transition-colors">
+                       <Copy size={16} />
+                    </button>
+                 </div>
+              </div>
+
+              <button 
+                 onClick={() => {
+                    setOneClickCreds(null);
+                    setAuthMode('LOGIN');
+                 }}
+                 className="w-full bg-app-accent text-white font-black py-4 rounded-xl shadow-lg hover:scale-[1.02] active:scale-95 transition-all uppercase tracking-widest text-sm"
+              >
+                 Go to Login
+              </button>
+           </div>
+        </div>
+       );
+    }
 
     return (
     <div className={`relative h-[100dvh] w-full max-w-md mx-auto bg-app-bg text-app-text font-sans shadow-2xl overflow-hidden border-x border-app-border flex flex-col ${themeMode === 'Light' ? 'theme-light' : ''} color-${themeColor.toLowerCase()}`}>
@@ -4277,58 +4350,17 @@ export default function App() {
           
           <div className="w-full">
              <form onSubmit={handleAuth} className="flex flex-col gap-3.5">
-               {authMode === 'OTP' ? (
+               {authMode === 'SIGNUP' ? (
                  <>
-                   <p className="text-sm font-bold text-center text-app-text mb-4">Enter the 6-digit OTP sent to your mobile number.</p>
-                   <div className="space-y-3.5">
-                      <div className="relative">
-                        <User size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-app-text-muted" />
-                        <input 
-                          type="text" 
-                          placeholder="Enter 6-digit OTP" 
-                          maxLength={6}
-                          value={enteredOtp}
-                          onChange={e => setEnteredOtp(e.target.value.replace(/\D/g, ''))}
-                          className="w-full bg-app-card border border-app-border text-app-text pl-12 pr-4 py-3.5 rounded-xl outline-none focus:border-app-accent font-bold text-sm transition-all tracking-[0.5em] text-center"
-                        />
-                      </div>
-                   </div>
-                 </>
-               ) : authMode === 'SIGNUP' ? (
-                 <>
-                   <div className="space-y-3.5">
-                      <div className="relative">
-                        <User size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-app-text-muted" />
-                        <input 
-                          type="text" 
-                          placeholder="First & Last Name" 
-                          value={authFullName}
-                          onChange={e => setAuthFullName(e.target.value)}
-                          className="w-full bg-app-card border border-app-border text-app-text pl-12 pr-4 py-3.5 rounded-xl outline-none focus:border-app-accent font-bold text-sm transition-all"
-                        />
-                      </div>
-                      <div className="relative">
-                        <PlayCircle size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-app-text-muted" />
-                        <input 
-                          type="tel" 
-                          placeholder="Mobile Number (10 digits)" 
-                          maxLength={10}
-                          value={authMobile}
-                          onChange={e => setAuthMobile(e.target.value.replace(/\D/g, ''))}
-                          className="w-full bg-app-card border border-app-border text-app-text pl-12 pr-4 py-3.5 rounded-xl outline-none focus:border-app-accent font-bold text-sm transition-all"
-                        />
-                      </div>
-                      <div className="relative">
-                        <Settings size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-app-text-muted" />
-                        <input 
-                          type="password" 
-                          placeholder="Create Password" 
-                          value={authPassword}
-                          onChange={e => setAuthPassword(e.target.value)}
-                          className="w-full bg-app-card border border-app-border text-app-text pl-12 pr-4 py-3.5 rounded-xl outline-none focus:border-app-accent font-bold text-sm transition-all"
-                        />
-                      </div>
-                   </div>
+                   <p className="text-sm font-bold text-center text-app-text mb-4">Click below to instantly create an account.</p>
+                   <button 
+                     type="button"
+                     onClick={() => handleAuth()}
+                     disabled={authLoading}
+                     className="w-full bg-[#153B25] text-[#4ADE80] border border-[#4ADE80]/30 font-black py-4 rounded-xl shadow-lg shadow-green-500/10 hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-70 mt-2 uppercase tracking-widest text-sm flex items-center justify-center gap-2"
+                   >
+                     {authLoading ? <RefreshCw className="animate-spin" size={18}/> : <PlusCircle size={18}/>} One-Click Sign Up
+                   </button>
                  </>
                ) : (
                  <>
@@ -4336,8 +4368,9 @@ export default function App() {
                       <div className="relative">
                         <User size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-app-text-muted" />
                         <input 
-                          type="tel" 
-                          placeholder="Mobile Number" 
+                          type="text" 
+                          placeholder="User ID (10 digits)" 
+                          maxLength={10}
                           value={authInput}
                           onChange={e => setAuthInput(e.target.value.replace(/\D/g, ''))}
                           className="w-full bg-app-card border border-app-border text-app-text pl-12 pr-4 py-3.5 rounded-xl outline-none focus:border-app-accent font-bold text-sm transition-all"
@@ -4354,37 +4387,34 @@ export default function App() {
                         />
                       </div>
                    </div>
+                   
+                   <button 
+                     type="submit"
+                     disabled={authLoading}
+                     className="w-full bg-app-accent text-white font-black py-4 rounded-xl shadow-lg shadow-app-accent/20 hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-70 mt-2 uppercase tracking-widest text-sm"
+                   >
+                     {authLoading ? 'Logging in...' : 'Login'}
+                   </button>
                  </>
                )}
-               
-               <button 
-                 type="submit"
-                 disabled={authLoading}
-                 className="w-full bg-app-accent text-white font-black py-4 rounded-xl shadow-lg shadow-app-accent/20 hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-70 mt-2 uppercase tracking-widest text-sm"
-               >
-                 {authLoading ? 'Authenticating...' : (authMode === 'OTP' ? 'Verify OTP' : (authMode === 'LOGIN' ? 'Login' : 'Create Account'))}
-               </button>
              </form>
-             <div id="recaptcha-container"></div>
 
-             {authMode !== 'OTP' && (
-               <div className="text-center mt-6">
-                 <button 
-                   type="button"
-                   onClick={() => {
-                     setAuthMode(prev => prev === 'LOGIN' ? 'SIGNUP' : 'LOGIN');
-                     setAuthError('');
-                   }}
-                   className="group text-xs text-app-text-muted font-bold transition-all"
-                 >
-                   {authMode === 'LOGIN' ? (
-                      <>New here? <span className="text-app-accent group-hover:underline ml-1">Create an account</span></>
-                   ) : (
-                      <>Already have an account? <span className="text-app-accent group-hover:underline ml-1">Login now</span></>
-                   )}
-                 </button>
-               </div>
-             )}
+             <div className="text-center mt-6">
+               <button 
+                 type="button"
+                 onClick={() => {
+                   setAuthMode(prev => prev === 'LOGIN' ? 'SIGNUP' : 'LOGIN');
+                   setAuthError('');
+                 }}
+                 className="group text-xs text-app-text-muted font-bold transition-all"
+               >
+                 {authMode === 'LOGIN' ? (
+                    <>New here? <span className="text-app-accent group-hover:underline ml-1">Create an account</span></>
+                 ) : (
+                    <>Already have an account? <span className="text-app-accent group-hover:underline ml-1">Login now</span></>
+                 )}
+               </button>
+             </div>
 
              <div className="relative flex items-center py-6">
                 <div className="flex-grow border-t border-app-border"></div>
@@ -7708,7 +7738,10 @@ export default function App() {
                                 const userByNumericQuery = query(collection(db, 'users'), where('numericId', '==', targetId));
                                 const userSnap = await getDocs(userByNumericQuery);
                                 
-                                if (!userSnap.empty) {
+                                if (!userSnap.docs || userSnap.docs.length === 0) {
+                                    alert("User not found!");
+                                    return;
+                                } else {
                                     const realUid = userSnap.docs[0].id;
                                     const userData = userSnap.docs[0].data();
                                     const wDoc = await getDoc(doc(db, 'wallets', realUid));

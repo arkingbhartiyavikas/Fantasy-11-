@@ -62,7 +62,8 @@ export const deleteDoc = async (docRef: DocRef) => {
 
 export const onSnapshot = (
     ref: any,
-    callback: (snapshot: any) => void
+    callback: (snapshot: any) => void,
+    onError?: (error: any) => void
 ) => {
     if (ref._path) { // doc snapshot
         const docRef = ref as DocRef;
@@ -150,11 +151,11 @@ export const writeBatch = (dbMock: any) => {
     return {
        update: (ref: any, data: any) => ops.push({ type: 'update', ref, data }),
        delete: (ref: any) => ops.push({ type: 'delete', ref }),
-       set: (ref: any, data: any) => ops.push({ type: 'set', ref, data }),
+       set: (ref: any, data: any, options?: { merge?: boolean }) => ops.push({ type: 'set', ref, data, options }),
        commit: async () => {
            for (const op of ops) {
                if (op.type === 'update') await updateDoc(op.ref, op.data);
-               else if (op.type === 'set') await setDoc(op.ref, op.data);
+               else if (op.type === 'set') await setDoc(op.ref, op.data, op.options);
                else if (op.type === 'delete') await deleteDoc(op.ref);
            }
        }
