@@ -2,7 +2,6 @@ import React, { useState, useEffect, useMemo, useCallback, useRef, Component } f
 import { motion, AnimatePresence } from 'motion/react';
 import Cropper from 'react-easy-crop';
 import { Trophy, Clock, Users, ArrowLeft, Home, User, Wallet, Bell, PlayCircle, Shield, Plus, Minus, Info, Receipt, Settings, MessageSquare, Copy, PlusCircle, Edit2, ArrowDownToLine, ArrowDownLeft, ArrowRight, Check, X, ChevronUp, ChevronDown, Search, ChevronLeft, ChevronRight, Trash2, Download, BarChart2, Image as ImageIcon, ZoomIn, RefreshCw, AlertCircle } from 'lucide-react';
-import { auth, googleProvider, signInWithPopup, signOut as firebaseSignOut, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, RecaptchaVerifier, signInWithPhoneNumber } from './lib/firebase';
 import { supabase } from './lib/supabase';
 import { db, doc, onSnapshot, setDoc, collection, query, where, getDoc, getDocs, updateDoc, writeBatch, increment, deleteDoc } from './lib/supabase-firestore';
 import { AreaChart, Area, LineChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip as RechartsTooltip, ResponsiveContainer, CartesianGrid, Legend } from 'recharts';
@@ -893,17 +892,12 @@ export default function App() {
                  let fullName = supaUser.user_metadata?.full_name || 'Fantasy Player';
                  const pseudoEmail = `${numericId}@dreamapp.com`;
                  
-                 // We MUST create this user in Firebase Auth so they can login via the login screen!
-                 // Supabase handles the Google portion, but our fallback login is Firebase
+                 // Create user only in Firestore directly, bypassing Firebase Auth
                  try {
-                     const userCredential = await createUserWithEmailAndPassword(auth, pseudoEmail, randomPass);
-                     sessionStorage.setItem('isSigningUp', 'true');
-                     
-                     const fbUser = userCredential.user;
-                     await setDoc(doc(db, 'users', fbUser.uid), {
+                     await setDoc(doc(db, 'users', supaUser.id), {
                         name: fullName,
                         mobile: numericId,
-                        email: supaUser.email || pseudoEmail, // Keep their real email here for lookups!
+                        email: supaUser.email || pseudoEmail,
                         numericId: numericId,
                         createdAt: new Date().toISOString(),
                         balance: 0,
@@ -915,59 +909,39 @@ export default function App() {
                      });
                      
                      localStorage.setItem('dreamApp_hasSignedUp', 'true');
-                     localStorage.setItem(`dreamApp_numericId_${fbUser.uid}`, numericId);
+                     localStorage.setItem(`dreamApp_numericId_${supaUser.id}`, numericId);
                      
-                     await firebaseSignOut(auth);
-                     await supabase.auth.signOut();
-                     sessionStorage.removeItem('isSigningUp');
-                     
-                     setOneClickCreds({ userId: numericId, pass: randomPass });
+                     // Not signing out here, auto login is fine for Google OAuth
+                     const newUser = {
+                       email: supaUser.email || pseudoEmail,
+                       name: fullName,
+                       id: supaUser.id,
+                       numericId: numericId
+                     };
+                     localStorage.setItem('dreamApp_user', JSON.stringify(newUser));
+                     setUser(newUser);
                  } catch (err) {
-                    console.error("Firebase auth creation failed in Supabase hook", err);
-                    alert("Account setup failed. Please try again.");
+                    console.error("Firestore user creation failed in Supabase hook", err);
                  }
                  
              } else {
                  // Existing user from Google OAuth
                  const data = userDoc.data();
-                 
-                 let randomPass = data.oneClickPassword;
-                 let loginEmail = data.email;
                  let fallbackNumeric = data.numericId || data.mobile;
                  
-                 // If we have their raw password, let's just log them in to Firebase!
-                 if (randomPass) {
-                     // Since their Firebase login uses the pseudoEmail (numericId@dreamapp.com) usually:
-                     let attemptEmail = loginEmail;
-                     if (!attemptEmail.includes('@dreamapp.com') && fallbackNumeric) {
-                         // wait, if we registered them via oneClick, we might have used numericId@dreamapp.com
-                         // We'll try signing in!
-                     }
-                     
-                     // We will redirect them to login manually using the generated credentials, or we can auto-login them!
-                     // Actually, the user asked to SHOW the ID and Password so they can log in!
-                     // "Jaise hi login continue Karega to usko login ho jana chahie lekin ek baat Jab User id password dekhta hai aur ek second Mein hat jata hai Aisa Nahin Hona chahie"
-                     
-                     // So we just show them the creds again!
-                     setOneClickCreds({ userId: fallbackNumeric, pass: randomPass });
-                     await supabase.auth.signOut();
-                     
-                 } else {
-                     // If somehow they don't have a oneClickPassword, we can just do the local state hack but with their existing ID
-                     let numericId = fallbackNumeric;
-                     localStorage.setItem(`dreamApp_numericId_${existingDocId}`, numericId);
-                     localStorage.setItem('dreamApp_hasSignedUp', 'true');
-                     
-                     const newUser = {
-                       email: supaUser.email || data.email || '',
-                       name: data.name || supaUser.user_metadata?.full_name || 'Fantasy Player',
-                       id: existingDocId,
-                       numericId: numericId
-                     };
-                     
-                     localStorage.setItem('dreamApp_user', JSON.stringify(newUser));
-                     setUser(newUser);
-                 }
+                 let numericId = fallbackNumeric;
+                 localStorage.setItem(`dreamApp_numericId_${existingDocId}`, numericId);
+                 localStorage.setItem('dreamApp_hasSignedUp', 'true');
+                 
+                 const newUser = {
+                   email: supaUser.email || data.email || '',
+                   name: data.name || supaUser.user_metadata?.full_name || 'Fantasy Player',
+                   id: existingDocId,
+                   numericId: numericId
+                 };
+                 
+                 localStorage.setItem('dreamApp_user', JSON.stringify(newUser));
+                 setUser(newUser);
              }
          } catch (e) {
              handleFsError(e, 'fetch_profile', supaUser.id);
@@ -992,80 +966,6 @@ export default function App() {
     };
   }, []);
 
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      setAuthInitialized(true);
-      if (firebaseUser) {
-        if (sessionStorage.getItem('isSigningUp') === 'true') {
-          // Do nothing, let handleAuth complete the setup and sign out
-          return;
-        }
-        
-        if (sessionStorage.getItem('isGoogleLoginInProgress') === 'true') {
-           return;
-        }
-        
-        if (sessionStorage.getItem('isPendingOtp') === 'true') {
-           // Wait until OTP is verified. Store the UID temporarily if needed, but do not set 'user'.
-           return;
-        }
-        
-        let numericId = localStorage.getItem(`dreamApp_numericId_${firebaseUser.uid}`) || '';
-        let fullName = firebaseUser.displayName || 'Fantasy Player';
-        
-        try {
-            const userDocRef = doc(db, 'users', firebaseUser.uid);
-            const userDoc = await getDoc(userDocRef);
-            if (userDoc.exists()) {
-                const data = userDoc.data();
-                numericId = data.numericId || numericId || '';
-                fullName = data.name || fullName;
-                
-                // If it existed in local storage but not DB, it's migrating now, but let's just make sure DB is updated
-                if (!data.numericId) {
-                    if (!numericId) {
-                        numericId = Math.floor(1000000000 + Math.random() * 9000000000).toString();
-                    }
-                    await setDoc(userDocRef, { numericId }, { merge: true });
-                }
-            } else {
-                if (!numericId) {
-                    numericId = Math.floor(1000000000 + Math.random() * 9000000000).toString();
-                }
-                await setDoc(userDocRef, {
-                    name: fullName,
-                    numericId: numericId,
-                    email: firebaseUser.email || ''
-                });
-            }
-        } catch (e) {
-            handleFsError(e, 'fetch_profile', firebaseUser.uid);
-            if (!numericId) {
-                numericId = Math.floor(1000000000 + Math.random() * 9000000000).toString();
-            }
-        }
-
-        if (numericId) {
-            localStorage.setItem(`dreamApp_numericId_${firebaseUser.uid}`, numericId);
-        }
-
-        localStorage.setItem('dreamApp_hasSignedUp', 'true');
-        const newUser = {
-          email: firebaseUser.email || '',
-          name: fullName,
-          id: firebaseUser.uid,
-          numericId: numericId
-        };
-        localStorage.setItem('dreamApp_user', JSON.stringify(newUser));
-        setUser(newUser);
-      } else {
-        if (!supabase) {
-           setUser(null);
-        }
-      }
-    });
-    return () => unsubscribe();
-  }, []);
   const [wallet, setWallet] = useState<{deposit: number, winning: number, bonus: number, blocked?: boolean, profits?: number, wins?: number}>({ deposit: 0, winning: 0, bonus: 0, profits: 0, wins: 0 });
   const [walletLoadedUser, setWalletLoadedUser] = useState<string | null>(null);
 
@@ -4129,7 +4029,6 @@ export default function App() {
              onClick={async () => {
                 try {
                   if (supabase) await supabase.auth.signOut();
-                  await firebaseSignOut(auth);
                   setUser(null);
                   setView('HOME');
                 } catch (error) {
@@ -4338,33 +4237,34 @@ export default function App() {
           
           let supaUserId = null;
           
-          // 1. Create User in Supabase (Safely stored in Supabase Dashboard)
-          if (supabase) {
-             const { data: supaData, error: supaError } = await supabase.auth.signUp({
-                email: pseudoEmail,
-                password: randomPass,
-                options: {
-                  data: {
-                    full_name: 'Fantasy Player',
-                    numericId: numericId
-                  }
-                }
-             });
-             
-             if (supaError) {
-                console.error("Supabase signup error:", supaError);
-             } else if (supaData?.user) {
-                supaUserId = supaData.user.id;
-             }
+          if (!supabase) {
+             alert('Supabase is not connected. Please connect Supabase first.');
+             setAuthLoading(false);
+             return;
           }
           
-          // 2. Create User in Firebase
-          const userCredential = await createUserWithEmailAndPassword(auth, pseudoEmail, randomPass);
-          const user = userCredential.user;
+          // 1. Create User in Supabase (Safely stored in Supabase Dashboard)
+          const { data: supaData, error: supaError } = await supabase.auth.signUp({
+            email: pseudoEmail,
+            password: randomPass,
+            options: {
+              data: {
+                full_name: 'Fantasy Player',
+                numericId: numericId
+              }
+            }
+          });
           
-          if (user) {
-            // Write to Firestore using Firebase UID (or Supabase UID if you prefer, but sticking to Firebase for backward compatibility)
-            await setDoc(doc(db, 'users', user.uid), {
+          if (supaError) {
+            console.error("Supabase signup error:", supaError);
+            throw new Error(supaError.message);
+          } else if (supaData?.user) {
+            supaUserId = supaData.user.id;
+          }
+          
+          if (supaUserId) {
+            // Write to Firestore using Supabase UID
+            await setDoc(doc(db, 'users', supaUserId), {
                name: 'Fantasy Player',
                mobile: numericId, // User ID is stored in mobile field for backward compatibility
                email: pseudoEmail,
@@ -4380,13 +4280,20 @@ export default function App() {
           }
           
           localStorage.setItem('dreamApp_hasSignedUp', 'true');
-          if (supabase) await supabase.auth.signOut(); // Sign out from Supabase immediately so they have to manually login
+          // Sign out from Supabase immediately so they have to manually login with the shown creds
+          await supabase.auth.signOut(); 
           
           setOneClickCreds({ userId: numericId, pass: randomPass });
-          await firebaseSignOut(auth);
           sessionStorage.removeItem('isSigningUp');
+          
         } else if (authMode === 'LOGIN') {
           let loginEmail = authInput.trim();
+          
+          if (!supabase) {
+            alert('Supabase is not connected. Please connect Supabase first.');
+            setAuthLoading(false);
+            return;
+          }
           
           if (/^\d{10}$/.test(loginEmail)) {
             // Check users by 'mobile' field since we stored UserID there
@@ -4400,16 +4307,49 @@ export default function App() {
             }
             loginEmail = snap.docs[0].data().email || `${loginEmail}@dreamapp.com`;
           } else {
+             setAuthLoading(false);
              return alert("Please enter your 10-digit User ID");
           }
           
-          try {
-            await signInWithEmailAndPassword(auth, loginEmail, authPassword);
-          } catch(signInError) {
+          const { error: signInError } = await supabase.auth.signInWithPassword({
+            email: loginEmail,
+            password: authPassword,
+          });
+          
+          if (signInError) {
+             // Fallback: If they were a legacy Firebase user, their account might not exist in Supabase Auth yet.
+             // We already checked Firestore for their user ID. Let's see if the password matches `oneClickPassword`.
+             const usersRef2 = collection(db, 'users');
+             const q2 = query(usersRef2, where('mobile', '==', authInput.trim()));
+             const snap2 = await getDocs(q2);
+             
+             if (snap2.docs && snap2.docs.length > 0) {
+                 const legacyData = snap2.docs[0].data();
+                 if (legacyData.oneClickPassword === authPassword) {
+                     // Migrate them to Supabase!
+                     const { data: supaData, error: supaError } = await supabase.auth.signUp({
+                        email: loginEmail,
+                        password: authPassword,
+                        options: {
+                          data: {
+                            full_name: legacyData.name || 'Fantasy Player',
+                            numericId: legacyData.mobile || legacyData.numericId
+                          }
+                        }
+                     });
+                     
+                     if (!supaError) {
+                         // Successfully migrated, user is now logged in!
+                         return; // We are done, onAuthStateChange will handle it!
+                     }
+                 }
+             }
+             
              console.error(signInError);
+             setAuthLoading(false);
              return alert("Incorrect User ID or Password.");
           }
-          // onAuthStateChange catches this
+          // Supabase's onAuthStateChange catches this and sets user
         }
       } catch (err: any) {
         handleFsError(err, 'auth_action');
@@ -7254,7 +7194,7 @@ export default function App() {
            <Shield size={64} className="text-red-500 mb-4" />
            <h2 className="text-2xl font-black mb-2 text-red-500">Account Blocked</h2>
            <p className="text-sm font-bold text-app-text-muted mb-8">Your account has been restricted by the admin. Please contact support.</p>
-           <button onClick={async () => { if (supabase) await supabase.auth.signOut(); await firebaseSignOut(auth); }} className="bg-red-600 hover:bg-red-700 font-bold px-6 py-2 rounded-xl text-white shadow-lg active:scale-95 transition-transform">Logout</button>
+           <button onClick={async () => { if (supabase) await supabase.auth.signOut(); }} className="bg-red-600 hover:bg-red-700 font-bold px-6 py-2 rounded-xl text-white shadow-lg active:scale-95 transition-transform">Logout</button>
         </div>
      );
   }
