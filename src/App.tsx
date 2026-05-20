@@ -4485,9 +4485,13 @@ export default function App() {
                          localStorage.setItem('dreamApp_user', JSON.stringify(newUser));
                          setUser(newUser);
                      }
-                   } catch (error) {
+                   } catch (error: any) {
                      console.error("Firebase Google login failed", error);
-                     alert("Google login failed. Please try again.");
+                     if (error.code === 'auth/operation-not-allowed') {
+                         alert("Google Sign-In is not enabled. Provide this instruction to the admin:\n\n1. Go to Firebase Console\n2. Open Authentication > Sign-in method\n3. Enable Google provider\n4. Save and retry.");
+                     } else {
+                         alert("Google login failed. Please try again.");
+                     }
                    } finally {
                      sessionStorage.removeItem('isGoogleLoginInProgress');
                      setAuthLoading(false);
