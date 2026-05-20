@@ -788,7 +788,7 @@ export default function App() {
   const [activeContestDetails, setActiveContestDetails] = useState<Contest | null>(null);
   const [activeContestInstanceId, setActiveContestInstanceId] = useState<number | null>(null);
   
-  const [authMode, setAuthMode] = useState<'LOGIN' | 'SIGNUP' | 'OTP'>('SIGNUP');
+  const [authMode, setAuthMode] = useState<'LOGIN' | 'SIGNUP' | 'OTP'>(typeof window !== 'undefined' && localStorage.getItem('dreamApp_hasSignedUp') === 'true' ? 'LOGIN' : 'SIGNUP');
   const [authInput, setAuthInput] = useState('');
   const [authPassword, setAuthPassword] = useState('');
   const [authFullName, setAuthFullName] = useState('');
@@ -4204,11 +4204,6 @@ export default function App() {
 
   const renderLogin = () => {
     const hasSignedUp = localStorage.getItem('dreamApp_hasSignedUp') === 'true';
-
-    // Force login mode if already signed up
-    if (hasSignedUp && authMode === 'SIGNUP') {
-       setAuthMode('LOGIN');
-    }
 
     const handleAuth = async (e?: React.FormEvent) => {
       if (e) e.preventDefault();
