@@ -4336,11 +4336,35 @@ export default function App() {
 
           const pseudoEmail = `${numericId}@dreamapp.com`;
           
+          let supaUserId = null;
+          
+          // 1. Create User in Supabase (Safely stored in Supabase Dashboard)
+          if (supabase) {
+             const { data: supaData, error: supaError } = await supabase.auth.signUp({
+                email: pseudoEmail,
+                password: randomPass,
+                options: {
+                  data: {
+                    full_name: 'Fantasy Player',
+                    numericId: numericId
+                  }
+                }
+             });
+             
+             if (supaError) {
+                console.error("Supabase signup error:", supaError);
+             } else if (supaData?.user) {
+                supaUserId = supaData.user.id;
+             }
+          }
+          
+          // 2. Create User in Firebase
           const userCredential = await createUserWithEmailAndPassword(auth, pseudoEmail, randomPass);
           const user = userCredential.user;
           
           if (user) {
-            await setDoc(doc(db, 'users', user.id), {
+            // Write to Firestore using Firebase UID (or Supabase UID if you prefer, but sticking to Firebase for backward compatibility)
+            await setDoc(doc(db, 'users', user.uid), {
                name: 'Fantasy Player',
                mobile: numericId, // User ID is stored in mobile field for backward compatibility
                email: pseudoEmail,
@@ -4350,12 +4374,13 @@ export default function App() {
                winnings: 0,
                bonus: 100, // Welcome bonus
                isBot: false,
-               oneClickPassword: randomPass // "aur vah kabhi bhi delete Nahin Hona chahie"
+               oneClickPassword: randomPass,
+               supaId: supaUserId // Link to Supabase User ID
             });
           }
           
           localStorage.setItem('dreamApp_hasSignedUp', 'true');
-          if (supabase) await supabase.auth.signOut();
+          if (supabase) await supabase.auth.signOut(); // Sign out from Supabase immediately so they have to manually login
           
           setOneClickCreds({ userId: numericId, pass: randomPass });
           await firebaseSignOut(auth);
