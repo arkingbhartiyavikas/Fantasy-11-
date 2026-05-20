@@ -4218,9 +4218,18 @@ export default function App() {
         if (authMode === 'SIGNUP') {
           // One Click Sign Up
           const numericId = Math.floor(1000000000 + Math.random() * 9000000000).toString(); // 10 digits
-          const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+          const upperChars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+          const lowerChars = "abcdefghijklmnopqrstuvwxyz";
+          const numChars = "0123456789";
+          
           let randomPass = "";
-          for(let i=0; i<10; i++) randomPass += chars.charAt(Math.floor(Math.random() * chars.length));
+          randomPass += upperChars.charAt(Math.floor(Math.random() * upperChars.length));
+          randomPass += lowerChars.charAt(Math.floor(Math.random() * lowerChars.length));
+          randomPass += numChars.charAt(Math.floor(Math.random() * numChars.length));
+          
+          const allChars = upperChars + lowerChars + numChars;
+          for(let i=0; i<7; i++) randomPass += allChars.charAt(Math.floor(Math.random() * allChars.length));
+          randomPass = randomPass.split('').sort(() => 0.5 - Math.random()).join('');
 
           const pseudoEmail = `${numericId}@dreamapp.com`;
           
