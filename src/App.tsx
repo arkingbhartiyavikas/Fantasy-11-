@@ -857,56 +857,133 @@ export default function App() {
          setAuthInitialized(true);
          const supaUser = session.user;
          
-         let numericId = localStorage.getItem(`dreamApp_numericId_${supaUser.id}`) || '';
-         if (!numericId) {
-             numericId = Math.floor(1000000000 + Math.random() * 9000000000).toString();
-             localStorage.setItem(`dreamApp_numericId_${supaUser.id}`, numericId);
-         }
-         let fullName = supaUser.user_metadata?.full_name || 'Fantasy Player';
-         
-         localStorage.setItem('dreamApp_hasSignedUp', 'true');
-         const newUser = {
-           email: supaUser.email || '',
-           name: fullName,
-           id: supaUser.id,
-           numericId: numericId
-         };
-         
-         // Set user immediately so UI updates instantly!
-         localStorage.setItem('dreamApp_user', JSON.stringify(newUser));
-         setUser(newUser);
-
-         // Sync to Firestore in background without awaiting
-         (async () => {
-             try {
-                 const userDocRef = doc(db, 'users', supaUser.id);
-                 const userDoc = await getDoc(userDocRef);
-                 if (userDoc.exists()) {
-                     const data = userDoc.data();
-                     const existingNumericId = data.numericId;
-                     
-                     if (existingNumericId && existingNumericId !== numericId) {
-                        numericId = existingNumericId;
-                        localStorage.setItem(`dreamApp_numericId_${supaUser.id}`, existingNumericId);
-                        setUser(prev => prev ? {...prev, numericId: existingNumericId, name: data.name || prev.name} : prev);
-                     }
-                     
-                     if (!data.numericId) {
-                         await setDoc(userDocRef, { numericId }, { merge: true });
-                     }
-                 } else {
-                     await setDoc(userDocRef, {
-                         name: fullName,
-                         numericId: numericId,
-                         email: supaUser.email || ''
-                     });
+         try {
+             // 1. Try to find user by Supabase ID
+             let userDocRef = doc(db, 'users', supaUser.id);
+             let userDoc = await getDoc(userDocRef);
+             let existingDocId = supaUser.id;
+             let isExisting = userDoc.exists();
+             
+             // 2. Try to find user by Email
+             if (!isExisting && supaUser.email) {
+                 const usersRef = collection(db, 'users');
+                 const qEmail = query(usersRef, where('email', '==', supaUser.email));
+                 const snapEmail = await getDocs(qEmail);
+                 if (snapEmail.docs && snapEmail.docs.length > 0) {
+                     isExisting = true;
+                     userDoc = snapEmail.docs[0];
+                     existingDocId = userDoc.id;
                  }
-             } catch (e) {
-                 handleFsError(e, 'fetch_profile', supaUser.id);
              }
-         })();
+             
+             if (!isExisting) {
+                 // New user from Google OAuth!
+                 const numericId = Math.floor(1000000000 + Math.random() * 9000000000).toString(); // 10 digits
+                 const upperChars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+                 const lowerChars = "abcdefghijklmnopqrstuvwxyz";
+                 const numChars = "0123456789";
+                 let randomPass = "";
+                 randomPass += upperChars.charAt(Math.floor(Math.random() * upperChars.length));
+                 randomPass += lowerChars.charAt(Math.floor(Math.random() * lowerChars.length));
+                 randomPass += numChars.charAt(Math.floor(Math.random() * numChars.length));
+                 const allChars = upperChars + lowerChars + numChars;
+                 for(let i=0; i<7; i++) randomPass += allChars.charAt(Math.floor(Math.random() * allChars.length));
+                 randomPass = randomPass.split('').sort(() => 0.5 - Math.random()).join('');
+                 
+                 let fullName = supaUser.user_metadata?.full_name || 'Fantasy Player';
+                 const pseudoEmail = `${numericId}@dreamapp.com`;
+                 
+                 // We MUST create this user in Firebase Auth so they can login via the login screen!
+                 // Supabase handles the Google portion, but our fallback login is Firebase
+                 try {
+                     const userCredential = await createUserWithEmailAndPassword(auth, pseudoEmail, randomPass);
+                     sessionStorage.setItem('isSigningUp', 'true');
+                     
+                     const fbUser = userCredential.user;
+                     await setDoc(doc(db, 'users', fbUser.uid), {
+                        name: fullName,
+                        mobile: numericId,
+                        email: supaUser.email || pseudoEmail, // Keep their real email here for lookups!
+                        numericId: numericId,
+                        createdAt: new Date().toISOString(),
+                        balance: 0,
+                        winnings: 0,
+                        bonus: 100,
+                        isBot: false,
+                        oneClickPassword: randomPass,
+                        supaId: supaUser.id
+                     });
+                     
+                     localStorage.setItem('dreamApp_hasSignedUp', 'true');
+                     localStorage.setItem(`dreamApp_numericId_${fbUser.uid}`, numericId);
+                     
+                     await firebaseSignOut(auth);
+                     await supabase.auth.signOut();
+                     sessionStorage.removeItem('isSigningUp');
+                     
+                     setOneClickCreds({ userId: numericId, pass: randomPass });
+                 } catch (err) {
+                    console.error("Firebase auth creation failed in Supabase hook", err);
+                    alert("Account setup failed. Please try again.");
+                 }
+                 
+             } else {
+                 // Existing user from Google OAuth
+                 const data = userDoc.data();
+                 
+                 let randomPass = data.oneClickPassword;
+                 let loginEmail = data.email;
+                 let fallbackNumeric = data.numericId || data.mobile;
+                 
+                 // If we have their raw password, let's just log them in to Firebase!
+                 if (randomPass) {
+                     // Since their Firebase login uses the pseudoEmail (numericId@dreamapp.com) usually:
+                     let attemptEmail = loginEmail;
+                     if (!attemptEmail.includes('@dreamapp.com') && fallbackNumeric) {
+                         // wait, if we registered them via oneClick, we might have used numericId@dreamapp.com
+                         // We'll try signing in!
+                     }
+                     
+                     // We will redirect them to login manually using the generated credentials, or we can auto-login them!
+                     // Actually, the user asked to SHOW the ID and Password so they can log in!
+                     // "Jaise hi login continue Karega to usko login ho jana chahie lekin ek baat Jab User id password dekhta hai aur ek second Mein hat jata hai Aisa Nahin Hona chahie"
+                     
+                     // So we just show them the creds again!
+                     setOneClickCreds({ userId: fallbackNumeric, pass: randomPass });
+                     await supabase.auth.signOut();
+                     
+                 } else {
+                     // If somehow they don't have a oneClickPassword, we can just do the local state hack but with their existing ID
+                     let numericId = fallbackNumeric;
+                     localStorage.setItem(`dreamApp_numericId_${existingDocId}`, numericId);
+                     localStorage.setItem('dreamApp_hasSignedUp', 'true');
+                     
+                     const newUser = {
+                       email: supaUser.email || data.email || '',
+                       name: data.name || supaUser.user_metadata?.full_name || 'Fantasy Player',
+                       id: existingDocId,
+                       numericId: numericId
+                     };
+                     
+                     localStorage.setItem('dreamApp_user', JSON.stringify(newUser));
+                     setUser(newUser);
+                 }
+             }
+         } catch (e) {
+             handleFsError(e, 'fetch_profile', supaUser.id);
+             // Fallback
+             let numericId = localStorage.getItem(`dreamApp_numericId_${supaUser.id}`) || '';
+             const newUser = {
+               email: supaUser.email || '',
+               name: supaUser.user_metadata?.full_name || 'Fantasy Player',
+               id: supaUser.id,
+               numericId: numericId
+             };
+             localStorage.setItem('dreamApp_user', JSON.stringify(newUser));
+             setUser(newUser);
+         }
        } else if (event === 'SIGNED_OUT') {
-         setUser(null);
+         // Keep existing fb user logic separate if needed, just nulling here
        }
     });
 
@@ -1989,7 +2066,7 @@ export default function App() {
   const [showPaymentModal, setShowPaymentModal] = useState<boolean>(false);
   const [showAdminQuickAdd, setShowAdminQuickAdd] = useState<boolean>(false);
   const [paymentAmount, setPaymentAmount] = useState<string>('100');
-  const [paymentMethod, setPaymentMethod] = useState<'Google Pay' | 'PhonePe' | 'Paytm' | ''>('');
+  const [paymentMethod, setPaymentMethod] = useState<'Google Pay' | 'PhonePe' | 'Paytm' | 'UPI' | ''>('');
   const [paymentUtr, setPaymentUtr] = useState<string>('');
   const [isScanningPayment, setIsScanningPayment] = useState<boolean>(false);
   const [editingSavedTeamIndex, setEditingSavedTeamIndex] = useState<number | null>(null);
@@ -3733,21 +3810,47 @@ export default function App() {
                     <div className="space-y-3">
                        <button 
                          onClick={() => setPaymentMethod('Google Pay')}
-                         className="w-full bg-app-card-inner border border-app-border hover:border-blue-500 text-app-text font-bold py-3.5 rounded-xl shadow-sm text-center flex items-center justify-center gap-2 active:bg-app-bg"
+                         className="w-full bg-app-card-inner border border-app-border hover:border-blue-500 rounded-xl shadow-sm flex items-center active:bg-app-bg text-left overflow-hidden h-14"
                        >
-                         Google Pay
+                         <div className="w-[70px] h-full bg-white flex items-center justify-center shrink-0 border-r border-app-border py-2">
+                           <img src="https://upload.wikimedia.org/wikipedia/commons/f/f2/Google_Pay_Logo.svg" alt="GPay" className="h-full object-contain" />
+                         </div>
+                         <div className="flex-1 px-4 text-app-text font-bold text-sm">
+                           Google Pay
+                         </div>
                        </button>
                        <button 
                          onClick={() => setPaymentMethod('PhonePe')}
-                         className="w-full bg-app-card-inner border border-app-border hover:border-purple-500 text-app-text font-bold py-3.5 rounded-xl shadow-sm text-center flex items-center justify-center gap-2 active:bg-app-bg"
+                         className="w-full bg-app-card-inner border border-app-border hover:border-purple-500 rounded-xl shadow-sm flex items-center active:bg-app-bg text-left overflow-hidden h-14"
                        >
-                         PhonePe
+                         <div className="w-[70px] h-full bg-white flex items-center justify-center shrink-0 border-r border-app-border py-2">
+                           <img src="https://upload.wikimedia.org/wikipedia/commons/7/71/PhonePe_Logo.svg" alt="PhonePe" className="h-full px-1 object-contain" />
+                         </div>
+                         <div className="flex-1 px-4 text-app-text font-bold text-sm">
+                           PhonePe
+                         </div>
                        </button>
                        <button 
                          onClick={() => setPaymentMethod('Paytm')}
-                         className="w-full bg-app-card-inner border border-app-border hover:border-blue-400 text-app-text font-bold py-3.5 rounded-xl shadow-sm text-center flex items-center justify-center gap-2 active:bg-app-bg"
+                         className="w-full bg-app-card-inner border border-app-border hover:border-blue-400 rounded-xl shadow-sm flex items-center active:bg-app-bg text-left overflow-hidden h-14"
                        >
-                         Paytm
+                         <div className="w-[70px] h-full bg-white flex items-center justify-center shrink-0 border-r border-app-border py-2 px-2">
+                           <img src="https://upload.wikimedia.org/wikipedia/commons/2/24/Paytm_Logo_%28standalone%29.svg" alt="Paytm" className="w-full object-contain" />
+                         </div>
+                         <div className="flex-1 px-4 text-app-text font-bold text-sm">
+                           Paytm
+                         </div>
+                       </button>
+                       <button 
+                         onClick={() => setPaymentMethod('UPI')}
+                         className="w-full bg-app-card-inner border border-app-border hover:border-orange-500 rounded-xl shadow-sm flex items-center active:bg-app-bg text-left overflow-hidden h-14"
+                       >
+                         <div className="w-[70px] h-full bg-white flex items-center justify-center shrink-0 border-r border-app-border py-2">
+                           <img src="https://upload.wikimedia.org/wikipedia/commons/e/e1/UPI-Logo-vector.svg" alt="UPI" className="h-[22px] object-contain" />
+                         </div>
+                         <div className="flex-1 px-4 text-app-text font-bold text-sm">
+                           UPI
+                         </div>
                        </button>
                     </div>
                   </>
@@ -4424,76 +4527,23 @@ export default function App() {
                 onClick={async () => {
                    try {
                      setAuthLoading(true);
-                     sessionStorage.setItem('isGoogleLoginInProgress', 'true');
-                     const result = await signInWithPopup(auth, googleProvider);
-                     const fbUser = result.user;
-                     
-                     // Check if this is a new user
-                     const userDocRef = doc(db, 'users', fbUser.uid);
-                     const userDoc = await getDoc(userDocRef);
-                     
-                     if (!userDoc.exists()) {
-                         // It's a new user!
-                         const numericId = Math.floor(1000000000 + Math.random() * 9000000000).toString(); // 10 digits
-                         const upperChars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-                         const lowerChars = "abcdefghijklmnopqrstuvwxyz";
-                         const numChars = "0123456789";
-                         let randomPass = "";
-                         randomPass += upperChars.charAt(Math.floor(Math.random() * upperChars.length));
-                         randomPass += lowerChars.charAt(Math.floor(Math.random() * lowerChars.length));
-                         randomPass += numChars.charAt(Math.floor(Math.random() * numChars.length));
-                         const allChars = upperChars + lowerChars + numChars;
-                         for(let i=0; i<7; i++) randomPass += allChars.charAt(Math.floor(Math.random() * allChars.length));
-                         randomPass = randomPass.split('').sort(() => 0.5 - Math.random()).join('');
-                         
-                         await setDoc(doc(db, 'users', fbUser.uid), {
-                            name: fbUser.displayName || 'Fantasy Player',
-                            mobile: numericId, // User ID is stored in mobile field for backward compatibility
-                            email: fbUser.email,
-                            numericId: numericId,
-                            createdAt: new Date().toISOString(),
-                            balance: 0,
-                            winnings: 0,
-                            bonus: 100, // Welcome bonus
-                            isBot: false,
-                            oneClickPassword: randomPass
-                         });
-                         
-                         localStorage.setItem('dreamApp_hasSignedUp', 'true');
-                         setOneClickCreds({ userId: numericId, pass: randomPass });
-                         await firebaseSignOut(auth);
-                     } else {
-                         // Existing user.
-                         const dbData = userDoc.data();
-                         // The user has already been checked so we just log them in locally
-                         let numericId = dbData?.numericId;
-                         if (!numericId && dbData?.mobile && dbData.mobile.length === 10) {
-                             numericId = dbData.mobile;
-                         }
-                         
-                         localStorage.setItem('dreamApp_hasSignedUp', 'true');
-                         if (numericId) {
-                            localStorage.setItem(`dreamApp_numericId_${fbUser.uid}`, numericId);
-                         }
-                         
-                         const newUser = {
-                           email: fbUser.email || dbData?.email || '',
-                           name: fbUser.displayName || dbData?.name || 'Fantasy Player',
-                           id: fbUser.uid,
-                           numericId: numericId || ''
-                         };
-                         localStorage.setItem('dreamApp_user', JSON.stringify(newUser));
-                         setUser(newUser);
+                     if (!supabase) {
+                       console.error("Supabase is missing!");
+                       alert("Database integration is under configuration... please try again shortly!");
+                       return;
                      }
+                     console.log("Using Supabase for Google login...");
+                     const { data, error } = await supabase.auth.signInWithOAuth({
+                       provider: 'google',
+                       options: {
+                         redirectTo: window.location.origin
+                       }
+                     });
+                     if (error) throw error;
                    } catch (error: any) {
-                     console.error("Firebase Google login failed", error);
-                     if (error.code === 'auth/operation-not-allowed') {
-                         alert("Google Sign-In is not enabled. Provide this instruction to the admin:\n\n1. Go to Firebase Console\n2. Open Authentication > Sign-in method\n3. Enable Google provider\n4. Save and retry.");
-                     } else {
-                         alert("Google login failed. Please try again.");
-                     }
+                     console.error("Supabase Google login failed", error);
+                     alert("Google login failed. Please try again.");
                    } finally {
-                     sessionStorage.removeItem('isGoogleLoginInProgress');
                      setAuthLoading(false);
                    }
                 }}
