@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef, Component } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import Cropper from 'react-easy-crop';
-import { Trophy, Clock, Users, ArrowLeft, Home, User, Wallet, Bell, PlayCircle, Shield, Plus, Minus, Info, Receipt, Settings, MessageSquare, Copy, PlusCircle, Edit2, ArrowDownToLine, ArrowDownLeft, ArrowRight, Check, X, ChevronUp, ChevronDown, Search, ChevronLeft, ChevronRight, Trash2, Download, BarChart2, Image as ImageIcon, ZoomIn, RefreshCw, AlertCircle } from 'lucide-react';
+import { Trophy, Clock, Users, ArrowLeft, Home, User, Wallet, Bell, PlayCircle, Shield, Plus, Minus, Info, Receipt, Settings, MessageSquare, Copy, PlusCircle, Edit2, ArrowDownToLine, ArrowDownLeft, ArrowRight, Check, X, ChevronUp, ChevronDown, Search, ChevronLeft, ChevronRight, Trash2, Download, BarChart2, Image as ImageIcon, ZoomIn, RefreshCw, AlertCircle, LogOut } from 'lucide-react';
 import { supabase } from './lib/supabase';
 import { db, doc, onSnapshot, setDoc, collection, query, where, getDoc, getDocs, updateDoc, writeBatch, increment, deleteDoc } from './lib/supabase-firestore';
 import { AreaChart, Area, LineChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip as RechartsTooltip, ResponsiveContainer, CartesianGrid, Legend } from 'recharts';
@@ -4029,10 +4029,12 @@ export default function App() {
              onClick={async () => {
                 try {
                   if (supabase) await supabase.auth.signOut();
-                  setUser(null);
-                  setView('HOME');
+                  localStorage.clear();
+                  window.location.href = '/';
                 } catch (error) {
                   console.error("Sign out error", error);
+                  localStorage.clear();
+                  window.location.href = '/';
                 }
              }}
              className="w-full mt-6 bg-app-bg border border-red-900 text-app-accent font-bold py-3 rounded-xl shadow-sm active:bg-red-950 transition-colors flex justify-center items-center gap-2"
@@ -4501,7 +4503,10 @@ export default function App() {
                      const { data, error } = await supabase.auth.signInWithOAuth({
                        provider: 'google',
                        options: {
-                         redirectTo: window.location.origin
+                         redirectTo: window.location.origin,
+                         queryParams: {
+                           prompt: 'select_account'
+                         }
                        }
                      });
                      if (error) throw error;
@@ -4751,11 +4756,55 @@ export default function App() {
                     <h2 className="font-black text-transparent bg-clip-text bg-gradient-to-r from-[#e5c158] to-[#f0b90b] uppercase tracking-widest text-lg drop-shadow-[0_0_12px_rgba(229,193,88,0.4)]">VIP</h2>
                  </div>
                  <div className="flex items-center gap-2">
+                    <button onClick={async () => {
+                       try {
+                          const btn = document.getElementById('adminRefreshBtn');
+                          if(btn) btn.style.opacity = '0.5';
+                          
+                          const fetchDocs = async (coll: string) => {
+                              const { data } = await supabase.from('firebase_docs').select('data, doc_id').eq('collection_name', coll).limit(10000);
+                              return { docs: (data || []).map((d: any) => ({ id: d.doc_id, data: () => d.data })) };
+                          };
+                          
+                          const [wdSnap, depSnap, kycSnap, bankSnap] = await Promise.all([
+                              fetchDocs('withdrawals'),
+                              fetchDocs('deposits'),
+                              fetchDocs('kyc'),
+                              fetchDocs('bankAccounts')
+                          ]);
+                          
+                          setWithdrawRequests(wdSnap.docs.map(d => d.data() as any));
+                          setDepositRequests(depSnap.docs.map(d => d.data() as any));
+                          setKycRequests(kycSnap.docs.map(d => d.data() as any));
+                          setBankAccounts(bankSnap.docs.map(d => d.data() as any));
+                          
+                          if(btn) {
+                             btn.style.opacity = '1';
+                          }
+                       } catch(e) {
+                          console.error(e);
+                       }
+                    }} id="adminRefreshBtn" className="w-9 h-9 rounded-xl bg-[#e5c158]/10 border border-[#e5c158]/30 flex items-center justify-center text-[#e5c158] overflow-hidden shadow-[0_0_10px_rgba(229,193,88,0.2)] hover:bg-[#e5c158]/20 transition-all cursor-pointer">
+                       <RefreshCw size={18} />
+                    </button>
                     <button onClick={() => setShowDashboardUsers(true)} className="w-9 h-9 rounded-xl bg-[#e5c158]/10 border border-[#e5c158]/30 flex items-center justify-center text-[#e5c158] overflow-hidden shadow-[0_0_10px_rgba(229,193,88,0.2)] hover:bg-[#e5c158]/20 transition-colors cursor-pointer">
                        <User size={18} />
                     </button>
                     <button onClick={() => setView('HOME')} className="w-9 h-9 rounded-xl bg-slate-800/80 border border-slate-700 flex items-center justify-center text-slate-400 hover:text-white hover:border-slate-500 transition-all">
                        <Home size={18} />
+                    </button>
+                    <button onClick={async () => {
+                       try {
+                         if (supabase) await supabase.auth.signOut();
+                         localStorage.clear();
+                         window.location.href = '/';
+                       } catch (error) {
+                         console.error("Sign out error", error);
+                         localStorage.clear();
+                         window.location.href = '/';
+                       }
+                    }} className="w-9 h-9 rounded-xl bg-red-900/30 border border-red-500/30 flex items-center justify-center text-red-500 hover:text-red-400 hover:bg-red-900/50 transition-all">
+                       <LogOut size={18} />
                     </button>
                  </div>
              </div>
@@ -7194,7 +7243,7 @@ export default function App() {
            <Shield size={64} className="text-red-500 mb-4" />
            <h2 className="text-2xl font-black mb-2 text-red-500">Account Blocked</h2>
            <p className="text-sm font-bold text-app-text-muted mb-8">Your account has been restricted by the admin. Please contact support.</p>
-           <button onClick={async () => { if (supabase) await supabase.auth.signOut(); }} className="bg-red-600 hover:bg-red-700 font-bold px-6 py-2 rounded-xl text-white shadow-lg active:scale-95 transition-transform">Logout</button>
+           <button onClick={async () => { if (supabase) await supabase.auth.signOut(); localStorage.clear(); window.location.href = '/'; }} className="bg-red-600 hover:bg-red-700 font-bold px-6 py-2 rounded-xl text-white shadow-lg active:scale-95 transition-transform">Logout</button>
         </div>
      );
   }

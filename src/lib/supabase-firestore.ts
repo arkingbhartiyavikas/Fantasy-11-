@@ -91,7 +91,7 @@ export const onSnapshot = (
                      queryBuilder = queryBuilder.filter(`data->>${f.field}`, 'eq', f.val);
                  }
              }
-             const { data } = await queryBuilder;
+             const { data } = await queryBuilder.limit(10000);
              const snapshot = {
                  docs: (data || []).map((d: any) => ({
                      id: d.doc_id,
@@ -123,7 +123,7 @@ export const getDocs = async (q: any) => {
                  queryBuilder = queryBuilder.filter(`data->>${f.field}`, 'eq', f.val);
              }
          }
-         const { data } = await queryBuilder;
+         const { data } = await queryBuilder.limit(10000);
          return {
              docs: (data || []).map((d: any) => ({
                  id: d.doc_id,
