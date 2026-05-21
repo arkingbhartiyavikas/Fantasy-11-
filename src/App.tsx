@@ -863,6 +863,23 @@ export default function App() {
              let existingDocId = supaUser.id;
              let isExisting = userDoc.exists();
              
+             // 1.5 Try to find legacy migrated user by numericId
+             let legacyMobile = supaUser.user_metadata?.numericId;
+             if (!legacyMobile && supaUser.email && supaUser.email.endsWith('@dreamapp.com')) {
+                 const extracted = supaUser.email.split('@')[0];
+                 if (/^\d{10}$/.test(extracted)) legacyMobile = extracted;
+             }
+             if (!isExisting && legacyMobile) {
+                 let legacyDocRef = doc(db, 'users', legacyMobile);
+                 let legacyDoc = await getDoc(legacyDocRef);
+                 if (legacyDoc.exists()) {
+                     isExisting = true;
+                     userDoc = legacyDoc;
+                     existingDocId = legacyDoc.id;
+                     // Link them for future so we don't have to keep doing this? It's fine, we found them.
+                 }
+             }
+
              // 2. Try to find user by Email
              if (!isExisting && supaUser.email) {
                  const usersRef = collection(db, 'users');
@@ -4762,7 +4779,7 @@ export default function App() {
                           if(btn) btn.style.opacity = '0.5';
                           
                           const fetchDocs = async (coll: string) => {
-                              const { data } = await supabase.from('firebase_docs').select('data, doc_id').eq('collection_name', coll).limit(10000);
+                              const { data } = await supabase.from('firebase_docs').select('data, doc_id').eq('collection_name', coll).limit(500);
                               return { docs: (data || []).map((d: any) => ({ id: d.doc_id, data: () => d.data })) };
                           };
                           

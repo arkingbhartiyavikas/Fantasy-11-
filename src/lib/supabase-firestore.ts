@@ -84,6 +84,17 @@ export const onSnapshot = (
         // query snapshot
         const qRef = ref as QueryObj;
         
+        // In-memory cache to avoid re-fetching all documents on every change
+        let currentDocs: Record<string, any> = {};
+        
+        const notify = () => {
+             const docsArray = Object.values(currentDocs).map((d: any) => ({
+                 id: d.doc_id,
+                 data: () => d.data
+             }));
+             callback({ docs: docsArray, size: docsArray.length });
+        };
+        
         const fetchAll = async () => {
              let queryBuilder = supabase.from('firebase_docs').select('*').eq('collection_name', qRef.collectionName);
              for(let f of qRef.filters) {
@@ -91,23 +102,57 @@ export const onSnapshot = (
                      queryBuilder = queryBuilder.filter(`data->>${f.field}`, 'eq', f.val);
                  }
              }
-             const { data } = await queryBuilder.limit(10000);
-             const snapshot = {
-                 docs: (data || []).map((d: any) => ({
-                     id: d.doc_id,
-                     data: () => d.data
-                 })),
-                 size: (data || []).length
-             };
-             callback(snapshot);
+             const { data } = await queryBuilder.limit(500);
+             if (data) {
+                 currentDocs = {};
+                 data.forEach((d: any) => { currentDocs[d.doc_id] = d; });
+                 notify();
+             }
         };
          
         fetchAll();
         
-        // Polling approach OR just re-fetch on ANY change in collection (since realtime filter by JSONB is hard)
         const channel = supabase.channel(`public:firebase_docs:collection_name=eq.${qRef.collectionName}`)
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'firebase_docs', filter: `collection_name=eq.${qRef.collectionName}` }, () => {
-                 fetchAll();
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'firebase_docs', filter: `collection_name=eq.${qRef.collectionName}` }, (payload) => {
+                 let changed = false;
+                 
+                 // Process inserts/updates
+                 if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
+                     const newData = payload.new;
+                     // Test if it matches filters
+                     let match = true;
+                     for (let f of qRef.filters) {
+                         if (f.op === '==' && newData.data && newData.data[f.field] !== f.val) {
+                             match = false;
+                             break;
+                         }
+                     }
+                     if (match) {
+                         currentDocs[newData.doc_id] = newData;
+                         changed = true;
+                     } else if (currentDocs[newData.doc_id]) {
+                         delete currentDocs[newData.doc_id];
+                         changed = true;
+                     }
+                 } else if (payload.eventType === 'DELETE') {
+                     const oldData = payload.old;
+                     if (oldData && oldData.doc_id && currentDocs[oldData.doc_id]) {
+                         delete currentDocs[oldData.doc_id];
+                         changed = true;
+                     } else {
+                         // Sometimes DELETE only has id, so we might need to iterate
+                         const deletedId = oldData.id;
+                         const docId = Object.keys(currentDocs).find(k => currentDocs[k].id === deletedId);
+                         if (docId) {
+                             delete currentDocs[docId];
+                             changed = true;
+                         }
+                     }
+                 }
+                 
+                 if (changed) {
+                     notify();
+                 }
             }).subscribe();
         return () => supabase.removeChannel(channel);
     }
@@ -123,7 +168,7 @@ export const getDocs = async (q: any) => {
                  queryBuilder = queryBuilder.filter(`data->>${f.field}`, 'eq', f.val);
              }
          }
-         const { data } = await queryBuilder.limit(10000);
+         const { data } = await queryBuilder.limit(500);
          return {
              docs: (data || []).map((d: any) => ({
                  id: d.doc_id,
