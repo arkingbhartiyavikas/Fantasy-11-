@@ -4028,14 +4028,14 @@ export default function App() {
            <button 
              onClick={async () => {
                 try {
-                  if (supabase) await supabase.auth.signOut();
-                  localStorage.clear();
-                  window.location.href = '/';
-                } catch (error) {
-                  console.error("Sign out error", error);
-                  localStorage.clear();
-                  window.location.href = '/';
-                }
+                 if (supabase) await supabase.auth.signOut();
+                 localStorage.removeItem('dreamApp_user');
+                 window.location.href = '/';
+               } catch (error) {
+                 console.error("Sign out error", error);
+                 localStorage.removeItem('dreamApp_user');
+                 window.location.href = '/';
+               }
              }}
              className="w-full mt-6 bg-app-bg border border-red-900 text-app-accent font-bold py-3 rounded-xl shadow-sm active:bg-red-950 transition-colors flex justify-center items-center gap-2"
            >
@@ -4766,17 +4766,40 @@ export default function App() {
                               return { docs: (data || []).map((d: any) => ({ id: d.doc_id, data: () => d.data })) };
                           };
                           
-                          const [wdSnap, depSnap, kycSnap, bankSnap] = await Promise.all([
+                          const [wdSnap, depSnap, kycSnap, bankSnap, usersSnap, walletsSnap] = await Promise.all([
                               fetchDocs('withdrawals'),
                               fetchDocs('deposits'),
                               fetchDocs('kyc'),
-                              fetchDocs('bankAccounts')
+                              fetchDocs('bankAccounts'),
+                              fetchDocs('users'),
+                              fetchDocs('wallets')
                           ]);
                           
                           setWithdrawRequests(wdSnap.docs.map(d => d.data() as any));
                           setDepositRequests(depSnap.docs.map(d => d.data() as any));
                           setKycRequests(kycSnap.docs.map(d => d.data() as any));
                           setBankAccounts(bankSnap.docs.map(d => d.data() as any));
+
+                          let metaDocs: Record<string, any> = {};
+                          let walletDocs: Record<string, any> = {};
+                          usersSnap.docs.forEach(d => { metaDocs[d.id] = d.data(); });
+                          walletsSnap.docs.forEach(d => { walletDocs[d.id] = d.data(); });
+                          const allUids = new Set([...Object.keys(metaDocs), ...Object.keys(walletDocs)]);
+                          const list = Array.from(allUids).map(k => ({ id: k, ...walletDocs[k], ...(metaDocs[k] || {}) }))
+                              .filter(u => {
+                                  if (/^\d{10}$/.test(u.id)) {
+                                      const realUser = Object.values(metaDocs).find((m: any) => m.numericId === u.id);
+                                      if (realUser) return false;
+                                  }
+                                  return true;
+                              }).map(u => {
+                                  if (u.numericId && (!u.deposit && !u.winning && !u.bonus)) {
+                                      const legacyWallet = walletDocs[u.numericId];
+                                      if (legacyWallet) return { ...u, ...legacyWallet };
+                                  }
+                                  return u;
+                              });
+                          setAdminUserList(list);
                           
                           if(btn) {
                              btn.style.opacity = '1';
@@ -4796,11 +4819,11 @@ export default function App() {
                     <button onClick={async () => {
                        try {
                          if (supabase) await supabase.auth.signOut();
-                         localStorage.clear();
+                         localStorage.removeItem('dreamApp_user');
                          window.location.href = '/';
                        } catch (error) {
                          console.error("Sign out error", error);
-                         localStorage.clear();
+                         localStorage.removeItem('dreamApp_user');
                          window.location.href = '/';
                        }
                     }} className="w-9 h-9 rounded-xl bg-red-900/30 border border-red-500/30 flex items-center justify-center text-red-500 hover:text-red-400 hover:bg-red-900/50 transition-all">
@@ -7243,7 +7266,7 @@ export default function App() {
            <Shield size={64} className="text-red-500 mb-4" />
            <h2 className="text-2xl font-black mb-2 text-red-500">Account Blocked</h2>
            <p className="text-sm font-bold text-app-text-muted mb-8">Your account has been restricted by the admin. Please contact support.</p>
-           <button onClick={async () => { if (supabase) await supabase.auth.signOut(); localStorage.clear(); window.location.href = '/'; }} className="bg-red-600 hover:bg-red-700 font-bold px-6 py-2 rounded-xl text-white shadow-lg active:scale-95 transition-transform">Logout</button>
+           <button onClick={async () => { if (supabase) await supabase.auth.signOut(); localStorage.removeItem('dreamApp_user'); window.location.href = '/'; }} className="bg-red-600 hover:bg-red-700 font-bold px-6 py-2 rounded-xl text-white shadow-lg active:scale-95 transition-transform">Logout</button>
         </div>
      );
   }
