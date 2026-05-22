@@ -4500,9 +4500,20 @@ export default function App() {
                    setAuthLoading(true);
                    const provider = new GoogleAuthProvider();
                    
-                   signInWithRedirect(auth, provider).catch((error: any) => {
+                   signInWithPopup(auth, provider).catch((error: any) => {
                      console.error("Firebase Google login failed", error);
-                     alert("Google login failed. Make sure Google Sign-In is enabled in Firebase Console! (" + error.message + ")");
+                     if (error.code === 'auth/unauthorized-domain') {
+                         alert("🚨 DOMAIN NOT AUTHORIZED 🚨\n\nPlease go to Firebase Console -> Authentication -> Settings -> Authorized Domains, and Add this exact domain:\n\n" + window.location.hostname);
+                     } else if (error.code === 'auth/popup-closed-by-user' || error.code === 'auth/popup-blocked') {
+                         // Fallback to redirect if popup fails
+                         signInWithRedirect(auth, provider).catch(err => {
+                             alert("Google Login Error: " + err.message);
+                             setAuthLoading(false);
+                         });
+                         return; 
+                     } else {
+                         alert("Google Login Failed: " + error.code + "\n" + error.message);
+                     }
                      setAuthLoading(false);
                    });
                 }}
