@@ -2,8 +2,9 @@ import React, { useState, useEffect, useMemo, useCallback, useRef, Component } f
 import { motion, AnimatePresence } from 'motion/react';
 import Cropper from 'react-easy-crop';
 import { Trophy, Clock, Users, ArrowLeft, Home, User, Wallet, Bell, PlayCircle, Shield, Plus, Minus, Info, Receipt, Settings, MessageSquare, Copy, PlusCircle, Edit2, ArrowDownToLine, ArrowDownLeft, ArrowRight, Check, X, ChevronUp, ChevronDown, Search, ChevronLeft, ChevronRight, Trash2, Download, BarChart2, Image as ImageIcon, ZoomIn, RefreshCw, AlertCircle, LogOut } from 'lucide-react';
-import { supabase } from './lib/supabase';
-import { db, doc, onSnapshot, setDoc, collection, query, where, getDoc, getDocs, updateDoc, writeBatch, increment, deleteDoc } from './lib/supabase-firestore';
+import { auth, db } from './lib/firebase';
+import { onAuthStateChanged, signOut, signInWithEmailAndPassword, createUserWithEmailAndPassword, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult } from 'firebase/auth';
+import { doc, onSnapshot, setDoc, collection, query, where, getDoc, getDocs, updateDoc, writeBatch, increment, deleteDoc } from 'firebase/firestore';
 import { AreaChart, Area, LineChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip as RechartsTooltip, ResponsiveContainer, CartesianGrid, Legend } from 'recharts';
 
 const createImage = (url: string): Promise<HTMLImageElement> =>
@@ -850,23 +851,28 @@ export default function App() {
       }
     }
     
-    if (!supabase) return;
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-       if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && session?.user) {
+    // Check for Firebase Auth redirect result
+    getRedirectResult(auth).catch(err => {
+        console.error("Redirect login failed", err);
+        alert("Google Login Failed: " + err.message);
+    });
+
+    const unsubscribe = onAuthStateChanged(auth, async (fbUser) => {
+       if (fbUser) {
          setAuthInitialized(true);
-         const supaUser = session.user;
+         const uid = fbUser.uid;
          
          try {
-             // 1. Try to find user by Supabase ID
-             let userDocRef = doc(db, 'users', supaUser.id);
+             // 1. Try to find user by Firebase ID
+             let userDocRef = doc(db, 'users', uid);
              let userDoc = await getDoc(userDocRef);
-             let existingDocId = supaUser.id;
+             let existingDocId = uid;
              let isExisting = userDoc.exists();
              
              // 1.5 Try to find legacy migrated user by numericId
-             let legacyMobile = supaUser.user_metadata?.numericId;
-             if (!legacyMobile && supaUser.email && supaUser.email.endsWith('@dreamapp.com')) {
-                 const extracted = supaUser.email.split('@')[0];
+             let legacyMobile = fbUser.displayName // maybe numericId was stored in displayName
+             if (!legacyMobile && fbUser.email && fbUser.email.endsWith('@dreamapp.com')) {
+                 const extracted = fbUser.email.split('@')[0];
                  if (/^\d{10}$/.test(extracted)) legacyMobile = extracted;
              }
              if (!isExisting && legacyMobile) {
@@ -876,14 +882,13 @@ export default function App() {
                      isExisting = true;
                      userDoc = legacyDoc;
                      existingDocId = legacyDoc.id;
-                     // Link them for future so we don't have to keep doing this? It's fine, we found them.
                  }
              }
 
              // 2. Try to find user by Email
-             if (!isExisting && supaUser.email) {
+             if (!isExisting && fbUser.email) {
                  const usersRef = collection(db, 'users');
-                 const qEmail = query(usersRef, where('email', '==', supaUser.email));
+                 const qEmail = query(usersRef, where('email', '==', fbUser.email));
                  const snapEmail = await getDocs(qEmail);
                  if (snapEmail.docs && snapEmail.docs.length > 0) {
                      isExisting = true;
@@ -893,8 +898,14 @@ export default function App() {
              }
              
              if (!isExisting) {
-                 // New user from Google OAuth!
-                 const numericId = Math.floor(1000000000 + Math.random() * 9000000000).toString(); // 10 digits
+                 // New user from Google OAuth or One-Click Login!
+                 let numericId = Math.floor(1000000000 + Math.random() * 9000000000).toString(); // 10 digits
+                 if (fbUser.email && (fbUser.email.endsWith('@fantasy11.local') || fbUser.email.endsWith('@dreamapp.com'))) {
+                    const extracted = fbUser.email.split('@')[0];
+                    if (/^\d{10}$/.test(extracted)) {
+                        numericId = extracted;
+                    }
+                 }
                  const upperChars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
                  const lowerChars = "abcdefghijklmnopqrstuvwxyz";
                  const numChars = "0123456789";
@@ -906,15 +917,14 @@ export default function App() {
                  for(let i=0; i<7; i++) randomPass += allChars.charAt(Math.floor(Math.random() * allChars.length));
                  randomPass = randomPass.split('').sort(() => 0.5 - Math.random()).join('');
                  
-                 let fullName = supaUser.user_metadata?.full_name || 'Fantasy Player';
+                 let fullName = fbUser.displayName || 'Fantasy Player';
                  const pseudoEmail = `${numericId}@dreamapp.com`;
                  
-                 // Create user only in Firestore directly, bypassing Firebase Auth
                  try {
-                     await setDoc(doc(db, 'users', supaUser.id), {
+                     await setDoc(doc(db, 'users', uid), {
                         name: fullName,
                         mobile: numericId,
-                        email: supaUser.email || pseudoEmail,
+                        email: fbUser.email || pseudoEmail,
                         numericId: numericId,
                         createdAt: new Date().toISOString(),
                         balance: 0,
@@ -922,27 +932,26 @@ export default function App() {
                         bonus: 100,
                         isBot: false,
                         oneClickPassword: randomPass,
-                        supaId: supaUser.id
+                        supaId: uid
                      });
                      
                      localStorage.setItem('dreamApp_hasSignedUp', 'true');
-                     localStorage.setItem(`dreamApp_numericId_${supaUser.id}`, numericId);
+                     localStorage.setItem(`dreamApp_numericId_${uid}`, numericId);
                      
-                     // Not signing out here, auto login is fine for Google OAuth
                      const newUser = {
-                       email: supaUser.email || pseudoEmail,
+                       email: fbUser.email || pseudoEmail,
                        name: fullName,
-                       id: supaUser.id,
+                       id: uid,
                        numericId: numericId
                      };
                      localStorage.setItem('dreamApp_user', JSON.stringify(newUser));
                      setUser(newUser);
                  } catch (err) {
-                    console.error("Firestore user creation failed in Supabase hook", err);
+                    console.error("Firestore user creation failed", err);
                  }
                  
              } else {
-                 // Existing user from Google OAuth
+                 // Existing user
                  const data = userDoc.data();
                  let fallbackNumeric = data.numericId || data.mobile;
                  
@@ -951,8 +960,8 @@ export default function App() {
                  localStorage.setItem('dreamApp_hasSignedUp', 'true');
                  
                  const newUser = {
-                   email: supaUser.email || data.email || '',
-                   name: data.name || supaUser.user_metadata?.full_name || 'Fantasy Player',
+                   email: fbUser.email || data.email || '',
+                   name: data.name || fbUser.displayName || 'Fantasy Player',
                    id: existingDocId,
                    numericId: numericId
                  };
@@ -961,25 +970,24 @@ export default function App() {
                  setUser(newUser);
              }
          } catch (e) {
-             handleFsError(e, 'fetch_profile', supaUser.id);
-             // Fallback
-             let numericId = localStorage.getItem(`dreamApp_numericId_${supaUser.id}`) || '';
+             handleFsError(e, 'fetch_profile', uid);
+             let numericId = localStorage.getItem(`dreamApp_numericId_${uid}`) || '';
              const newUser = {
-               email: supaUser.email || '',
-               name: supaUser.user_metadata?.full_name || 'Fantasy Player',
-               id: supaUser.id,
+               email: fbUser.email || '',
+               name: fbUser.displayName || 'Fantasy Player',
+               id: uid,
                numericId: numericId
              };
              localStorage.setItem('dreamApp_user', JSON.stringify(newUser));
              setUser(newUser);
          }
-       } else if (event === 'SIGNED_OUT') {
-         // Keep existing fb user logic separate if needed, just nulling here
+       } else {
+         // handle signed out
        }
     });
 
     return () => {
-      subscription.unsubscribe();
+      unsubscribe();
     };
   }, []);
 
@@ -4045,7 +4053,7 @@ export default function App() {
            <button 
              onClick={async () => {
                 try {
-                 if (supabase) await supabase.auth.signOut();
+                 if (auth) await signOut(auth);
                  localStorage.removeItem('dreamApp_user');
                  window.location.href = '/';
                } catch (error) {
@@ -4237,52 +4245,36 @@ export default function App() {
       try {
         if (authMode === 'SIGNUP') {
           sessionStorage.setItem('isSigningUp', 'true');
-          // One Click Sign Up
-          const numericId = Math.floor(1000000000 + Math.random() * 9000000000).toString(); // 10 digits
-          const upperChars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-          const lowerChars = "abcdefghijklmnopqrstuvwxyz";
-          const numChars = "0123456789";
           
-          let randomPass = "";
-          randomPass += upperChars.charAt(Math.floor(Math.random() * upperChars.length));
-          randomPass += lowerChars.charAt(Math.floor(Math.random() * lowerChars.length));
-          randomPass += numChars.charAt(Math.floor(Math.random() * numChars.length));
-          
-          const allChars = upperChars + lowerChars + numChars;
-          for(let i=0; i<7; i++) randomPass += allChars.charAt(Math.floor(Math.random() * allChars.length));
-          randomPass = randomPass.split('').sort(() => 0.5 - Math.random()).join('');
+          const numericId = authInput.trim();
+          if (!/^\d{10}$/.test(numericId)) {
+             setAuthLoading(false);
+                             return alert("Please enter a valid 10-digit User ID for signup");
+          }
+          if (authPassword.length < 6) {
+             setAuthLoading(false);
+             return alert("Password must be at least 6 characters");
+          }
 
           const pseudoEmail = `${numericId}@dreamapp.com`;
           
           let supaUserId = null;
           
-          if (!supabase) {
-             alert('Supabase is not connected. Please connect Supabase first.');
+          if (!auth) {
+             alert('Database is not connected. Please connect database first.');
              setAuthLoading(false);
              return;
           }
           
-          // 1. Create User in Supabase (Safely stored in Supabase Dashboard)
-          const { data: supaData, error: supaError } = await supabase.auth.signUp({
-            email: pseudoEmail,
-            password: randomPass,
-            options: {
-              data: {
-                full_name: 'Fantasy Player',
-                numericId: numericId
-              }
-            }
-          });
+          // 1. Create User in Firebase
+          const userCredential = await createUserWithEmailAndPassword(auth, pseudoEmail, authPassword);
           
-          if (supaError) {
-            console.error("Supabase signup error:", supaError);
-            throw new Error(supaError.message);
-          } else if (supaData?.user) {
-            supaUserId = supaData.user.id;
+          if (userCredential?.user) {
+            supaUserId = userCredential.user.uid;
           }
           
           if (supaUserId) {
-            // Write to Firestore using Supabase UID
+            // Write to Firestore using Firebase UID
             await setDoc(doc(db, 'users', supaUserId), {
                name: 'Fantasy Player',
                mobile: numericId, // User ID is stored in mobile field for backward compatibility
@@ -4293,23 +4285,31 @@ export default function App() {
                winnings: 0,
                bonus: 100, // Welcome bonus
                isBot: false,
-               oneClickPassword: randomPass,
+               oneClickPassword: authPassword,
                supaId: supaUserId // Link to Supabase User ID
+            });
+            
+            // Link mobile doc for quick auth check
+            await setDoc(doc(db, 'users', numericId), {
+               userId: numericId,
+               mobile: numericId,
+               oneClickPassword: authPassword,
+               email: pseudoEmail,
+               name: 'Fantasy Player',
+               avatar: 1,
+               createdAt: new Date().toISOString()
             });
           }
           
           localStorage.setItem('dreamApp_hasSignedUp', 'true');
-          // Sign out from Supabase immediately so they have to manually login with the shown creds
-          await supabase.auth.signOut(); 
-          
-          setOneClickCreds({ userId: numericId, pass: randomPass });
+          // Since signup also logs in automatically via Supabase, we are done
           sessionStorage.removeItem('isSigningUp');
           
         } else if (authMode === 'LOGIN') {
           let loginEmail = authInput.trim();
           
-          if (!supabase) {
-            alert('Supabase is not connected. Please connect Supabase first.');
+          if (!auth) {
+            alert('Database is not connected. Please connect database first.');
             setAuthLoading(false);
             return;
           }
@@ -4330,12 +4330,9 @@ export default function App() {
              return alert("Please enter your 10-digit User ID");
           }
           
-          const { error: signInError } = await supabase.auth.signInWithPassword({
-            email: loginEmail,
-            password: authPassword,
-          });
-          
-          if (signInError) {
+          try {
+             await signInWithEmailAndPassword(auth, loginEmail, authPassword);
+          } catch(signInError: any) {
              // Fallback: If they were a legacy Firebase user, their account might not exist in Supabase Auth yet.
              // We already checked Firestore for their user ID. Let's see if the password matches `oneClickPassword`.
              const usersRef2 = collection(db, 'users');
@@ -4345,21 +4342,12 @@ export default function App() {
              if (snap2.docs && snap2.docs.length > 0) {
                  const legacyData = snap2.docs[0].data();
                  if (legacyData.oneClickPassword === authPassword) {
-                     // Migrate them to Supabase!
-                     const { data: supaData, error: supaError } = await supabase.auth.signUp({
-                        email: loginEmail,
-                        password: authPassword,
-                        options: {
-                          data: {
-                            full_name: legacyData.name || 'Fantasy Player',
-                            numericId: legacyData.mobile || legacyData.numericId
-                          }
-                        }
-                     });
-                     
-                     if (!supaError) {
-                         // Successfully migrated, user is now logged in!
+                     // Migrate them to Firebase
+                     try {
+                         await createUserWithEmailAndPassword(auth, loginEmail, authPassword);
                          return; // We are done, onAuthStateChange will handle it!
+                     } catch(err) {
+                         // ignore
                      }
                  }
              }
@@ -4368,7 +4356,7 @@ export default function App() {
              setAuthLoading(false);
              return alert("Incorrect User ID or Password.");
           }
-          // Supabase's onAuthStateChange catches this and sets user
+          // Firebase's onAuthStateChanged catches this and sets user
         }
       } catch (err: any) {
         handleFsError(err, 'auth_action');
@@ -4411,13 +4399,12 @@ export default function App() {
 
               <button 
                  onClick={async () => {
-                    if (supabase) await supabase.auth.signOut();
                     setOneClickCreds(null);
-                    setAuthMode('LOGIN');
+                    // the user is already authenticated behind the scenes by `createUserWithEmailAndPassword`
                  }}
                  className="w-full bg-app-accent text-white font-black py-4 rounded-xl shadow-lg hover:scale-[1.02] active:scale-95 transition-all uppercase tracking-widest text-sm"
               >
-                 Go to Login
+                 Login Now
               </button>
            </div>
         </div>
@@ -4435,26 +4422,13 @@ export default function App() {
           
           <div className="w-full">
              <form onSubmit={handleAuth} className="flex flex-col gap-3.5">
-               {authMode === 'SIGNUP' ? (
-                 <>
-                   <p className="text-sm font-bold text-center text-app-text mb-4">Click below to instantly create an account.</p>
-                   <button 
-                     type="button"
-                     onClick={() => handleAuth()}
-                     disabled={authLoading}
-                     className="w-full bg-[#153B25] text-[#4ADE80] border border-[#4ADE80]/30 font-black py-4 rounded-xl shadow-lg shadow-green-500/10 hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-70 mt-2 uppercase tracking-widest text-sm flex items-center justify-center gap-2"
-                   >
-                     {authLoading ? <RefreshCw className="animate-spin" size={18}/> : <PlusCircle size={18}/>} One-Click Sign Up
-                   </button>
-                 </>
-               ) : (
-                 <>
+               <>
                    <div className="space-y-3.5">
                       <div className="relative">
                         <User size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-app-text-muted" />
                         <input 
                           type="text" 
-                          placeholder="User ID (10 digits)" 
+                           placeholder="User ID (10 digits)"
                           maxLength={10}
                           value={authInput}
                           onChange={e => setAuthInput(e.target.value.replace(/\D/g, ''))}
@@ -4478,10 +4452,9 @@ export default function App() {
                      disabled={authLoading}
                      className="w-full bg-app-accent text-white font-black py-4 rounded-xl shadow-lg shadow-app-accent/20 hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-70 mt-2 uppercase tracking-widest text-sm"
                    >
-                     {authLoading ? 'Logging in...' : 'Login'}
+                     {authLoading ? (authMode === 'SIGNUP' ? 'Creating...' : 'Logging in...') : (authMode === 'SIGNUP' ? 'Create Account' : 'Login')}
                    </button>
                  </>
-               )}
              </form>
 
              <div className="text-center mt-6">
@@ -4508,31 +4481,30 @@ export default function App() {
              </div>
 
              <button 
-                onClick={async () => {
-                   try {
-                     setAuthLoading(true);
-                     if (!supabase) {
-                       console.error("Supabase is missing!");
-                       alert("Database integration is under configuration... please try again shortly!");
-                       return;
-                     }
-                     console.log("Using Supabase for Google login...");
-                     const { data, error } = await supabase.auth.signInWithOAuth({
-                       provider: 'google',
-                       options: {
-                         redirectTo: window.location.origin,
-                         queryParams: {
-                           prompt: 'select_account'
-                         }
-                       }
-                     });
-                     if (error) throw error;
-                   } catch (error: any) {
-                     console.error("Supabase Google login failed", error);
-                     alert("Google login failed. Please try again.");
-                   } finally {
-                     setAuthLoading(false);
+                onClick={(e) => {
+                   e.preventDefault();
+                   if (!auth) {
+                     console.error("Firebase is missing!");
+                     alert("Database integration is under configuration... please try again shortly!");
+                     return;
                    }
+
+                   // Prevent popup blocker crash in preview iframe
+                   if (window !== window.parent) {
+                      alert("⚠️ App is running in preview mode.\n\nGoogle Login requires opening the app in a new tab to allow popups. Please click the 'box with arrow icon' in the top right to open the app in a new window, then try again.");
+                      return;
+                   }
+
+                   console.log("Using Firebase for Google login...");
+                   
+                   setAuthLoading(true);
+                   const provider = new GoogleAuthProvider();
+                   
+                   signInWithRedirect(auth, provider).catch((error: any) => {
+                     console.error("Firebase Google login failed", error);
+                     alert("Google login failed. Make sure Google Sign-In is enabled in Firebase Console! (" + error.message + ")");
+                     setAuthLoading(false);
+                   });
                 }}
                 disabled={authLoading}
                 className="w-full flex items-center justify-center gap-3 bg-app-card border border-app-border font-bold text-sm py-3.5 rounded-xl shadow-sm hover:border-app-accent/50 active:scale-95 transition-all disabled:opacity-50"
@@ -4544,6 +4516,35 @@ export default function App() {
                    <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
                 </svg>
                 <span className="text-app-text">Continue with Google</span>
+             </button>
+
+             <button
+                 type="button"
+                 disabled={authLoading}
+                 onClick={async () => {
+                    try {
+                        setAuthLoading(true);
+                        const numId = Math.floor(1000000000 + Math.random() * 9000000000).toString();
+                        const pass = Math.floor(1000000000 + Math.random() * 9000000000).toString();
+                        const email = `${numId}@fantasy11.local`;
+                        if (!auth) throw new Error("Firebase not connected");
+                        await createUserWithEmailAndPassword(auth, email, pass);
+                        setOneClickCreds({ userId: numId, pass });
+                    } catch(err: any) {
+                        console.error(err);
+                        if (err.code === 'auth/operation-not-allowed') {
+                           alert("Email/Password Sign-In is not enabled! Please go to your Firebase Console -> Authentication -> Sign-in Method, and enable 'Email/Password'.");
+                        } else {
+                           alert("Error generating account: " + err.message);
+                        }
+                    } finally {
+                        setAuthLoading(false);
+                    }
+                 }}
+                 className="w-full mt-4 flex items-center justify-center gap-3 bg-app-card border border-app-border font-bold text-sm py-3.5 rounded-xl shadow-sm hover:border-app-accent/50 active:scale-95 transition-all disabled:opacity-50 text-app-accent"
+             >
+                 <User className="w-5 h-5" />
+                 <span>One-Click Quick Login</span>
              </button>
           </div>
 
@@ -4592,7 +4593,7 @@ export default function App() {
     );
   };
 
-  if (!user) return renderLogin();
+  if (!user || oneClickCreds) return renderLogin();
   
   const syncBotsOnlyToCloud = async () => {
     if (!isAdmin) return;
@@ -4779,8 +4780,7 @@ export default function App() {
                           if(btn) btn.style.opacity = '0.5';
                           
                           const fetchDocs = async (coll: string) => {
-                              const { data } = await supabase.from('firebase_docs').select('data, doc_id').eq('collection_name', coll).limit(500);
-                              return { docs: (data || []).map((d: any) => ({ id: d.doc_id, data: () => d.data })) };
+                              return await getDocs(collection(db, coll));
                           };
                           
                           const [wdSnap, depSnap, kycSnap, bankSnap, usersSnap, walletsSnap] = await Promise.all([
@@ -4835,7 +4835,7 @@ export default function App() {
                     </button>
                     <button onClick={async () => {
                        try {
-                         if (supabase) await supabase.auth.signOut();
+                         if (auth) await signOut(auth);
                          localStorage.removeItem('dreamApp_user');
                          window.location.href = '/';
                        } catch (error) {
@@ -4891,19 +4891,23 @@ export default function App() {
                 <h3 className="text-lg font-bold text-slate-200 tracking-wide">Real-time User Activity</h3>
             </div>
             
-            <div className="grid grid-cols-3 gap-2 mb-6">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 mb-6">
                 <div className="p-2 -m-2 rounded transition-colors">
                      <p className="text-slate-400 text-[10px] uppercase font-bold tracking-wider mb-1">Total Users</p>
                     <p className="text-lg xl:text-xl font-bold text-slate-200 flex items-center gap-1">{adminUserList.length} <User size={14} className="text-[#e5c158]"/></p>
                 </div>
                 <div>
-                    <p className="text-slate-400 text-[10px] uppercase font-bold tracking-wider mb-1">New Signups</p>
-                    <p className="text-lg xl:text-xl font-bold text-slate-200 flex items-center gap-1">{adminUserList.length} <ChevronUp size={14} className="text-green-500"/></p>
+                     <p className="text-slate-400 text-[10px] uppercase font-bold tracking-wider mb-1">Total Entries</p>
+                    <p className="text-lg xl:text-xl font-bold text-slate-200 flex items-center gap-1">{appContests.length + 3200} <ChevronUp size={14} className="text-green-500"/></p>
                 </div>
-                <div>
-                    <p className="text-slate-400 text-[10px] uppercase font-bold tracking-wider mb-1">Total Entries</p>
-                    <p className="text-lg xl:text-xl font-bold text-slate-200 flex items-center gap-1">{appContests.length + 3200} <ChevronDown size={14} className="text-red-500"/></p>
-                </div>
+                <button onClick={() => setAdminTab('FINANCIALS')} className="text-left group transition-all hover:bg-yellow-500/10 p-2 -m-2 rounded">
+                    <p className="text-slate-400 text-[10px] uppercase font-bold tracking-wider mb-1">Pending Deposits</p>
+                    <p className="text-lg xl:text-xl font-bold text-slate-200 flex items-center gap-1">{depositRequests.filter(r => r.status === 'Pending').length} <span className="text-[10px] text-yellow-500 bg-yellow-500/20 px-1 py-0.5 rounded">Action Req</span></p>
+                </button>
+                <button onClick={() => setAdminTab('FINANCIALS')} className="text-left group transition-all hover:bg-yellow-500/10 p-2 -m-2 rounded">
+                    <p className="text-slate-400 text-[10px] uppercase font-bold tracking-wider mb-1">Pending Withdrawals</p>
+                    <p className="text-lg xl:text-xl font-bold text-slate-200 flex items-center gap-1">{withdrawRequests.filter(r => r.status === 'Pending').length} <span className="text-[10px] text-yellow-500 bg-yellow-500/20 px-1 py-0.5 rounded">Action Req</span></p>
+                </button>
             </div>
             
             <div className="h-[200px] w-full">
@@ -7283,7 +7287,7 @@ export default function App() {
            <Shield size={64} className="text-red-500 mb-4" />
            <h2 className="text-2xl font-black mb-2 text-red-500">Account Blocked</h2>
            <p className="text-sm font-bold text-app-text-muted mb-8">Your account has been restricted by the admin. Please contact support.</p>
-           <button onClick={async () => { if (supabase) await supabase.auth.signOut(); localStorage.removeItem('dreamApp_user'); window.location.href = '/'; }} className="bg-red-600 hover:bg-red-700 font-bold px-6 py-2 rounded-xl text-white shadow-lg active:scale-95 transition-transform">Logout</button>
+           <button onClick={async () => { if (auth) await signOut(auth); localStorage.removeItem('dreamApp_user'); window.location.href = '/'; }} className="bg-red-600 hover:bg-red-700 font-bold px-6 py-2 rounded-xl text-white shadow-lg active:scale-95 transition-transform">Logout</button>
         </div>
      );
   }
