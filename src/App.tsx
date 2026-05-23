@@ -859,7 +859,6 @@ export default function App() {
 
     const unsubscribe = onAuthStateChanged(auth, async (fbUser) => {
        if (fbUser) {
-         setAuthInitialized(true);
          const uid = fbUser.uid;
          
          try {
@@ -980,9 +979,13 @@ export default function App() {
              };
              localStorage.setItem('dreamApp_user', JSON.stringify(newUser));
              setUser(newUser);
+         } finally {
+             setAuthLoading(false);
          }
        } else {
          // handle signed out
+         setAuthInitialized(true);
+         setAuthLoading(false);
        }
     });
 
@@ -1007,11 +1010,15 @@ export default function App() {
     const unsubWallet = onSnapshot(doc(db, 'wallets', user.id), (docS) => {
         if (docS.exists()) {
              setWallet(docS.data() as any);
+             if (isSubscribed) setWalletLoadedUser(user.id);
         } else {
              // Create initial wallet if doesn't exist
              const init = { deposit: 0, winning: 24, bonus: 100, profits: 0, wins: 0 };
              setDoc(doc(db, 'wallets', user.id), init);
-             if (isSubscribed) setWallet(init);
+             if (isSubscribed) {
+                 setWallet(init);
+                 setWalletLoadedUser(user.id);
+             }
         }
     }, (e) => handleFsError(e, 'listen_wallet', user.id));
 
@@ -1069,9 +1076,23 @@ export default function App() {
         });
     }, (e) => handleFsError(e, 'listen_teams', 'userTeams'));
 
-    let unsubAdminUsers = () => {};
-    let unsubAdminUserMeta = () => {};
-    if (isAdmin && view === 'ADMIN' && !firestoreQuotaExceeded) {
+    return () => { 
+        isSubscribed = false;
+        unsubWallet(); 
+        unsubDep(); 
+        unsubWd(); 
+        unsubKyc(); 
+        unsubBank();
+        unsubUserTeams();
+    };
+  }, [user?.id, isAdmin, firestoreQuotaExceeded]);
+
+  const adminDataFetchedRef = useRef(false);
+
+  useEffect(() => {
+    let isSubscribed = true;
+    if (isAdmin && view === 'ADMIN' && !firestoreQuotaExceeded && !adminDataFetchedRef.current) {
+        adminDataFetchedRef.current = true;
         let metaDocs: Record<string, any> = {};
         let walletDocs: Record<string, any> = {};
         const updateList = () => {
@@ -1125,19 +1146,10 @@ export default function App() {
         };
         fetchAdminData();
     }
-
-    return () => { 
+    return () => {
         isSubscribed = false;
-        unsubWallet(); 
-        unsubDep(); 
-        unsubWd(); 
-        unsubKyc(); 
-        unsubBank();
-        unsubUserTeams();
-        unsubAdminUsers();
-        unsubAdminUserMeta();
     };
-  }, [user?.id, isAdmin, firestoreQuotaExceeded, view]);
+  }, [isAdmin, view, firestoreQuotaExceeded]);
 
   // Hook to save local wallet edits to DB (e.g. from playing contests)
   useEffect(() => {
@@ -4515,6 +4527,9 @@ export default function App() {
                          alert("Google Login Failed: " + error.code + "\n" + error.message);
                      }
                      setAuthLoading(false);
+                   }).then(() => {
+                     // In case it succeeds immediately (rare with popup but good practice)
+                     setAuthLoading(false);
                    });
                 }}
                 disabled={authLoading}
@@ -4603,6 +4618,15 @@ export default function App() {
     </div>
     );
   };
+
+  if (!authInitialized || (user && walletLoadedUser !== user.id)) {
+    return (
+      <div className="min-h-[100dvh] flex flex-col items-center justify-center bg-[#0d1321] text-[#e5c158]">
+        <div className="w-12 h-12 border-4 border-[#e5c158]/30 border-t-[#e5c158] rounded-full animate-spin shadow-[0_0_20px_rgba(229,193,88,0.4)]"></div>
+        <p className="mt-4 font-bold text-xs uppercase tracking-widest animate-pulse">Initializing...</p>
+      </div>
+    );
+  }
 
   if (!user || oneClickCreds) return renderLogin();
   
@@ -5638,7 +5662,7 @@ export default function App() {
                           const updatedContests = [...appContests, newContest];
                           setAppContests(updatedContests);
                           localStorage.setItem('dreamApp_contests', JSON.stringify(updatedContests));
-                          // syncActiveDataToCloud(); // Call sync button instead to avoid payload size errors
+                          syncActiveDataToCloud();
                           
                           alert(`Successfully added ${adminContestType} contest!`);
                           setAdminContestName('');
@@ -6000,7 +6024,7 @@ export default function App() {
                           };
                           const newMatches = [newAppMatch, ...appMatches];
                           setAppMatches(newMatches);
-                          // Removing main_state write to avoid 1MB document size errors.
+                          syncActiveDataToCloud();
                           // Force re-render of this button
                           setApiMatches([...apiMatches]);
                        }}
@@ -6175,7 +6199,7 @@ export default function App() {
               localStorage.setItem('dreamApp_matches', JSON.stringify(updatedMatches));
               localStorage.setItem('dreamApp_players', JSON.stringify(updatedPlayers));
               
-              // syncActiveDataToCloud(); // Call sync button instead to avoid payload size errors
+              syncActiveDataToCloud();
               
               setMatchListT1Name('');
               setMatchListT1Code('');
@@ -6382,13 +6406,12 @@ export default function App() {
                          onUpdate={(updatedMatch) => {
                             const newMatches = appMatches.map(mm => mm.id === m.id ? updatedMatch : mm);
                             setAppMatches(newMatches);
-                            // Removing main_state write to avoid 1MB document size errors.
-                            // Use "Update Apps & Player" button to sync.
+                            syncActiveDataToCloud();
                          }}
                          onDelete={() => {
                             const newMatches = appMatches.filter(mm => mm.id !== m.id);
                             setAppMatches(newMatches);
-                            // Removing main_state write to avoid 1MB document size errors.
+                            syncActiveDataToCloud();
                          }}
                          onStatusChange={(status) => {
                             if (status === 'Completed' && m.status !== 'Completed') {
@@ -6396,12 +6419,12 @@ export default function App() {
                             }
                             const newMatches = appMatches.map(mm => mm.id === m.id ? { ...mm, status } : mm);
                             setAppMatches(newMatches);
-                            // Removing main_state write to avoid 1MB document size errors.
+                            syncActiveDataToCloud();
                          }}
                          onLineupToggle={() => {
                             const newMatches = appMatches.map(mm => mm.id === m.id ? { ...mm, lineupStatus: mm.lineupStatus === 'OUT' ? 'NOT_OUT' : 'OUT' as const } : mm);
                             setAppMatches(newMatches);
-                            // Removing main_state write to avoid 1MB document size errors.
+                            syncActiveDataToCloud();
                          }}
                        />
                     ))}
@@ -7225,7 +7248,7 @@ export default function App() {
                                  e.stopPropagation();
                                  const newMatchesList = appMatches.map(m => m.id === match.id ? { ...m, lineupStatus: m.lineupStatus === 'OUT' ? 'NOT_OUT' : 'OUT' as const } : m);
                                  setAppMatches(newMatchesList);
-                                 // Removed main_state write to avoid 1MB error. 
+                                 syncActiveDataToCloud(); 
                                }}
                                className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${match.lineupStatus === 'OUT' ? 'bg-green-500/20 text-green-400 border border-green-500/50 shadow-[0_0_10px_rgba(34,197,94,0.2)]' : 'bg-red-500/10 text-red-500 border border-red-500/50'}`}
                              >
@@ -7555,7 +7578,7 @@ export default function App() {
                               };
                               const newMatchesList = [...appMatches, newMatchObj];
                               setAppMatches(newMatchesList);
-                              // syncActiveDataToCloud(); // Call sync button instead to avoid payload size errors
+                              syncActiveDataToCloud();
                               
                               setSelectedTeamsForMatch([]);
                               setNewMatchTimeForm('');
