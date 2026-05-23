@@ -722,7 +722,10 @@ export default function App() {
   const [hasDismissedQuota, setHasDismissedQuota] = useState(false);
 
   const handleFsError = (e: any, operation?: string, path?: string) => {
-     console.error(`Supabase wrapper Error [${operation || 'unknown'} @ ${path || 'unknown'}]:`, e);
+     console.error(`Firestore Error [${operation || 'unknown'} @ ${path || 'unknown'}]:`, e);
+     if (e?.message?.includes('offline')) {
+         console.error("Critical: Firestore Database is offline or not created yet in the Firebase Console.");
+     }
   };
 
   useEffect(() => {
@@ -2006,6 +2009,7 @@ export default function App() {
   const [paymentAmount, setPaymentAmount] = useState<string>('100');
   const [paymentMethod, setPaymentMethod] = useState<'Google Pay' | 'PhonePe' | 'Paytm' | 'UPI' | ''>('');
   const [paymentUtr, setPaymentUtr] = useState<string>('');
+  const [depositScreenshot, setDepositScreenshot] = useState<string>('');
   const [isScanningPayment, setIsScanningPayment] = useState<boolean>(false);
   const [editingSavedTeamIndex, setEditingSavedTeamIndex] = useState<number | null>(null);
   const [editReturnView, setEditReturnView] = useState<'ADMIN' | 'MY_MATCHES'>('ADMIN');
@@ -2037,6 +2041,7 @@ export default function App() {
   const [isSearchingUser, setIsSearchingUser] = useState<boolean>(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncMessage, setSyncMessage] = useState<{type: 'success' | 'error', text: string} | null>(null);
+  const [selectedImageUrl, setSelectedImageUrl] = useState<string | null>(null);
   
   // Teams Management State
   const [appFormats, setAppFormats] = useState<string[]>(() => {
@@ -3824,8 +3829,18 @@ export default function App() {
                          <input 
                             type="file" 
                             accept="image/*"
+                            onChange={(e) => {
+                               const file = e.target.files?.[0];
+                               if(file) {
+                                  if(file.size > 2048576) return alert("Image size must be less than 2MB");
+                                  const reader = new FileReader();
+                                  reader.onload = (re) => setDepositScreenshot(re.target?.result as string);
+                                  reader.readAsDataURL(file);
+                               }
+                            }}
                             className="w-full text-sm text-app-text-muted file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
                          />
+                         {depositScreenshot && <img src={depositScreenshot} alt="Screenshot Preview" className="h-16 mt-2 rounded border border-app-border object-contain" />}
                          <p className="text-[10px] text-app-text-muted mt-1">Upload the successful payment screenshot</p>
                      </div>
 
@@ -3841,6 +3856,7 @@ export default function App() {
                            disabled={isScanningPayment}
                            onClick={() => {
                               if (paymentUtr.length < 8) return alert('Please enter a valid UTR number.');
+                              if (!depositScreenshot) return alert('Please upload the payment screenshot.');
                               const amt = parseFloat(paymentAmount);
                               
                               setIsScanningPayment(true);
@@ -3853,6 +3869,7 @@ export default function App() {
                                  amount: amt,
                                  method: paymentMethod,
                                  utr: paymentUtr,
+                                 screenshot: depositScreenshot,
                                  status: 'Pending',
                                  timestamp: new Date().toLocaleTimeString()
                               };
@@ -4512,16 +4529,14 @@ export default function App() {
                          alert("🚨 DOMAIN NOT AUTHORIZED 🚨\n\nPlease go to Firebase Console -> Authentication -> Settings -> Authorized Domains, and Add this exact domain:\n\n" + window.location.hostname);
                      } else if (error.code === 'auth/popup-closed-by-user' || error.code === 'auth/popup-blocked') {
                          console.warn("Popup blocked or closed. Attempting redirect login fallback...");
+                         alert("Browser ne popup ko block kar diya hai! Agar login nahi ho raha hai to Google Login par dobara click karein ya apne browser ke popup blocker ko band karke try karein.");
                          signInWithRedirect(auth, provider).catch(err => {
                              alert("Google Login Error: " + err.message);
-                             setAuthLoading(false);
                          });
-                         return; 
                      } else {
                          alert("Google Login Failed: " + error.code + "\n" + error.message);
                      }
-                     setAuthLoading(false);
-                   }).then(() => {
+                   }).finally(() => {
                      setAuthLoading(false);
                    });
                 }}
@@ -6482,16 +6497,22 @@ export default function App() {
                             </thead>
                             <tbody className="divide-y divide-slate-800/50">
                               <tr>
-                                <td className="p-3 text-slate-300">Aadhaar Card</td>
+                                <td className="p-3 text-slate-300">Aadhaar (Front)</td>
                                 <td className="p-3 text-slate-300">{selectedKycRequest.aadhar || 'ID-XXXXXXXXXXXX'}</td>
-                                <td className="p-3 text-[#e5c158]">PENDING</td>
-                                <td className="p-3 text-center"><button className="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded border border-slate-700 transition-colors uppercase text-[10px] tracking-wider">VIEW/VERIFY</button></td>
+                                <td className="p-3 text-[#e5c158] uppercase">{selectedKycRequest.status === 'Pending Review' ? 'PENDING' : selectedKycRequest.status}</td>
+                                <td className="p-3 text-center"><button onClick={() => { if(selectedKycRequest.aadharFront) setSelectedImageUrl(selectedKycRequest.aadharFront); else alert('No Aadhaar front image'); }} className="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded border border-slate-700 transition-colors uppercase text-[10px] tracking-wider">VIEW</button></td>
+                              </tr>
+                              <tr>
+                                <td className="p-3 text-slate-300">Aadhaar (Back)</td>
+                                <td className="p-3 text-slate-300">{selectedKycRequest.aadhar || 'ID-XXXXXXXXXXXX'}</td>
+                                <td className="p-3 text-[#e5c158] uppercase">{selectedKycRequest.status === 'Pending Review' ? 'PENDING' : selectedKycRequest.status}</td>
+                                <td className="p-3 text-center"><button onClick={() => { if(selectedKycRequest.aadharBack) setSelectedImageUrl(selectedKycRequest.aadharBack); else alert('No Aadhaar back image'); }} className="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded border border-slate-700 transition-colors uppercase text-[10px] tracking-wider">VIEW</button></td>
                               </tr>
                               <tr>
                                 <td className="p-3 text-slate-300">PAN Card</td>
                                 <td className="p-3 text-slate-300">{selectedKycRequest.pan || 'ID-XXXXXXXXXXXX'}</td>
-                                <td className="p-3 text-green-500">VERIFIED</td>
-                                <td className="p-3 text-center"><button className="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded border border-slate-700 transition-colors uppercase text-[10px] tracking-wider">RE-VIEW</button></td>
+                                <td className="p-3 text-[#e5c158] uppercase">{selectedKycRequest.status === 'Pending Review' ? 'PENDING' : selectedKycRequest.status}</td>
+                                <td className="p-3 text-center"><button onClick={() => { if(selectedKycRequest.panFront) setSelectedImageUrl(selectedKycRequest.panFront); else alert('No PAN front image'); }} className="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded border border-slate-700 transition-colors uppercase text-[10px] tracking-wider">VIEW</button></td>
                               </tr>
                             </tbody>
                           </table>
@@ -6504,7 +6525,11 @@ export default function App() {
                                       alert('KYC Approved for ' + selectedKycRequest.userName + '.');
                                       setSelectedKycRequest(null);
                                    }} className="w-full bg-slate-600 hover:bg-slate-500 text-white font-bold py-3 rounded-lg transition-colors uppercase tracking-widest text-sm">VERIFY USER KYC</button>
-                        <button className="w-full bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 font-bold py-3 rounded-lg transition-colors uppercase tracking-widest text-sm">REQUEST ADDITIONAL INFO</button>
+                        <button onClick={async () => {
+                                      await setDoc(doc(db, 'kyc', selectedKycRequest.id), { ...selectedKycRequest, status: 'Rejected' });
+                                      alert('KYC Rejected for ' + selectedKycRequest.userName + '.');
+                                      setSelectedKycRequest(null);
+                                   }} className="w-full bg-red-900/40 hover:bg-red-900/60 text-red-500 border border-red-900/50 font-bold py-3 rounded-lg transition-colors uppercase tracking-widest text-sm">REJECT KYC REQUEST</button>
                      </div>
                      
                      <div>
@@ -6915,7 +6940,12 @@ export default function App() {
                                 <p className="text-xs text-slate-300 mb-2 flex justify-between"><span>ID:</span> <span className="font-bold text-slate-200 font-mono select-all">{req.userNumericId || req.userId}</span></p>
                                 <p className="text-xs text-slate-300 mb-2 flex justify-between"><span>Time:</span> <span className="font-bold text-slate-200 text-[10px]">{req.timestamp}</span></p>
                                 <p className="text-xs text-slate-300 mb-2 flex justify-between items-center"><span>UTR:</span> <span className="font-mono font-bold text-slate-200 bg-black/80 px-2 py-0.5 border border-slate-600 rounded">{req.utr}</span></p>
-                                <p className="text-xs text-[#e5c158] font-bold flex items-center justify-end gap-1 underline mt-3 cursor-pointer hover:text-[#f0b90b]">
+                                <p 
+                                  onClick={() => {
+                                    if (req.screenshot) setSelectedImageUrl(req.screenshot);
+                                    else alert('No screenshot uploaded.');
+                                  }}
+                                  className="text-xs text-[#e5c158] font-bold flex items-center justify-end gap-1 underline mt-3 cursor-pointer hover:text-[#f0b90b]">
                                   View Screenshot
                                 </p>
                               </div>
@@ -8095,6 +8125,18 @@ export default function App() {
                    </button>
                 </div>
             </div>
+      )}
+
+      {selectedImageUrl && (
+          <div className="fixed inset-0 z-[999] bg-black/90 backdrop-blur-sm flex items-center justify-center p-4">
+              <button 
+                  onClick={() => setSelectedImageUrl(null)} 
+                  className="absolute top-4 right-4 bg-white/10 hover:bg-white/20 p-2 rounded-full text-white transition-colors"
+              >
+                  <X size={24} />
+              </button>
+              <img src={selectedImageUrl} alt="View" className="max-w-full max-h-[85vh] object-contain rounded-lg shadow-2xl border border-white/20" />
+          </div>
       )}
 
     </div>
