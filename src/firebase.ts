@@ -3,12 +3,13 @@ import { getAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 
 const firebaseConfig = {
-  apiKey: "AIzaSyCg203O6Q_ztRQqw0ti1DC8EQFXHmN6VwE",
-  authDomain: "arking-3a0f9.firebaseapp.com",
-  projectId: "arking-3a0f9",
-  storageBucket: "arking-3a0f9.firebasestorage.app",
-  messagingSenderId: "137848768061",
-  appId: "1:137848768061:web:a9587d3e9ee3ee20e78c54"
+  apiKey: "AIzaSyCJ242ctyQ3rsJAzr1G2Eh4Fe1fdCwJO6w",
+  authDomain: "fantasy-11online.firebaseapp.com",
+  projectId: "fantasy-11online",
+  storageBucket: "fantasy-11online.firebasestorage.app",
+  messagingSenderId: "504797070449",
+  appId: "1:504797070449:web:7dcf2c8ab484c95ce587d0",
+  measurementId: "G-L31CCE95K6"
 };
 
 const app = initializeApp(firebaseConfig);

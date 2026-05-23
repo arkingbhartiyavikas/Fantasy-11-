@@ -980,6 +980,7 @@ export default function App() {
              localStorage.setItem('dreamApp_user', JSON.stringify(newUser));
              setUser(newUser);
          } finally {
+             setAuthInitialized(true);
              setAuthLoading(false);
          }
        } else {
@@ -4501,14 +4502,7 @@ export default function App() {
                      return;
                    }
 
-                   // Prevent popup blocker crash in preview iframe
-                   if (window !== window.parent) {
-                      alert("⚠️ App is running in preview mode.\n\nGoogle Login requires opening the app in a new tab to allow popups. Please click the 'box with arrow icon' in the top right to open the app in a new window, then try again.");
-                      return;
-                   }
-
                    console.log("Using Firebase for Google login...");
-                   
                    setAuthLoading(true);
                    const provider = new GoogleAuthProvider();
                    
@@ -4517,7 +4511,7 @@ export default function App() {
                      if (error.code === 'auth/unauthorized-domain') {
                          alert("🚨 DOMAIN NOT AUTHORIZED 🚨\n\nPlease go to Firebase Console -> Authentication -> Settings -> Authorized Domains, and Add this exact domain:\n\n" + window.location.hostname);
                      } else if (error.code === 'auth/popup-closed-by-user' || error.code === 'auth/popup-blocked') {
-                         // Fallback to redirect if popup fails
+                         console.warn("Popup blocked or closed. Attempting redirect login fallback...");
                          signInWithRedirect(auth, provider).catch(err => {
                              alert("Google Login Error: " + err.message);
                              setAuthLoading(false);
@@ -4528,7 +4522,6 @@ export default function App() {
                      }
                      setAuthLoading(false);
                    }).then(() => {
-                     // In case it succeeds immediately (rare with popup but good practice)
                      setAuthLoading(false);
                    });
                 }}
