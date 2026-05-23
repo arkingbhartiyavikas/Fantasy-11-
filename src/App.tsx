@@ -4762,7 +4762,7 @@ export default function App() {
       const allContests = [...appContests];
       const adminTeams = savedTeams.filter(t => t.userId === 'admin_bot' || t.userId === 'admin_bot_boot');
 
-      const saveChunks = async (key: string, data: any[], itemsPerChunk = 500) => {
+      const saveChunks = async (key: string, data: any[], itemsPerChunk = 50) => {
           const CHUNK_SIZE = itemsPerChunk; 
           const chunks = [];
           for (let i = 0; i < data.length; i += CHUNK_SIZE) {
@@ -4782,8 +4782,8 @@ export default function App() {
           }
           await setDoc(metaRef, { count: chunks.length, timestamp: ts, total: data.length });
           
-          // Speed up writes by using small parallel batches (10 at a time)
-          const BATCH_SIZE = 5;
+          // Use sequential writes or very small batches to avoid hitting 10MB payload limit
+          const BATCH_SIZE = 2;
           for (let i = 0; i < chunks.length; i += BATCH_SIZE) {
               const batch = chunks.slice(i, i + BATCH_SIZE).map((chunk, idx) => 
                   setDoc(doc(db, 'gameData', `${key}_chunk_${i + idx}`), { data: JSON.parse(JSON.stringify(chunk)), timestamp: ts })
@@ -4792,11 +4792,11 @@ export default function App() {
           }
       };
 
-      await saveChunks('matches', allMatches, 200);
-      await saveChunks('contests', allContests, 200);
+      await saveChunks('matches', allMatches, 20);
+      await saveChunks('contests', allContests, 20);
       await setDoc(doc(db, 'gameData', 'banners'), { data: JSON.parse(JSON.stringify(appBanners)), timestamp: ts });
-      await saveChunks('players', appPlayers, 1000);
-      await saveChunks('adminTeams', adminTeams, 800);
+      await saveChunks('players', appPlayers, 200);
+      await saveChunks('adminTeams', adminTeams, 200);
       lastLoadTs.current = ts;
       await setDoc(doc(db, 'gameData', 'sync_meta'), { lastUpdate: ts });
       console.log("Cloud sync successful (All Data)");
@@ -8188,7 +8188,7 @@ export default function App() {
               >
                   <X size={24} />
               </button>
-              <img src={selectedImageUrl} alt="View" className="max-w-full max-h-[85vh] object-contain rounded-lg shadow-2xl border border-white/20" />
+              <img src={selectedImageUrl} referrerPolicy="no-referrer" onError={(e) => { e.currentTarget.src = 'https://placehold.co/400x400?text=Format+Not+Supported'; }} alt="View" className="max-w-full max-h-[85vh] object-contain rounded-lg shadow-2xl border border-white/20" />
           </div>
       )}
 
