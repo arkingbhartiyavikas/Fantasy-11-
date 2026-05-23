@@ -43,6 +43,44 @@ const getCroppedImg = async (imageSrc: string, pixelCrop: any): Promise<string> 
   return canvas.toDataURL('image/jpeg', 0.8);
 }
 
+const compressImageToDataUrl = (file: File): Promise<string> => {
+   return new Promise((resolve, reject) => {
+       const reader = new FileReader();
+       reader.onload = (event) => {
+           const img = new Image();
+           img.src = event.target?.result as string;
+           img.onload = () => {
+               const canvas = document.createElement('canvas');
+               const MAX_WIDTH = 500;
+               const MAX_HEIGHT = 500;
+               let width = img.width;
+               let height = img.height;
+
+               if (width > height) {
+                   if (width > MAX_WIDTH) {
+                       height *= MAX_WIDTH / width;
+                       width = MAX_WIDTH;
+                   }
+               } else {
+                   if (height > MAX_HEIGHT) {
+                       width *= MAX_HEIGHT / height;
+                       height = MAX_HEIGHT;
+                   }
+               }
+               canvas.width = width;
+               canvas.height = height;
+               const ctx = canvas.getContext('2d');
+               if (!ctx) return resolve(event.target?.result as string);
+               ctx.drawImage(img, 0, 0, width, height);
+               resolve(canvas.toDataURL('image/jpeg', 0.5));
+           };
+           img.onerror = (err) => reject(err);
+       };
+       reader.onerror = (err) => reject(err);
+       reader.readAsDataURL(file);
+   });
+};
+
 // --- Types ---
 type Role = 'WK' | 'BAT' | 'AR' | 'BOWL';
 type ViewType = 'HOME' | 'MATCH' | 'CREATE_TEAM' | 'TEAM_PREVIEW' | 'SELECT_CAPTAIN' | 'MY_MATCHES' | 'WALLET' | 'REWARD' | 'CHAT' | 'NOTIFICATIONS' | 'PROFILE' | 'ADMIN' | 'CONTEST_DETAILS' | 'KYC' | 'WITHDRAW';
@@ -724,7 +762,7 @@ export default function App() {
   const handleFsError = (e: any, operation?: string, path?: string) => {
      console.error(`Firestore Error [${operation || 'unknown'} @ ${path || 'unknown'}]:`, e);
      if (e?.message?.includes('offline')) {
-         console.error("Critical: Firestore Database is offline or not created yet in the Firebase Console.");
+         console.warn("Notice: Firestore is currently offline or unreachable. Working from local cache if possible.");
      }
   };
 
@@ -3829,13 +3867,16 @@ export default function App() {
                          <input 
                             type="file" 
                             accept="image/*"
-                            onChange={(e) => {
+                            onChange={async (e) => {
                                const file = e.target.files?.[0];
                                if(file) {
-                                  if(file.size > 2048576) return alert("Image size must be less than 2MB");
-                                  const reader = new FileReader();
-                                  reader.onload = (re) => setDepositScreenshot(re.target?.result as string);
-                                  reader.readAsDataURL(file);
+                                  if(file.size > 5242880) return alert("Image size must be less than 5MB");
+                                  try {
+                                      const compressed = await compressImageToDataUrl(file);
+                                      setDepositScreenshot(compressed);
+                                  } catch (err) {
+                                      alert('Failed to process image.');
+                                  }
                                }
                             }}
                             className="w-full text-sm text-app-text-muted file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
@@ -4196,25 +4237,31 @@ export default function App() {
                  {aadharInput.length === 12 && (
                     <div className="flex flex-col gap-3 py-2 animate-in fade-in zoom-in-95 duration-300">
                        <label className="text-xs font-bold text-app-accent uppercase tracking-wider">Aadhar Front Image</label>
-                       <input type="file" accept="image/*" onChange={(e)=>{
+                       <input type="file" accept="image/*" onChange={async (e)=>{
                            const file = e.target.files?.[0];
                            if(file) {
-                               if(file.size > 2048576) return alert("Image size must be less than 2MB");
-                               const reader = new FileReader();
-                               reader.onload = (re) => setAadharFrontImg(re.target?.result as string);
-                               reader.readAsDataURL(file);
+                               if(file.size > 5242880) return alert("Image size must be less than 5MB");
+                               try {
+                                   const compressed = await compressImageToDataUrl(file);
+                                   setAadharFrontImg(compressed);
+                               } catch (err) {
+                                   alert('Failed to process image.');
+                               }
                            }
                        }} className="w-full text-xs text-app-text file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:bg-app-accent/20 file:text-app-accent file:font-semibold" />
                        {aadharFrontImg && <img src={aadharFrontImg} alt="Aadhar Front" className="h-20 object-contain rounded border border-app-border" />}
 
                        <label className="text-xs font-bold text-app-accent uppercase tracking-wider mt-2">Aadhar Back Image</label>
-                       <input type="file" accept="image/*" onChange={(e)=>{
+                       <input type="file" accept="image/*" onChange={async (e)=>{
                            const file = e.target.files?.[0];
                            if(file) {
-                               if(file.size > 2048576) return alert("Image size must be less than 2MB");
-                               const reader = new FileReader();
-                               reader.onload = (re) => setAadharBackImg(re.target?.result as string);
-                               reader.readAsDataURL(file);
+                               if(file.size > 5242880) return alert("Image size must be less than 5MB");
+                               try {
+                                   const compressed = await compressImageToDataUrl(file);
+                                   setAadharBackImg(compressed);
+                               } catch (err) {
+                                   alert('Failed to process image.');
+                               }
                            }
                        }} className="w-full text-xs text-app-text file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:bg-app-accent/20 file:text-app-accent file:font-semibold" />
                        {aadharBackImg && <img src={aadharBackImg} alt="Aadhar Back" className="h-20 object-contain rounded border border-app-border" />}
@@ -4237,13 +4284,16 @@ export default function App() {
                  {panInput.length === 10 && (
                     <div className="flex flex-col gap-3 py-2 animate-in fade-in zoom-in-95 duration-300">
                        <label className="text-xs font-bold text-app-accent uppercase tracking-wider">PAN Front Image</label>
-                       <input type="file" accept="image/*" onChange={(e)=>{
+                       <input type="file" accept="image/*" onChange={async (e)=>{
                            const file = e.target.files?.[0];
                            if(file) {
-                               if(file.size > 2048576) return alert("Image size must be less than 2MB");
-                               const reader = new FileReader();
-                               reader.onload = (re) => setPanFrontImg(re.target?.result as string);
-                               reader.readAsDataURL(file);
+                               if(file.size > 5242880) return alert("Image size must be less than 5MB");
+                               try {
+                                   const compressed = await compressImageToDataUrl(file);
+                                   setPanFrontImg(compressed);
+                               } catch (err) {
+                                   alert('Failed to process image.');
+                               }
                            }
                        }} className="w-full text-xs text-app-text file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:bg-app-accent/20 file:text-app-accent file:font-semibold" />
                        {panFrontImg && <img src={panFrontImg} alt="PAN Front" className="h-20 object-contain rounded border border-app-border" />}
@@ -4742,13 +4792,11 @@ export default function App() {
           }
       };
 
-      await Promise.all([
-          saveChunks('matches', allMatches, 200), 
-          saveChunks('contests', allContests, 200), 
-          setDoc(doc(db, 'gameData', 'banners'), { data: JSON.parse(JSON.stringify(appBanners)), timestamp: ts }),
-          saveChunks('players', appPlayers, 1000), 
-          saveChunks('adminTeams', adminTeams, 800)
-      ]);
+      await saveChunks('matches', allMatches, 200);
+      await saveChunks('contests', allContests, 200);
+      await setDoc(doc(db, 'gameData', 'banners'), { data: JSON.parse(JSON.stringify(appBanners)), timestamp: ts });
+      await saveChunks('players', appPlayers, 1000);
+      await saveChunks('adminTeams', adminTeams, 800);
       lastLoadTs.current = ts;
       await setDoc(doc(db, 'gameData', 'sync_meta'), { lastUpdate: ts });
       console.log("Cloud sync successful (All Data)");
@@ -5238,16 +5286,17 @@ export default function App() {
                     <input 
                       type="file" 
                       accept="image/*"
-                      onChange={(e) => {
+                      onChange={async (e) => {
                          const file = e.target.files?.[0];
                          if (file) {
-                             if (file.size > 1048576) return alert("Image size must be less than 1MB");
-                             const reader = new FileReader();
-                             reader.onloadend = () => {
-                                 setAdminUpiQR(reader.result as string);
-                                 setDoc(doc(db, 'gameData', 'settings'), {adminUPI, adminUpiQR: reader.result}, {merge: true}).then(() => alert("QR Code uploaded and saved!"));
-                             };
-                             reader.readAsDataURL(file);
+                             if (file.size > 5242880) return alert("Image size must be less than 5MB");
+                             try {
+                                 const compressed = await compressImageToDataUrl(file);
+                                 setAdminUpiQR(compressed);
+                                 setDoc(doc(db, 'gameData', 'settings'), {adminUPI, adminUpiQR: compressed}, {merge: true}).then(() => alert("QR Code uploaded and saved!"));
+                             } catch (err) {
+                                 alert('Failed to process image.');
+                             }
                          }
                       }} 
                       className="w-full bg-black/50 text-slate-400 border border-[#e5c158]/30 rounded-lg p-2 text-sm outline-none focus:border-yellow-500 mb-2 file:bg-[#e5c158]/20 file:text-[#e5c158] file:border-0 file:rounded file:px-3 file:py-1 file:font-semibold"
@@ -5292,14 +5341,16 @@ export default function App() {
                          type="file" 
                          accept="image/*" 
                          className="hidden" 
-                         onChange={(e) => {
+                         onChange={async (e) => {
                             const file = e.target.files?.[0];
                             if (file) {
-                               const reader = new FileReader();
-                               reader.onloadend = () => {
-                                  setAppBanners(prev => prev.map(b => b.id === banner.id ? { ...b, imageUrl: reader.result as string } : b));
-                               };
-                               reader.readAsDataURL(file);
+                               if (file.size > 5242880) return alert("Image size must be less than 5MB");
+                               try {
+                                  const compressed = await compressImageToDataUrl(file);
+                                  setAppBanners(prev => prev.map(b => b.id === banner.id ? { ...b, imageUrl: compressed } : b));
+                               } catch (err) {
+                                  alert('Failed to process image.');
+                               }
                             }
                          }} 
                        />
@@ -6521,13 +6572,13 @@ export default function App() {
                      
                      <div className="space-y-3 mb-6">
                         <button onClick={async () => {
-                                      await setDoc(doc(db, 'kyc', selectedKycRequest.id), { ...selectedKycRequest, status: 'Approved' });
-                                      alert('KYC Approved for ' + selectedKycRequest.userName + '.');
+                                      await setDoc(doc(db, 'kyc', selectedKycRequest.id), { ...selectedKycRequest, status: 'Approved', aadharFront: null, aadharBack: null, panFront: null });
+                                      alert('KYC Approved for ' + selectedKycRequest.userName + '. Photo data cleared.');
                                       setSelectedKycRequest(null);
                                    }} className="w-full bg-slate-600 hover:bg-slate-500 text-white font-bold py-3 rounded-lg transition-colors uppercase tracking-widest text-sm">VERIFY USER KYC</button>
                         <button onClick={async () => {
-                                      await setDoc(doc(db, 'kyc', selectedKycRequest.id), { ...selectedKycRequest, status: 'Rejected' });
-                                      alert('KYC Rejected for ' + selectedKycRequest.userName + '.');
+                                      await setDoc(doc(db, 'kyc', selectedKycRequest.id), { ...selectedKycRequest, status: 'Rejected', aadharFront: null, aadharBack: null, panFront: null });
+                                      alert('KYC Rejected for ' + selectedKycRequest.userName + '. Photo data cleared.');
                                       setSelectedKycRequest(null);
                                    }} className="w-full bg-red-900/40 hover:bg-red-900/60 text-red-500 border border-red-900/50 font-bold py-3 rounded-lg transition-colors uppercase tracking-widest text-sm">REJECT KYC REQUEST</button>
                      </div>
@@ -6953,7 +7004,7 @@ export default function App() {
                                  <button 
                                    onClick={async () => {
                                       // Accept Logic
-                                      await setDoc(doc(db, 'deposits', req.id), { ...req, status: 'Approved' });
+                                      await setDoc(doc(db, 'deposits', req.id), { ...req, status: 'Approved', screenshot: null });
                                       if (req.userId) {
                                          const wRef = doc(db, 'wallets', req.userId);
                                          const wDoc = await getDoc(wRef);
@@ -6971,7 +7022,7 @@ export default function App() {
                                  <button 
                                    onClick={async () => {
                                       // Reject Logic
-                                      await setDoc(doc(db, 'deposits', req.id), { ...req, status: 'Rejected' });
+                                      await setDoc(doc(db, 'deposits', req.id), { ...req, status: 'Rejected', screenshot: null });
                                       alert(`Deposit request rejected.`);
                                    }}
                                    className="flex-1 bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/50 font-bold py-2.5 rounded-lg active:scale-[0.98] transition-all text-xs text-center uppercase tracking-widest"
@@ -7408,16 +7459,18 @@ export default function App() {
                          type="file" 
                          accept="image/*" 
                          className="hidden" 
-                         onChange={(e) => {
+                         onChange={async (e) => {
                             const file = e.target.files?.[0];
                             if (file) {
-                               const reader = new FileReader();
-                               reader.onloadend = () => {
-                                  setNewFlagUrl(reader.result as string);
+                               if (file.size > 5242880) return alert("Image size must be less than 5MB");
+                               try {
+                                  const compressed = await compressImageToDataUrl(file);
+                                  setNewFlagUrl(compressed);
                                   setZoom(1);
                                   setCrop({x:0, y:0});
-                               };
-                               reader.readAsDataURL(file);
+                               } catch (err) {
+                                  alert('Failed to process image.');
+                               }
                             }
                          }} 
                       />
