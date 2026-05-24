@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef, Component } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import Cropper from 'react-easy-crop';
-import { Trophy, Clock, Users, ArrowLeft, Home, User, Wallet, Bell, PlayCircle, Shield, Plus, Minus, Info, Receipt, Settings, MessageSquare, Copy, PlusCircle, Edit2, ArrowDownToLine, ArrowDownLeft, ArrowRight, Check, X, ChevronUp, ChevronDown, Search, ChevronLeft, ChevronRight, Trash2, Download, BarChart2, Image as ImageIcon, ZoomIn, RefreshCw, AlertCircle, LogOut } from 'lucide-react';
+import { Trophy, Clock, Users, ArrowLeft, Home, User, Wallet, Bell, PlayCircle, Shield, Plus, Minus, Info, Receipt, Settings, MessageSquare, Copy, PlusCircle, Edit2, ArrowDownToLine, ArrowDownLeft, ArrowRight, Check, X, ChevronUp, ChevronDown, Search, ChevronLeft, ChevronRight, Trash2, Download, BarChart2, Image as ImageIcon, ZoomIn, RefreshCw, AlertCircle, LogOut, Filter } from 'lucide-react';
 import { auth, db } from './lib/firebase';
 import { onAuthStateChanged, signOut, signInWithEmailAndPassword, createUserWithEmailAndPassword, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult } from 'firebase/auth';
 import { doc, onSnapshot, setDoc, collection, query, where, getDoc, getDocs, updateDoc, writeBatch, increment, deleteDoc, runTransaction } from 'firebase/firestore';
@@ -536,7 +536,7 @@ const ContestDetailsView = ({
               let mult = 1;
               if (livePlayer.id === t.captain) mult = 2;
               else if (livePlayer.id === t.viceCaptain) mult = 1.5;
-              return acc + (livePlayer.points * mult);
+              return acc + ((livePlayer.livePoints ?? livePlayer.points) * mult);
            }, 0);
            
            if (t.isWinnerBot) computedPoints += 100000;
@@ -1731,9 +1731,9 @@ export default function App() {
                  setAppPlayers(prev => {
                      let changed = false;
                      const newPlayers = prev.map(p => {
-                         if (livePts[p.id] !== undefined && p.points !== livePts[p.id]) {
+                         if (livePts[p.id] !== undefined && p.livePoints !== livePts[p.id]) {
                              changed = true;
-                             return { ...p, points: livePts[p.id] };
+                             return { ...p, livePoints: livePts[p.id] };
                          }
                          return p;
                      });
@@ -1796,7 +1796,7 @@ export default function App() {
                       let mult = 1;
                       if (livePlayer.id === t.captain) mult = 2;
                       else if (livePlayer.id === t.viceCaptain) mult = 1.5;
-                      return acc + (livePlayer.points * mult);
+                      return acc + ((livePlayer.livePoints ?? livePlayer.points) * mult);
                    }, 0);
                    if (botKey) memoizedBotPoints[botKey] = computedPoints;
                 }
@@ -2780,7 +2780,7 @@ export default function App() {
      const isExpanded = expandedBotsContest === contest.id;
 
      return (
-        <div className="absolute right-4 top-3 flex items-center justify-end z-20 gap-2">
+        <div className="flex items-center justify-end z-20 gap-2">
            {!isExpanded ? (
               <button 
                  onClick={(e) => { e.stopPropagation(); setExpandedBotsContest(contest.id); }}
@@ -3106,7 +3106,7 @@ export default function App() {
                           let mult = 1;
                           if (livePlayer.id === st.captain) mult = 2;
                           else if (livePlayer.id === st.viceCaptain) mult = 1.5;
-                          return acc + (livePlayer.points * mult);
+                          return acc + ((livePlayer.livePoints ?? livePlayer.points) * mult);
                        }, 0);
                        return (
                            <div key={i} className={`bg-app-card rounded-xl shadow-sm border border-app-border overflow-hidden ${currentMatchStatus === 'Completed' ? 'opacity-60' : ''}`}>
@@ -3247,7 +3247,8 @@ export default function App() {
             <AnimatePresence>
               {displayedPlayers.map((player) => {
                 const isSelected = !!team.find(p => p.id === player.id);
-                const tColorRaw = player.team === activeMatch?.team1?.shortFrame ? activeMatch?.team1?.color : activeMatch?.team2?.color;
+                const isTeam1 = player.team === activeMatch?.team1?.shortFrame;
+                const tColorRaw = isTeam1 ? (activeMatch?.team1?.color || 'bg-blue-600') : (activeMatch?.team2?.color || 'bg-rose-600');
                 
                 return (
                   <motion.div 
@@ -3272,8 +3273,7 @@ export default function App() {
                        </div>
                        
                        <div 
-                         className={`absolute -bottom-1 -left-1 z-20 px-1.5 py-[1px] rounded-[4px] text-[8px] font-black uppercase text-white shadow-md border-[1.5px] border-[#0f172a] ${tColorRaw?.startsWith('bg-') ? tColorRaw : 'bg-slate-900'}`}
-                         style={(!tColorRaw?.startsWith('bg-') && tColorRaw) ? { backgroundColor: tColorRaw, borderColor: '#0f172a' } : {}}
+                         className="absolute -bottom-1 -left-1 z-20 px-[5px] py-[2px] rounded-[4px] text-[8px] tracking-widest font-black uppercase shadow-[0_2px_4px_rgba(0,0,0,0.1)] border border-app-border bg-app-bg text-app-text dark:bg-app-card-inner"
                        >
                          {player.team}
                        </div>
@@ -3368,7 +3368,7 @@ export default function App() {
        if (!p) return acc;
        const latestP = appPlayers.find(ap => ap.id === p.id) || p;
        const mult = p.id === captain ? 2 : (p.id === viceCaptain ? 1.5 : 1);
-       const pts = Number(latestP.points || 0);
+       const pts = Number((latestP.livePoints ?? latestP.points) || 0);
        return acc + (pts * mult);
     }, 0);
 
@@ -3448,13 +3448,14 @@ export default function App() {
                              const isC = p.id === captain;
                              const isVC = p.id === viceCaptain;
                              const pName = p.name || 'Player';
-                             const pPoints = Number(latestP.points || 0);
+                             const pPoints = Number((latestP.livePoints ?? latestP.points) || 0);
                              return (
                              <div key={p.id} className="flex flex-col items-center cursor-pointer relative group mt-2">
                                  <div className="relative mb-2 flex flex-col items-center">
                                      {/* Styled Avatar Circle matching Create Team */}
                                      {(() => {
-                                        const tColorRaw = p.team === activeMatch?.team1?.shortFrame ? activeMatch?.team1?.color : activeMatch?.team2?.color;
+                                        const isTeam1 = p.team === activeMatch?.team1?.shortFrame;
+                                        const tColorRaw = isTeam1 ? (activeMatch?.team1?.color || 'bg-blue-600') : (activeMatch?.team2?.color || 'bg-rose-600');
                                         const tTextCls = tColorRaw?.startsWith('bg-') ? tColorRaw.replace('bg-', 'text-') : tColorRaw?.startsWith('border-') ? tColorRaw.replace('border-', 'text-') : (tColorRaw?.startsWith('text-') ? tColorRaw : '');
                                         const tBorderCls = tColorRaw?.startsWith('bg-') ? tColorRaw.replace('bg-', 'border-') : tColorRaw?.startsWith('text-') ? tColorRaw.replace('text-', 'border-') : (tColorRaw?.startsWith('border-') ? tColorRaw : '');
                                         const custStyle = (!tColorRaw?.startsWith('bg-') && !tColorRaw?.startsWith('text-') && !tColorRaw?.startsWith('border-')) ? { color: tColorRaw, borderColor: tColorRaw } : {};
@@ -3470,8 +3471,7 @@ export default function App() {
                                              </div>
                                              
                                              <div 
-                                               className={`absolute -bottom-[2px] z-20 px-2 py-[1px] rounded-[4px] text-[8px] font-black uppercase shadow-md border-[1px] border-[#0f172a] bg-[#0f172a] tracking-wider ${tTextCls || 'text-white'}`}
-                                               style={custStyle.color ? { color: custStyle.color } : {}}
+                                               className="absolute -bottom-[2px] z-20 px-[5px] py-[2px] rounded-[4px] text-[8px] tracking-widest font-black uppercase shadow-[0_2px_4px_rgba(0,0,0,0.5)] border border-white/20 bg-[#0f172a] text-white"
                                              >
                                                {p.team}
                                              </div>
@@ -3514,7 +3514,8 @@ export default function App() {
       <div className="flex-1 overflow-y-auto bg-app-bg pb-20">
          <div className="bg-app-card">
            {team && (team || []).map(player => {
-               const tColorRaw = player.team === activeMatch?.team1?.shortFrame ? activeMatch?.team1?.color : activeMatch?.team2?.color;
+               const isTeam1 = player.team === activeMatch?.team1?.shortFrame;
+               const tColorRaw = isTeam1 ? (activeMatch?.team1?.color || 'bg-blue-600') : (activeMatch?.team2?.color || 'bg-rose-600');
                const tTextCls = tColorRaw?.startsWith('bg-') ? tColorRaw.replace('bg-', 'text-') : tColorRaw?.startsWith('border-') ? tColorRaw.replace('border-', 'text-') : (tColorRaw?.startsWith('text-') ? tColorRaw : '');
                const tBorderCls = tColorRaw?.startsWith('bg-') ? tColorRaw.replace('bg-', 'border-') : tColorRaw?.startsWith('text-') ? tColorRaw.replace('text-', 'border-') : (tColorRaw?.startsWith('border-') ? tColorRaw : '');
                const custStyle = (!tColorRaw?.startsWith('bg-') && !tColorRaw?.startsWith('text-') && !tColorRaw?.startsWith('border-')) ? { color: tColorRaw, borderColor: tColorRaw } : {};
@@ -3532,8 +3533,7 @@ export default function App() {
                        </div>
                        
                        <div 
-                         className={`absolute bottom-[2px] z-20 px-2 py-[1.5px] rounded-[6px] text-[9px] font-black uppercase shadow-md border-[1.5px] border-app-border bg-app-bg tracking-wider ${tTextCls || 'text-app-text'}`}
-                         style={custStyle.color ? { color: custStyle.color } : {}}
+                         className="absolute bottom-[2px] z-20 px-[6px] py-[2px] rounded-[4px] text-[8px] tracking-widest font-black uppercase shadow-[0_2px_4px_rgba(0,0,0,0.1)] border border-app-border bg-app-bg text-app-text dark:bg-app-card-inner"
                        >
                          {player.team}
                        </div>
@@ -3630,7 +3630,7 @@ export default function App() {
                         let mult = 1;
                         if (livePlayer.id === st.captain) mult = 2;
                         else if (livePlayer.id === st.viceCaptain) mult = 1.5;
-                        const pts = Number(livePlayer.points || 0);
+                        const pts = Number((livePlayer.livePoints ?? livePlayer.points) || 0);
                         return acc + (pts * mult);
                      }, 0);
 
@@ -6541,9 +6541,18 @@ export default function App() {
                             setAppMatches(newMatches);
                             syncCategoryToCloud('matches', newMatches, 20);
                          }}
-                         onStatusChange={(status) => {
+                         onStatusChange={async (status) => {
                             if (status === 'Completed' && m.status !== 'Completed') {
                                 distributePrizes(m.id);
+                                const updatedPlayers = appPlayers.map(p => {
+                                    if (p.livePoints !== undefined && p.livePoints !== p.points) {
+                                       return { ...p, points: p.livePoints };
+                                    }
+                                    return p;
+                                });
+                                setAppPlayers(updatedPlayers);
+                                await syncCategoryToCloud('players', updatedPlayers, 100);
+                                await setDoc(doc(db, 'gameData', 'live_player_points'), {});
                             }
                             const newMatches = appMatches.map(mm => mm.id === m.id ? { ...mm, status } : mm);
                             setAppMatches(newMatches);
