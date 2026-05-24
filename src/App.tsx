@@ -4,7 +4,7 @@ import Cropper from 'react-easy-crop';
 import { Trophy, Clock, Users, ArrowLeft, Home, User, Wallet, Bell, PlayCircle, Shield, Plus, Minus, Info, Receipt, Settings, MessageSquare, Copy, PlusCircle, Edit2, ArrowDownToLine, ArrowDownLeft, ArrowRight, Check, X, ChevronUp, ChevronDown, Search, ChevronLeft, ChevronRight, Trash2, Download, BarChart2, Image as ImageIcon, ZoomIn, RefreshCw, AlertCircle, LogOut } from 'lucide-react';
 import { auth, db } from './lib/firebase';
 import { onAuthStateChanged, signOut, signInWithEmailAndPassword, createUserWithEmailAndPassword, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult } from 'firebase/auth';
-import { doc, onSnapshot, setDoc, collection, query, where, getDoc, getDocs, updateDoc, writeBatch, increment, deleteDoc } from 'firebase/firestore';
+import { doc, onSnapshot, setDoc, collection, query, where, getDoc, getDocs, updateDoc, writeBatch, increment, deleteDoc, runTransaction } from 'firebase/firestore';
 import { AreaChart, Area, LineChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip as RechartsTooltip, ResponsiveContainer, CartesianGrid, Legend } from 'recharts';
 
 const createImage = (url: string): Promise<HTMLImageElement> =>
@@ -3210,7 +3210,7 @@ export default function App() {
           </div>
         </header>
 
-        <div className="flex border-b border-app-border shrink-0">
+        <div className="flex border-b border-app-border shrink-0 bg-app-card">
           {(['WK', 'BAT', 'AR', 'BOWL'] as Role[]).map((r) => {
             const count = team.filter(p => p.role === r).length;
             return (
@@ -3225,43 +3225,92 @@ export default function App() {
           })}
         </div>
 
+        {/* Sub-header text */}
+        <div className="bg-app-card-inner py-2 px-4 text-center text-xs text-app-text font-medium border-b border-app-border shrink-0 text-app-text-muted">
+            Pick {activeRole === 'WK' ? '1-8 Wicket-Keeper' : activeRole === 'BAT' ? '1-8 Batsman' : activeRole === 'AR' ? '1-8 All Rounder' : '1-8 Bowler'} <Info size={12} className="inline-block ml-1 opacity-70 mb-0.5" />
+        </div>
+
+        {/* Sorting Header */}
+        <div className="flex items-center px-4 py-2.5 bg-red-500/10 dark:bg-app-card-inner border-b border-app-border text-[11px] font-bold text-app-text-muted shrink-0">
+            <div className="w-[45px] flex items-center justify-center shrink-0 -ml-2">
+                <button className="p-1.5 rounded-full border border-red-500/20 bg-white dark:bg-app-card">
+                    <Filter size={14} className="text-red-500" />
+                </button>
+            </div>
+            <div className="flex-1 pl-2 text-app-text">Selected BY</div>
+            <div className="w-[70px] text-center text-app-text">Avg. Points</div>
+            <div className="w-[60px] text-right text-app-text">Credits</div>
+        </div>
+
         <div className="flex-1 overflow-y-auto bg-app-bg pb-24">
           <div className="bg-app-card">
             <AnimatePresence>
               {displayedPlayers.map((player) => {
                 const isSelected = !!team.find(p => p.id === player.id);
-                const tColor = player.team === activeMatch?.team1?.shortFrame ? activeMatch?.team1?.color : activeMatch?.team2?.color;
+                const tColorRaw = player.team === activeMatch?.team1?.shortFrame ? activeMatch?.team1?.color : activeMatch?.team2?.color;
                 
                 return (
                   <motion.div 
                     key={player.id}
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className={`flex items-center p-3 border-b border-app-border transition-colors ${isSelected ? 'bg-orange-50' : 'hover:bg-app-card-inner'}`}
+                    className={`flex items-center py-3 border-b border-app-border transition-colors cursor-pointer ${isSelected ? 'bg-orange-500/10' : 'bg-app-card hover:bg-app-card-inner'}`}
                     onClick={() => togglePlayer(player)}
                   >
-                    <div className="w-12 h-12 rounded-full overflow-hidden shrink-0 relative border border-app-border bg-app-bg flex items-end justify-center">
-                      <User size={40} className="text-app-text-muted translate-y-2" />
-                      <div className={`absolute bottom-0 left-0 right-0 text-[10px] text-app-text font-bold text-center py-0.5 ${tColor}`}>{player.team}</div>
+                    {/* Left: Avatar with Info, Team Tag */}
+                    <div className="relative shrink-0 w-[70px] h-[64px] flex flex-col items-center justify-start ml-2 pl-2">
+                       <button className="absolute top-0 -left-1 opacity-50 hover:opacity-100 z-20" onClick={(e) => { e.stopPropagation(); /* show info */}}>
+                          <Info size={14} className="text-app-text" />
+                       </button>
+                       <div 
+                         className="w-[50px] h-[50px] flex items-end justify-center relative overflow-visible z-10 drop-shadow-sm mt-1"
+                       >
+                         {/* Silhouette Image matching reference */}
+                         <div className="w-full h-full relative flex items-end justify-center overflow-hidden rounded-t-[20px] bg-transparent">
+                             <User size={50} className={`text-[#d1d5db] dark:text-[#475569] translate-y-3 block ${isSelected ? 'opacity-90' : 'opacity-100'}`} fill="currentColor" strokeWidth={1} />
+                         </div>
+                       </div>
+                       
+                       <div 
+                         className={`absolute -bottom-1 -left-1 z-20 px-1.5 py-[1px] rounded-[4px] text-[8px] font-black uppercase text-white shadow-md border-[1.5px] border-[#0f172a] ${tColorRaw?.startsWith('bg-') ? tColorRaw : 'bg-slate-900'}`}
+                         style={(!tColorRaw?.startsWith('bg-') && tColorRaw) ? { backgroundColor: tColorRaw, borderColor: '#0f172a' } : {}}
+                       >
+                         {player.team}
+                       </div>
                     </div>
                     
-                    <div className="flex-1 pl-4 pr-2">
-                       <h4 className="font-bold text-sm text-app-text">{player.name}</h4>
-                       <div className="flex items-center gap-2 mt-0.5">
-                           <p className="text-[10px] text-app-text-muted font-bold">{player.points} pts</p>
-                           {player.isPlaying === true && <span className="flex items-center gap-1.5 text-[10px] text-green-600 font-bold bg-green-50 px-1.5 py-0.5 rounded-sm ml-1"><Check size={10} strokeWidth={4} /> Playing</span>}
-                           {player.isPlaying === false && <span className="flex items-center gap-1.5 text-[10px] text-red-500 font-bold bg-red-50 px-1.5 py-0.5 rounded-sm ml-1"><div className="w-1.5 h-1.5 bg-red-500 rounded-full"></div> Not Playing</span>}
+                    {/* Middle: Name, Sel by, Played last match */}
+                    <div className="flex-1 pl-4">
+                       <h4 className="font-bold text-[14px] text-app-text tracking-wide">{player.name}</h4>
+                       <div className="flex flex-col gap-0.5 mt-0.5">
+                           <p className="text-[10px] text-app-text-muted font-medium">Sel by {(player.selPercent || ((player.id.charCodeAt(0)-40)%70 + 10)).toFixed(2)}%</p>
+                           {player.isPlaying === true && (
+                               <span className="flex items-center gap-1 mt-0.5 text-[9px] text-[#2563eb] dark:text-[#60a5fa] font-bold">
+                                   <div className="w-[5px] h-[5px] bg-[#2563eb] dark:bg-[#60a5fa] rounded-full"></div> Played last match
+                               </span>
+                           )}
+                           {player.isPlaying === false && (
+                               <span className="flex items-center gap-1 mt-0.5 text-[9px] text-red-500 font-medium">
+                                   <div className="w-[5px] h-[5px] bg-red-500 rounded-full"></div> Not Playing
+                               </span>
+                           )}
                        </div>
                     </div>
 
-                    <div className="w-16 flex items-center justify-between text-sm">
-                      <span className="font-bold text-app-text ml-2">{player.credits}</span>
+                    {/* Points */}
+                    <div className="w-[60px] text-center font-bold text-sm text-app-text mr-2">
+                        {player.points || 0}
+                    </div>
+
+                    {/* Credits & Action */}
+                    <div className="w-[70px] flex items-center justify-between text-base pr-4">
+                      <span className="font-bold text-[13px] text-app-text">{player.credits}</span>
                       <button 
-                        className={`w-6 h-6 rounded-full flex items-center justify-center ml-2 border transition-all ${
-                          isSelected ? 'bg-red-50 border-app-accent text-app-accent' : 'border-green-600 text-green-600'
+                        className={`w-[22px] h-[22px] rounded-full flex items-center justify-center border-2 transition-all ${
+                          isSelected ? 'border-red-500 text-red-500 bg-red-500/10' : 'border-red-500 text-red-500 bg-transparent hover:bg-red-500/10'
                         }`}
                       >
-                        {isSelected ? <Minus size={16} /> : <Plus size={16} />}
+                        {isSelected ? <Minus size={14} strokeWidth={4} /> : <Plus size={14} strokeWidth={4} />}
                       </button>
                     </div>
                   </motion.div>
@@ -3401,18 +3450,42 @@ export default function App() {
                              const pName = p.name || 'Player';
                              const pPoints = Number(latestP.points || 0);
                              return (
-                             <div key={p.id} className="flex flex-col items-center cursor-pointer relative group">
-                                 <div className="relative mb-1">
-                                   <div className="w-[50px] h-[55px] flex items-end justify-center overflow-visible drop-shadow-lg">
-                                      <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${pName.replace(/ /g, '')}&backgroundColor=transparent`} alt={pName} className="w-[60px] h-[60px] object-cover" />
-                                   </div>
+                             <div key={p.id} className="flex flex-col items-center cursor-pointer relative group mt-2">
+                                 <div className="relative mb-2 flex flex-col items-center">
+                                     {/* Styled Avatar Circle matching Create Team */}
+                                     {(() => {
+                                        const tColorRaw = p.team === activeMatch?.team1?.shortFrame ? activeMatch?.team1?.color : activeMatch?.team2?.color;
+                                        const tTextCls = tColorRaw?.startsWith('bg-') ? tColorRaw.replace('bg-', 'text-') : tColorRaw?.startsWith('border-') ? tColorRaw.replace('border-', 'text-') : (tColorRaw?.startsWith('text-') ? tColorRaw : '');
+                                        const tBorderCls = tColorRaw?.startsWith('bg-') ? tColorRaw.replace('bg-', 'border-') : tColorRaw?.startsWith('text-') ? tColorRaw.replace('text-', 'border-') : (tColorRaw?.startsWith('border-') ? tColorRaw : '');
+                                        const custStyle = (!tColorRaw?.startsWith('bg-') && !tColorRaw?.startsWith('text-') && !tColorRaw?.startsWith('border-')) ? { color: tColorRaw, borderColor: tColorRaw } : {};
+                                        return (
+                                           <div className="relative shrink-0 w-[50px] h-[54px] flex flex-col items-center justify-start drop-shadow-md">
+                                             <div 
+                                               className={`w-[48px] h-[48px] rounded-full flex items-end justify-center relative overflow-hidden shadow-[0_0_8px_rgba(0,0,0,0.5)] border-[2px] z-10 bg-slate-800 ${tBorderCls || 'border-app-border-hover'}`}
+                                               style={custStyle.borderColor ? { borderColor: custStyle.borderColor } : {}}
+                                             >
+                                               <div className="w-full h-full flex flex-col items-center justify-end bg-gradient-to-b from-transparent to-black/40">
+                                                   <User size={36} className="text-slate-400 translate-y-1 relative z-0 drop-shadow-md" />
+                                               </div>
+                                             </div>
+                                             
+                                             <div 
+                                               className={`absolute -bottom-[2px] z-20 px-2 py-[1px] rounded-[4px] text-[8px] font-black uppercase shadow-md border-[1px] border-[#0f172a] bg-[#0f172a] tracking-wider ${tTextCls || 'text-white'}`}
+                                               style={custStyle.color ? { color: custStyle.color } : {}}
+                                             >
+                                               {p.team}
+                                             </div>
+                                           </div>
+                                        );
+                                     })()}
+
                                    {(isC || isVC) && (
-                                     <div className={`absolute top-0 -left-2 w-[18px] h-[18px] border border-white text-white rounded-full flex items-center justify-center text-[9px] font-bold shadow-md z-10 ${isC ? 'bg-[#d32f2f]' : 'bg-transparent text-white'}`}>
+                                     <div className={`absolute top-0 -left-2 w-[18px] h-[18px] border border-white text-white rounded-full flex items-center justify-center text-[9px] font-bold shadow-[0_0_8px_rgba(0,0,0,0.8)] z-30 ${isC ? 'bg-[#d32f2f]' : 'bg-slate-700 text-white'}`}>
                                        {isC ? 'C' : 'VC'}
                                      </div>
                                    )}
                                  </div>
-                                 <div className="bg-black text-white text-[10px] font-medium px-2 py-0.5 rounded shadow-md whitespace-nowrap w-[70px] text-center truncate relative z-10">{pName}</div>
+                                 <div className="bg-black/80 backdrop-blur-sm border border-white/10 text-white text-[10px] font-medium px-2 py-0.5 rounded shadow-lg whitespace-nowrap min-w-[65px] max-w-[75px] text-center truncate relative z-10">{pName}</div>
                                  <span className="text-white text-[10px] mt-1 font-semibold drop-shadow-sm">
                                    {isLiveOrCompleted ? `${(pPoints * (isC ? 2 : isVC ? 1.5 : 1)).toFixed(1)} Pt.` : `${p.credits || 0} Cr`}
                                  </span>
@@ -3440,37 +3513,58 @@ export default function App() {
       
       <div className="flex-1 overflow-y-auto bg-app-bg pb-20">
          <div className="bg-app-card">
-           {team && (team || []).map(player => (
-               <div key={player.id} className="flex items-center p-3 border-b border-app-border">
-               <div className="w-12 h-12 rounded-full bg-app-bg flex items-end justify-center overflow-hidden shrink-0 border border-app-border">
-                  <User size={40} className="text-app-text-muted translate-y-2" />
-               </div>
-               <div className="flex-1 pl-3">
-                  <h4 className="font-bold text-sm text-app-text">{player.name}</h4>
-                  <div className="flex items-center gap-2">
-                     <span className="text-[10px] font-medium text-app-text-muted">{player.team} | {player.role}</span>
-                     {player.isPlaying === true && <span className="flex items-center gap-1.5 text-[10px] text-green-600 font-bold bg-green-50 px-1.5 py-0.5 rounded-sm"><Check size={8} strokeWidth={4} /> Playing</span>}
-                     {player.isPlaying === false && <span className="flex items-center gap-1.5 text-[10px] text-red-500 font-bold bg-red-50 px-1.5 py-0.5 rounded-sm"><div className="w-1 h-1 bg-red-500 rounded-full"></div> Not Playing</span>}
-                  </div>
-               </div>
-               <div className="w-1/2 flex items-center justify-around px-2">
-                  <button 
-                     onClick={() => {
-                        if (viceCaptain === player.id) setViceCaptain(null);
-                        setCaptain(captain === player.id ? null : player.id);
-                     }}
-                     className={`w-9 h-9 rounded-full border flex items-center justify-center font-bold text-sm transition-all shadow-sm ${captain === player.id ? 'bg-app-card-alt border-slate-900 text-app-text scale-110' : 'border-app-border-hover text-app-text-muted bg-app-card'}`}
-                  >C</button>
-                  <button 
-                     onClick={() => {
-                        if (captain === player.id) setCaptain(null);
-                        setViceCaptain(viceCaptain === player.id ? null : player.id);
-                     }}
-                     className={`w-9 h-9 rounded-full border flex items-center justify-center font-bold text-sm transition-all shadow-sm ${viceCaptain === player.id ? 'bg-app-card-alt border-slate-900 text-app-text scale-110' : 'border-app-border-hover text-app-text-muted bg-app-card'}`}
-                  >VC</button>
-               </div>
-             </div>
-           ))}
+           {team && (team || []).map(player => {
+               const tColorRaw = player.team === activeMatch?.team1?.shortFrame ? activeMatch?.team1?.color : activeMatch?.team2?.color;
+               const tTextCls = tColorRaw?.startsWith('bg-') ? tColorRaw.replace('bg-', 'text-') : tColorRaw?.startsWith('border-') ? tColorRaw.replace('border-', 'text-') : (tColorRaw?.startsWith('text-') ? tColorRaw : '');
+               const tBorderCls = tColorRaw?.startsWith('bg-') ? tColorRaw.replace('bg-', 'border-') : tColorRaw?.startsWith('text-') ? tColorRaw.replace('text-', 'border-') : (tColorRaw?.startsWith('border-') ? tColorRaw : '');
+               const custStyle = (!tColorRaw?.startsWith('bg-') && !tColorRaw?.startsWith('text-') && !tColorRaw?.startsWith('border-')) ? { color: tColorRaw, borderColor: tColorRaw } : {};
+
+               return (
+               <div key={player.id} className="flex items-center p-3 border-b border-white/5">
+                    <div className="relative shrink-0 w-[54px] h-[58px] flex flex-col items-center justify-start mt-1">
+                       <div 
+                         className={`w-[46px] h-[46px] rounded-full flex items-end justify-center relative overflow-hidden shadow-[0_0_8px_rgba(0,0,0,0.5)] border-[2px] z-10 bg-slate-800 ${tBorderCls || 'border-app-border-hover'}`}
+                         style={custStyle.borderColor ? { borderColor: custStyle.borderColor } : {}}
+                       >
+                         <div className="w-full h-full flex flex-col items-center justify-end bg-gradient-to-b from-transparent to-black/40">
+                             <User size={34} className="text-slate-400 translate-y-1 relative z-0 drop-shadow-md" />
+                         </div>
+                       </div>
+                       
+                       <div 
+                         className={`absolute bottom-[2px] z-20 px-2 py-[1.5px] rounded-[6px] text-[9px] font-black uppercase shadow-md border-[1.5px] border-app-border bg-app-bg tracking-wider ${tTextCls || 'text-app-text'}`}
+                         style={custStyle.color ? { color: custStyle.color } : {}}
+                       >
+                         {player.team}
+                       </div>
+                    </div>
+                <div className="flex-1 pl-3">
+                   <h4 className="font-bold text-[14px] text-app-text tracking-wide">{player.name}</h4>
+                   <div className="flex items-center gap-2 mt-0.5">
+                      <span className="text-[10px] font-medium text-app-text-muted">{player.points} pts | <span className="font-bold text-slate-300">{player.role}</span></span>
+                      {player.isPlaying === true && <span className="flex items-center gap-1 text-[10px] text-green-500 font-bold bg-green-500/10 px-1 py-0.5 rounded-sm border border-green-500/20"><Check size={8} strokeWidth={4} /> Playing</span>}
+                      {player.isPlaying === false && <span className="flex items-center gap-1 text-[10px] text-red-400 font-bold bg-red-500/10 px-1 py-0.5 rounded-sm border border-red-500/20"><div className="w-1 h-1 bg-red-400 rounded-full"></div> Not</span>}
+                   </div>
+                </div>
+                <div className="w-[100px] flex items-center justify-around px-1 gap-1">
+                   <button 
+                      onClick={() => {
+                         if (viceCaptain === player.id) setViceCaptain(null);
+                         setCaptain(captain === player.id ? null : player.id);
+                      }}
+                      className={`w-[38px] h-[38px] rounded-full border-2 flex items-center justify-center font-black text-[13px] transition-all shadow-[0_2px_8px_rgba(0,0,0,0.3)] ${captain === player.id ? 'bg-[#e5c158] border-[#e5c158] text-black scale-110 drop-shadow-[0_0_8px_rgba(229,193,88,0.6)]' : 'border-[#475569] text-slate-400 bg-slate-800 hover:bg-slate-700'}`}
+                   >C</button>
+                   <button 
+                      onClick={() => {
+                         if (captain === player.id) setCaptain(null);
+                         setViceCaptain(viceCaptain === player.id ? null : player.id);
+                      }}
+                      className={`w-[38px] h-[38px] rounded-full border-2 flex items-center justify-center font-black text-[13px] transition-all shadow-[0_2px_8px_rgba(0,0,0,0.3)] ${viceCaptain === player.id ? 'bg-slate-300 border-white text-black scale-110 drop-shadow-[0_0_8px_rgba(255,255,255,0.4)]' : 'border-[#475569] text-slate-400 bg-slate-800 hover:bg-slate-700'}`}
+                   >VC</button>
+                </div>
+              </div>
+               );
+           })}
          </div>
       </div>
       
@@ -4688,14 +4782,11 @@ export default function App() {
 
   if (!user || oneClickCreds) return renderLogin();
   
-  const syncBotsOnlyToCloud = async () => {
-    if (!isAdmin) return;
-    try {
-      const ts = Date.now();
-      const adminTeams = savedTeams.filter(t => t.userId === 'admin_bot' || t.userId === 'admin_bot_boot');
-
-      const saveChunks = async (key: string, data: any[], itemsPerChunk = 1000) => {
-          const CHUNK_SIZE = itemsPerChunk; 
+  const syncCategoryToCloud = async (key: string, data: any[], itemsPerChunk = 50) => {
+      if (!isAdmin) return;
+      try {
+          const ts = Date.now();
+          const CHUNK_SIZE = itemsPerChunk;
           const chunks = [];
           for (let i = 0; i < data.length; i += CHUNK_SIZE) {
               chunks.push(data.slice(i, i + CHUNK_SIZE));
@@ -4713,18 +4804,27 @@ export default function App() {
               }
           }
           await setDoc(metaRef, { count: chunks.length, timestamp: ts, total: data.length });
-          
-          const BATCH_SIZE = 5;
+          const BATCH_SIZE = 2;
           for (let i = 0; i < chunks.length; i += BATCH_SIZE) {
               const batch = chunks.slice(i, i + BATCH_SIZE).map((chunk, idx) => 
                   setDoc(doc(db, 'gameData', `${key}_chunk_${i + idx}`), { data: JSON.parse(JSON.stringify(chunk)), timestamp: ts })
               );
               await Promise.all(batch);
           }
-      };
+          lastLoadTs.current = ts;
+          await setDoc(doc(db, 'gameData', 'sync_meta'), { lastUpdate: ts, type: key });
+      } catch (e: any) {
+          console.error(`Sync category ${key} failed:`, e);
+      }
+  };
 
-      // bots have lightweight payload, so 800-1000 per chunk is very safe and efficient
-      await saveChunks('adminTeams', adminTeams, 800);
+  const syncBotsOnlyToCloud = async () => {
+    if (!isAdmin) return;
+    try {
+      const ts = Date.now();
+      const adminTeams = savedTeams.filter(t => t.userId === 'admin_bot' || t.userId === 'admin_bot_boot');
+
+      await syncCategoryToCloud('adminTeams', adminTeams, 800);
       lastLoadTs.current = ts; // Update local TS to avoid self-reload
       await setDoc(doc(db, 'gameData', 'sync_meta'), { lastUpdate: ts, type: 'bots' });
       console.log("Cloud sync successful (Bots Only)");
@@ -4756,47 +4856,15 @@ export default function App() {
     if (!isAdmin) return;
     try {
       const ts = Date.now();
-      // Keep all matches and contests to avoid data loss.
-      // Chunks will handle the payload size issue.
       const allMatches = [...appMatches];
       const allContests = [...appContests];
       const adminTeams = savedTeams.filter(t => t.userId === 'admin_bot' || t.userId === 'admin_bot_boot');
 
-      const saveChunks = async (key: string, data: any[], itemsPerChunk = 50) => {
-          const CHUNK_SIZE = itemsPerChunk; 
-          const chunks = [];
-          for (let i = 0; i < data.length; i += CHUNK_SIZE) {
-              chunks.push(data.slice(i, i + CHUNK_SIZE));
-          }
-          const metaRef = doc(db, 'gameData', `${key}_meta`);
-          const metaSnap = await getDoc(metaRef);
-          if (metaSnap.exists()) {
-              const prevCount = metaSnap.data().count || 0;
-              if (prevCount > chunks.length) {
-                  const deletePromises = [];
-                  for (let i = chunks.length; i < prevCount; i++) {
-                      deletePromises.push(deleteDoc(doc(db, 'gameData', `${key}_chunk_${i}`)).catch(() => {}));
-                  }
-                  await Promise.all(deletePromises);
-              }
-          }
-          await setDoc(metaRef, { count: chunks.length, timestamp: ts, total: data.length });
-          
-          // Use sequential writes or very small batches to avoid hitting 10MB payload limit
-          const BATCH_SIZE = 2;
-          for (let i = 0; i < chunks.length; i += BATCH_SIZE) {
-              const batch = chunks.slice(i, i + BATCH_SIZE).map((chunk, idx) => 
-                  setDoc(doc(db, 'gameData', `${key}_chunk_${i + idx}`), { data: JSON.parse(JSON.stringify(chunk)), timestamp: ts })
-              );
-              await Promise.all(batch);
-          }
-      };
-
-      await saveChunks('matches', allMatches, 20);
-      await saveChunks('contests', allContests, 20);
+      await syncCategoryToCloud('matches', allMatches, 20);
+      await syncCategoryToCloud('contests', allContests, 20);
       await setDoc(doc(db, 'gameData', 'banners'), { data: JSON.parse(JSON.stringify(appBanners)), timestamp: ts });
-      await saveChunks('players', appPlayers, 200);
-      await saveChunks('adminTeams', adminTeams, 200);
+      await syncCategoryToCloud('players', appPlayers, 200);
+      await syncCategoryToCloud('adminTeams', adminTeams, 200);
       lastLoadTs.current = ts;
       await setDoc(doc(db, 'gameData', 'sync_meta'), { lastUpdate: ts });
       console.log("Cloud sync successful (All Data)");
@@ -5721,7 +5789,7 @@ export default function App() {
                           const updatedContests = [...appContests, newContest];
                           setAppContests(updatedContests);
                           localStorage.setItem('dreamApp_contests', JSON.stringify(updatedContests));
-                          syncActiveDataToCloud();
+                          syncCategoryToCloud('contests', updatedContests, 20);
                           
                           alert(`Successfully added ${adminContestType} contest!`);
                           setAdminContestName('');
@@ -6083,7 +6151,7 @@ export default function App() {
                           };
                           const newMatches = [newAppMatch, ...appMatches];
                           setAppMatches(newMatches);
-                          syncActiveDataToCloud();
+                          syncCategoryToCloud('matches', newMatches, 20);
                           // Force re-render of this button
                           setApiMatches([...apiMatches]);
                        }}
@@ -6258,7 +6326,8 @@ export default function App() {
               localStorage.setItem('dreamApp_matches', JSON.stringify(updatedMatches));
               localStorage.setItem('dreamApp_players', JSON.stringify(updatedPlayers));
               
-              syncActiveDataToCloud();
+              syncCategoryToCloud('players', updatedPlayers, 200);
+              syncCategoryToCloud('matches', updatedMatches, 20);
               
               setMatchListT1Name('');
               setMatchListT1Code('');
@@ -6465,12 +6534,12 @@ export default function App() {
                          onUpdate={(updatedMatch) => {
                             const newMatches = appMatches.map(mm => mm.id === m.id ? updatedMatch : mm);
                             setAppMatches(newMatches);
-                            syncActiveDataToCloud();
+                            syncCategoryToCloud('matches', newMatches, 20);
                          }}
                          onDelete={() => {
                             const newMatches = appMatches.filter(mm => mm.id !== m.id);
                             setAppMatches(newMatches);
-                            syncActiveDataToCloud();
+                            syncCategoryToCloud('matches', newMatches, 20);
                          }}
                          onStatusChange={(status) => {
                             if (status === 'Completed' && m.status !== 'Completed') {
@@ -6478,12 +6547,12 @@ export default function App() {
                             }
                             const newMatches = appMatches.map(mm => mm.id === m.id ? { ...mm, status } : mm);
                             setAppMatches(newMatches);
-                            syncActiveDataToCloud();
+                            syncCategoryToCloud('matches', newMatches, 20);
                          }}
                          onLineupToggle={() => {
                             const newMatches = appMatches.map(mm => mm.id === m.id ? { ...mm, lineupStatus: mm.lineupStatus === 'OUT' ? 'NOT_OUT' : 'OUT' as const } : mm);
                             setAppMatches(newMatches);
-                            syncActiveDataToCloud();
+                            syncCategoryToCloud('matches', newMatches, 20);
                          }}
                        />
                     ))}
@@ -6930,17 +6999,47 @@ export default function App() {
                                    </button>
                                    <button 
                                      onClick={async () => {
-                                        await setDoc(doc(db, 'withdrawals', req.id), { ...req, status: 'Rejected' });
-                                        // Refund winning balance
-                                        if (req.userId) {
-                                           const wRef = doc(db, 'wallets', req.userId);
-                                           const wDoc = await getDoc(wRef);
-                                           if (wDoc.exists()) {
-                                              const curr = wDoc.data();
-                                              await setDoc(wRef, { ...curr, winning: (curr.winning || 0) + req.amount });
+                                        try {
+                                           const reqRef = doc(db, 'withdrawals', req.id);
+                                           if (req.userId) {
+                                              const wRef = doc(db, 'wallets', req.userId);
+                                              const withdrawalAmount = Number(req.amount);
+                                              if (isNaN(withdrawalAmount) || withdrawalAmount <= 0) {
+                                                  alert("Invalid withdrawal amount format.");
+                                                  return;
+                                              }
+
+                                              await runTransaction(db, async (transaction) => {
+                                                  const reqDoc = await transaction.get(reqRef);
+                                                  if (!reqDoc.exists()) {
+                                                      throw new Error("Withdrawal request does not exist!");
+                                                  }
+                                                  
+                                                  const currentStatus = reqDoc.data().status;
+                                                  if (currentStatus === 'Rejected' || currentStatus === 'Cancelled') {
+                                                      throw new Error(`Request has already been processed as ${currentStatus}!`);
+                                                  }
+
+                                                  // Update request status atomically to prevent double processing
+                                                  transaction.update(reqRef, { status: 'Rejected' });
+
+                                                  const wDoc = await transaction.get(wRef);
+                                                  if (wDoc.exists()) {
+                                                      const currentWinning = Number(wDoc.data().winning || 0);
+                                                      const newWinningBalance = currentWinning + withdrawalAmount;
+                                                      // Update wallet winning balance atomically
+                                                      transaction.update(wRef, { winning: newWinningBalance });
+                                                  }
+                                              });
+                                              alert(`Withdrawal rejected. Amount strictly refunded to user wallet.`);
+                                           } else {
+                                              await setDoc(doc(db, 'withdrawals', req.id), { ...req, status: 'Rejected' });
+                                              alert("Withdrawal rejected. No user ID associated for refund.");
                                            }
+                                        } catch (e: any) {
+                                           console.error("Rejection Error:", e);
+                                           alert("Failed to reject or refund: " + (e?.message || e));
                                         }
-                                        alert(`Withdrawal rejected. Amount refunded to user wallet.`);
                                      }}
                                      className="flex-1 bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/50 font-bold py-2.5 rounded-lg active:scale-[0.98] transition-all text-xs text-center uppercase tracking-widest"
                                    >
@@ -7322,7 +7421,7 @@ export default function App() {
                                  e.stopPropagation();
                                  const newMatchesList = appMatches.map(m => m.id === match.id ? { ...m, lineupStatus: m.lineupStatus === 'OUT' ? 'NOT_OUT' : 'OUT' as const } : m);
                                  setAppMatches(newMatchesList);
-                                 syncActiveDataToCloud(); 
+                                 syncCategoryToCloud('matches', newMatchesList, 20); 
                                }}
                                className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${match.lineupStatus === 'OUT' ? 'bg-green-500/20 text-green-400 border border-green-500/50 shadow-[0_0_10px_rgba(34,197,94,0.2)]' : 'bg-red-500/10 text-red-500 border border-red-500/50'}`}
                              >
@@ -7654,7 +7753,7 @@ export default function App() {
                               };
                               const newMatchesList = [...appMatches, newMatchObj];
                               setAppMatches(newMatchesList);
-                              syncActiveDataToCloud();
+                              syncCategoryToCloud('matches', newMatchesList, 20);
                               
                               setSelectedTeamsForMatch([]);
                               setNewMatchTimeForm('');
