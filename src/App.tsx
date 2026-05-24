@@ -164,6 +164,8 @@ interface Player {
   points: number;
   selPercent: number;
   isPlaying?: boolean;
+  livePoints?: number;
+  breakup?: Record<string, { points: number, actual: number | string }>;
 }
 
 // --- Mock Data ---
@@ -746,6 +748,12 @@ const ContestDetailsView = ({
     </div>
   );
 };
+
+const POINT_EVENTS = [
+  'starting 11', 'Run', "4's", "6's", 'S/R', '50/100 Runs Bonus', '30 Runs Bonus', 'Duck', 
+  'Dot Balls', 'Wkts', 'E/R', 'Maiden Over', 'Run Out', 'Runout thrower', 'Runout catcher', 
+  'Catch', 'Stumping', 'Lbw / Bowled', 'Bonus Points'
+];
 
 export default function App() {
   const [authInitialized, setAuthInitialized] = useState(false);
@@ -1731,9 +1739,14 @@ export default function App() {
                  setAppPlayers(prev => {
                      let changed = false;
                      const newPlayers = prev.map(p => {
-                         if (livePts[p.id] !== undefined && p.livePoints !== livePts[p.id]) {
-                             changed = true;
-                             return { ...p, livePoints: livePts[p.id] };
+                         const ptsData = livePts[p.id];
+                         if (ptsData !== undefined) {
+                             const totalPts = typeof ptsData === 'number' ? ptsData : (ptsData.total ?? p.livePoints);
+                             const newBreakup = typeof ptsData === 'object' ? ptsData.breakup : undefined;
+                             if (p.livePoints !== totalPts || JSON.stringify(p.breakup) !== JSON.stringify(newBreakup)) {
+                                 changed = true;
+                                 return { ...p, livePoints: totalPts, breakup: newBreakup ?? p.breakup };
+                             }
                          }
                          return p;
                      });
@@ -1920,6 +1933,9 @@ export default function App() {
   const [viceCaptain, setViceCaptain] = useState<string | null>(null);
   const [previewSource, setPreviewSource] = useState<'CREATE_TEAM' | 'MY_MATCHES' | 'CONTEST_DETAILS'>('CREATE_TEAM');
   const [previewTeamInfo, setPreviewTeamInfo] = useState<{name: string, points?: number} | null>(null);
+  const [showPlayerInfoPopup, setShowPlayerInfoPopup] = useState<Player | null>(null);
+  const [adminEditPlayerBreakup, setAdminEditPlayerBreakup] = useState<Player | null>(null);
+  const [adminEditingEvent, setAdminEditingEvent] = useState<{ event: string, actual: string, points: string } | null>(null);
   const [adminCustomAmount, setAdminCustomAmount] = useState<string>('');
   
   // Admin Contest Creation State
@@ -3259,10 +3275,13 @@ export default function App() {
                     onClick={() => togglePlayer(player)}
                   >
                     {/* Left: Avatar with Info, Team Tag */}
-                    <div className="relative shrink-0 w-[70px] h-[64px] flex flex-col items-center justify-start ml-2 pl-2">
-                       <button className="absolute top-0 -left-1 opacity-50 hover:opacity-100 z-20" onClick={(e) => { e.stopPropagation(); /* show info */}}>
+                    <div 
+                      className="relative shrink-0 w-[70px] h-[64px] flex flex-col items-center justify-start ml-2 pl-2 cursor-pointer z-10"
+                      onClick={(e) => { e.stopPropagation(); setShowPlayerInfoPopup(player); }}
+                    >
+                       <div className="absolute top-0 -left-1 opacity-50 z-20 hover:opacity-100">
                           <Info size={14} className="text-app-text" />
-                       </button>
+                       </div>
                        <div 
                          className="w-[50px] h-[50px] flex items-end justify-center relative overflow-visible z-10 drop-shadow-sm mt-1"
                        >
@@ -6435,7 +6454,7 @@ export default function App() {
                            const st = playerAdjustments[p.id] || { adjustment: 0, manual: p.points, reason: '' };
                            return (
                              <tr key={p.id}>
-                               <td className="p-3 font-bold text-slate-200">{p.name}</td>
+                               <td className="p-3 font-bold text-slate-200 cursor-pointer hover:text-[#e5c158] transition-colors" onClick={() => setAdminEditPlayerBreakup(p)}>{p.name}</td>
                                <td className="p-3 text-slate-400 font-mono">{String(p.team || '').substring(0,3).toUpperCase()}</td>
                                <td className="p-3 text-center text-slate-300">{p.points}</td>
                                <td className="p-3">
@@ -6553,6 +6572,19 @@ export default function App() {
                                 setAppPlayers(updatedPlayers);
                                 await syncCategoryToCloud('players', updatedPlayers, 100);
                                 await setDoc(doc(db, 'gameData', 'live_player_points'), {});
+                            } else if (status === 'Live' && m.status !== 'Live') {
+                                const startingPoints: Record<string, any> = {};
+                                const updatedPlayers = appPlayers.map(p => {
+                                    if (p.isPlaying && (p.team === m.team1.shortFrame || p.team === m.team2.shortFrame)) {
+                                        const pts = Math.max(p.livePoints ?? p.points, 4);
+                                        const breakup = { 'starting 11': { points: 4, actual: 'Yes' } };
+                                        startingPoints[p.id] = { total: pts, breakup };
+                                        return { ...p, livePoints: pts, points: pts, breakup };
+                                    }
+                                    return p;
+                                });
+                                setAppPlayers(updatedPlayers);
+                                await setDoc(doc(db, 'gameData', 'live_player_points'), startingPoints, { merge: true });
                             }
                             const newMatches = appMatches.map(mm => mm.id === m.id ? { ...mm, status } : mm);
                             setAppMatches(newMatches);
@@ -7777,6 +7809,87 @@ export default function App() {
             </div>
         )}
 </>
+      {showPlayerInfoPopup && (
+        <div className="fixed inset-[-20px] bg-black/60 z-[100] flex flex-col pt-10 pb-4 px-4 overflow-hidden" onClick={() => setShowPlayerInfoPopup(null)}>
+            <motion.div 
+               initial={{ y: "100%" }}
+               animate={{ y: 0 }}
+               transition={{ type: "spring", damping: 25, stiffness: 200 }}
+               className="bg-app-bg h-full rounded-t-3xl shadow-xl flex flex-col overflow-hidden"
+               onClick={e => e.stopPropagation()}
+            >
+              <div className="bg-[#0f0f0f] dark:bg-black text-white p-4 flex items-center gap-4 border-b border-app-border shrink-0">
+                 <button onClick={() => setShowPlayerInfoPopup(null)}><ArrowLeft size={24}/></button>
+                 <h2 className="text-xl font-bold font-sans">Player Info</h2>
+              </div>
+              
+              <div className="flex-1 overflow-y-auto bg-app-card text-app-text">
+                 <div className="p-4 bg-app-card flex items-center gap-4">
+                    <div className="w-[60px] h-[60px] border border-app-border bg-app-bg rounded-lg shadow-sm flex items-end justify-center overflow-hidden">
+                       <User size={65} className="text-[#d1d5db] dark:text-[#475569] translate-y-3" fill="currentColor" strokeWidth={1} />
+                    </div>
+                    <div>
+                       <h3 className="text-xl font-black">{showPlayerInfoPopup.name}</h3>
+                       <p className="text-sm font-bold text-app-text-muted uppercase tracking-widest">{showPlayerInfoPopup.team} | {showPlayerInfoPopup.role}</p>
+                    </div>
+                 </div>
+                 
+                 <div className="px-4 py-3 bg-app-bg text-[10px] uppercase font-black tracking-widest text-[#e5c158] border-y border-app-border shadow-[0_4px_6px_-1px_rgba(0,0,0,0.1)]">
+                    Points Breakup
+                 </div>
+                 <div className="w-full text-sm">
+                     <div className="flex px-4 py-2 text-app-text-muted text-xs border-b border-app-border font-bold uppercase tracking-widest bg-app-card">
+                        <div className="flex-1">Event</div>
+                        <div className="w-16 text-center">Points</div>
+                        <div className="w-16 text-right">Actual</div>
+                     </div>
+                     
+                     {POINT_EVENTS.map(evt => {
+                         let evtPts: number | string = 0;
+                         let evtActual: number | string = 0;
+                         
+                         if (showPlayerInfoPopup.breakup && showPlayerInfoPopup.breakup[evt]) {
+                             evtPts = showPlayerInfoPopup.breakup[evt].points ?? 0;
+                             evtActual = showPlayerInfoPopup.breakup[evt].actual ?? 0;
+                         } else if (evt === 'starting 11') {
+                             evtPts = showPlayerInfoPopup.isPlaying && (activeMatch?.status === 'Live' || activeMatch?.status === 'Completed') ? 4 : 0;
+                             evtActual = showPlayerInfoPopup.isPlaying ? 'Yes' : 'No';
+                         } else if (evt === 'Run' && !showPlayerInfoPopup.breakup) {
+                             // Fallback for old data without breakup
+                             evtPts = (showPlayerInfoPopup.livePoints ?? showPlayerInfoPopup.points) - (showPlayerInfoPopup.isPlaying && (activeMatch?.status === 'Live' || activeMatch?.status === 'Completed') ? 4 : 0);
+                             evtActual = evtPts;
+                         }
+                         
+                         return (
+                             <div key={evt} className="flex px-4 py-3 border-b border-app-border bg-app-bg items-center hover:bg-app-card transition-colors">
+                                 <div className="flex-1 font-semibold text-app-text">{evt}</div>
+                                 <div className="w-16 text-center font-bold text-app-text">{evtPts}</div>
+                                 <div className="w-16 text-right text-app-text-muted">{evtActual}</div>
+                             </div>
+                         );
+                     })}
+
+                     <div className="flex px-4 py-4 bg-app-bg items-center font-black font-sans text-lg border-t-2 border-t-app-border-hover mt-3 shadow-t-sm">
+                        <div className="flex-1">Total points</div>
+                        <div className="w-16 text-right pr-4 font-black">{(showPlayerInfoPopup.livePoints ?? showPlayerInfoPopup.points)}</div>
+                     </div>
+                 </div>
+              </div>
+              
+              {view === 'CREATE_TEAM' && selectedContest && (
+                 <div className="p-4 bg-app-bg shrink-0 border-t border-app-border shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] text-center relative z-[110]">
+                    <button 
+                       onClick={() => { togglePlayer(showPlayerInfoPopup); setShowPlayerInfoPopup(null); }}
+                       disabled={!team.find(p => p.id === showPlayerInfoPopup.id) && team.length >= 11}
+                       className={`w-full max-w-[300px] mx-auto py-3.5 rounded-lg text-white font-black uppercase text-sm tracking-wide ${team.find(p => p.id === showPlayerInfoPopup.id) ? 'bg-[#921414] hover:bg-red-800' : (team.length >= 11 ? 'bg-slate-500' : 'bg-[#e41e25] hover:bg-[#c1191f]')}`}
+                    >
+                       {team.find(p => p.id === showPlayerInfoPopup.id) ? 'Remove From Team' : 'Add To Team'}
+                    </button>
+                 </div>
+              )}
+            </motion.div>
+        </div>
+      )}
       {view === 'HOME' && renderHome()}
       {view === 'MATCH' && renderContests()}
       {view === 'CREATE_TEAM' && renderCreateTeam()}
@@ -8298,6 +8411,95 @@ export default function App() {
               </button>
               <img src={selectedImageUrl} referrerPolicy="no-referrer" onError={(e) => { e.currentTarget.src = 'https://placehold.co/400x400?text=Format+Not+Supported'; }} alt="View" className="max-w-full max-h-[85vh] object-contain rounded-lg shadow-2xl border border-white/20" />
           </div>
+      )}
+
+      {adminEditPlayerBreakup && (
+        <div className="fixed inset-[-20px] bg-black/60 z-[300] flex flex-col pt-10 pb-4 px-4 overflow-hidden" onClick={() => {setAdminEditPlayerBreakup(null); setAdminEditingEvent(null);}}>
+            <motion.div 
+               initial={{ y: "100%" }}
+               animate={{ y: 0 }}
+               transition={{ type: "spring", damping: 25, stiffness: 200 }}
+               className="bg-[#13151c] h-full rounded-t-3xl shadow-xl flex flex-col overflow-hidden relative backdrop-blur-md"
+               onClick={e => e.stopPropagation()}
+            >
+              <div className="bg-[#0f0f0f] border-b border-[#e5c158]/20 text-[#e5c158] p-4 flex items-center gap-4 shrink-0 shadow-sm">
+                 <button onClick={() => {setAdminEditPlayerBreakup(null); setAdminEditingEvent(null);}}><ArrowLeft size={24}/></button>
+                 <h2 className="text-xl font-black font-sans uppercase tracking-wider flex-1 truncate">{adminEditPlayerBreakup.name}</h2>
+              </div>
+              
+              <div className="flex-1 overflow-y-auto text-slate-200 hide-scrollbar pb-20 bg-[#13151c]">
+                 <div className="w-full text-sm">
+                     <div className="flex px-4 py-3 text-[#e5c158]/80 text-[10px] border-b border-[#e5c158]/20 font-black uppercase tracking-widest bg-black/60 shadow-sm sticky top-0 z-10 backdrop-blur-md">
+                        <div className="flex-1">Event</div>
+                        <div className="w-16 text-center">Points</div>
+                        <div className="w-16 text-right">Actual</div>
+                        <div className="w-10"></div>
+                     </div>
+                     
+                     {POINT_EVENTS.map(evt => {
+                         const evtData = adminEditPlayerBreakup.breakup?.[evt] || { points: 0, actual: 0 };
+                         return (
+                            <div key={evt} className="flex flex-col border-b border-slate-800/50 hover:bg-slate-800/30 transition-colors">
+                                <div className="flex px-4 py-3 items-center">
+                                    <div className="flex-1 font-semibold text-slate-300 text-xs truncate mr-2">{evt}</div>
+                                    <div className="w-16 text-center font-bold text-slate-100">{evtData.points}</div>
+                                    <div className="w-16 text-right text-slate-400 font-mono text-xs truncate max-w-[60px] overflow-hidden">{evtData.actual}</div>
+                                    <div className="w-10 flex justify-end">
+                                        <button 
+                                          onClick={() => setAdminEditingEvent({ event: evt, actual: String(evtData.actual), points: String(evtData.points) })}
+                                          className="text-[#e5c158]/70 hover:text-[#e5c158] hover:scale-110 active:scale-95 transition-all p-1"
+                                        >
+                                            <Plus size={18} strokeWidth={3} />
+                                        </button>
+                                    </div>
+                                </div>
+                                {adminEditingEvent?.event === evt && (
+                                    <div className="bg-[#090b10] p-3 mx-3 mb-3 rounded-xl border border-[#e5c158]/40 flex flex-col gap-3 shadow-[inset_0_2px_10px_rgba(0,0,0,0.5)]">
+                                        <div className="flex gap-3">
+                                            <div className="flex-1 flex flex-col gap-1.5 text-[9px] text-[#e5c158]/70 font-black uppercase tracking-widest">
+                                                Actual Value
+                                                <input type="text" value={adminEditingEvent.actual} onChange={(e) => setAdminEditingEvent({...adminEditingEvent, actual: e.target.value})} className="bg-black border border-slate-700 rounded-lg px-3 py-2 text-sm font-mono text-white outline-none focus:border-[#e5c158] focus:shadow-[0_0_10px_rgba(229,193,88,0.2)] transition-all w-full" />
+                                            </div>
+                                            <div className="flex-1 flex flex-col gap-1.5 text-[9px] text-[#e5c158]/70 font-black uppercase tracking-widest">
+                                                Points
+                                                <input type="number" value={adminEditingEvent.points} onChange={(e) => setAdminEditingEvent({...adminEditingEvent, points: e.target.value})} className="bg-black border border-slate-700 rounded-lg px-3 py-2 text-sm font-mono text-white outline-none focus:border-[#e5c158] focus:shadow-[0_0_10px_rgba(229,193,88,0.2)] transition-all w-full" />
+                                            </div>
+                                        </div>
+                                        <div className="flex gap-3 mt-1">
+                                            <button onClick={() => setAdminEditingEvent(null)} className="flex-1 py-3 border border-slate-700 text-slate-400 rounded-lg text-xs font-bold uppercase transition-colors hover:bg-slate-800 hover:text-white">Cancel</button>
+                                            <button onClick={async () => {
+                                                const pts = Number(adminEditingEvent.points) || 0;
+                                                const actual = adminEditingEvent.actual;
+                                                const newBreakup = { ...adminEditPlayerBreakup.breakup, [evt]: { points: pts, actual: actual } };
+                                                const newTotal = Object.values(newBreakup).reduce((sum, item) => sum + (Number(item?.points) || 0), 0);
+                                                
+                                                try {
+                                                    await setDoc(doc(db, 'gameData', 'live_player_points'), { 
+                                                        [adminEditPlayerBreakup.id]: { total: newTotal, breakup: newBreakup } 
+                                                    }, { merge: true });
+                                                    
+                                                    setAdminEditPlayerBreakup(prev => prev ? { ...prev, breakup: newBreakup, livePoints: newTotal } : null);
+                                                    setAdminEditingEvent(null);
+                                                } catch (e) {
+                                                    console.error("Failed to update points:", e);
+                                                    alert("Failed to update points");
+                                                }
+                                            }} className="flex-1 py-3 bg-[#e5c158] text-black rounded-lg text-[10px] font-black uppercase tracking-widest shadow-[0_0_15px_rgba(229,193,88,0.3)] transition-all hover:bg-yellow-400 hover:shadow-[0_0_20px_rgba(229,193,88,0.5)] active:scale-95">Save</button>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                         );
+                     })}
+
+                     <div className="flex px-4 py-5 bg-black/60 items-center font-black font-sans text-xl border-t border-[#e5c158]/50 mt-4 shadow-[0_-5px_15px_rgba(0,0,0,0.5)] text-[#e5c158]">
+                        <div className="flex-1 uppercase tracking-widest text-sm">Total Points</div>
+                        <div className="w-16 text-right pr-4 text-2xl">{adminEditPlayerBreakup.livePoints ?? adminEditPlayerBreakup.points}</div>
+                     </div>
+                 </div>
+              </div>
+            </motion.div>
+        </div>
       )}
 
     </div>
