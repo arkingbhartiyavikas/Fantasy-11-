@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef, Component } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import Cropper from 'react-easy-crop';
-import { Trophy, Clock, Users, ArrowLeft, Home, User, Wallet, Bell, PlayCircle, Shield, Plus, Minus, Info, Receipt, Settings, MessageSquare, Copy, PlusCircle, Edit2, ArrowDownToLine, ArrowDownLeft, ArrowRight, Check, X, ChevronUp, ChevronDown, Search, ChevronLeft, ChevronRight, Trash2, Download, BarChart2, Image as ImageIcon, ZoomIn, RefreshCw, AlertCircle, LogOut, Filter } from 'lucide-react';
+import { Trophy, Clock, Users, ArrowLeft, Home, User, Wallet, Bell, PlayCircle, Shield, Plus, Minus, Info, Receipt, Settings, MessageSquare, Copy, PlusCircle, Edit2, ArrowDownToLine, ArrowDownLeft, ArrowRight, Check, X, ChevronUp, ChevronDown, Search, ChevronLeft, ChevronRight, Trash2, Download, BarChart2, Image as ImageIcon, ZoomIn, RefreshCw, AlertCircle, LogOut, Filter, Headphones, CheckCircle, Mail, Send, Phone } from 'lucide-react';
 import { auth, db } from './lib/firebase';
 import { onAuthStateChanged, signOut, signInWithEmailAndPassword, createUserWithEmailAndPassword, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult } from 'firebase/auth';
 import { doc, onSnapshot, setDoc, collection, query, where, getDoc, getDocs, updateDoc, writeBatch, increment, deleteDoc, runTransaction } from 'firebase/firestore';
@@ -557,9 +557,9 @@ const ContestDetailsView = ({
      let currentRank = 0;
      let lastPoints = -1;
      const isUpcoming = activeMatch?.status === 'Upcoming';
-     return sorted.map((team) => {
+     const rankedTeams = sorted.map((team) => {
         if (isUpcoming) {
-           return { ...team, rank: '-' };
+           return { ...team, points: '-', rank: '-' };
         }
         const p = team.points || 0;
         if (p !== lastPoints) {
@@ -568,7 +568,12 @@ const ContestDetailsView = ({
         }
         return { ...team, rank: currentRank };
      });
-  }, [contestTeams, appPlayers, activeMatch?.status]);
+
+     // Move current user's teams to the top for display
+     const currentUserTeams = rankedTeams.filter(t => currentUser && t.userId === currentUser.id);
+     const otherTeams = rankedTeams.filter(t => !(currentUser && t.userId === currentUser.id));
+     return [...currentUserTeams, ...otherTeams];
+  }, [contestTeams, appPlayers, activeMatch?.status, currentUser?.id]);
 
   const getPayouts = () => {
     if (contest.payouts && contest.payouts.length > 0) {
@@ -730,8 +735,8 @@ const ContestDetailsView = ({
                               </div>
                            </div>
                            <div className="flex gap-4 w-32 justify-end items-center">
-                              <span className="w-12 text-center text-sm text-[#7a7a7a] font-normal">{t.points || 0}</span>
-                              <span className="w-12 text-right font-medium text-black dark:text-app-text text-[15px]">{t.rank || (i + 1)}</span>
+                              <span className="w-12 text-center text-sm text-[#7a7a7a] font-normal">{t.points}</span>
+                              <span className="w-12 text-right font-medium text-black dark:text-app-text text-[15px]">{t.rank}</span>
                            </div>
                         </div>
                         );
@@ -835,6 +840,23 @@ export default function App() {
     root.style.setProperty('--app-border-hover', isLight ? '#cbd5e1' : '#334155');
     root.style.setProperty('--app-accent', themeColor === 'Red' ? '#dc2626' : themeColor === 'Green' ? '#16a34a' : '#2563eb');
   }, [themeMode, themeColor]);
+
+  const [helpSettings, setHelpSettings] = useState<{ email?: string; telegram?: string; barcode?: string; whatsapp?: string }>({});
+  useEffect(() => {
+    const fetchHelpSettings = async () => {
+      try {
+        const docRef = doc(db, 'adminSettings', 'helpSupport');
+        const snap = await getDoc(docRef);
+        if (snap.exists()) {
+           setHelpSettings(snap.data() as any);
+           setHelpSettingsInput(snap.data() as any);
+        }
+      } catch (e) {
+         console.warn("Failed to load help settings", e);
+      }
+    };
+    fetchHelpSettings();
+  }, []);
 
   const [view, setView] = useState<ViewType>('HOME');
   const [activeMatch, setActiveMatch] = useState<Match | null>(null);
@@ -2094,8 +2116,14 @@ export default function App() {
   const [showManageDeposits, setShowManageDeposits] = useState<boolean>(false);
   const [showManageWithdrawals, setShowManageWithdrawals] = useState<boolean>(false);
   const [showManageKYC, setShowManageKYC] = useState<boolean>(false);
+  const [showManageHelp, setShowManageHelp] = useState<boolean>(false);
+  const [helpSettingsInput, setHelpSettingsInput] = useState<{ email: string; telegram: string; barcode: string; whatsapp: string }>({ email: '', telegram: '', barcode: '', whatsapp: '' });
   
   const [showManageUsers, setShowManageUsers] = useState<boolean>(false);
+  const [showFairPlayPolicy, setShowFairPlayPolicy] = useState<boolean>(false);
+  const [showHelpSupport, setShowHelpSupport] = useState<boolean>(false);
+  const [showReferEarn, setShowReferEarn] = useState<boolean>(false);
+  const [showHowToPlay, setShowHowToPlay] = useState<boolean>(false);
   const [searchUserId, setSearchUserId] = useState<string>('');
   const [adminProfileModalUser, setAdminProfileModalUser] = useState<any | null>(null);
 
@@ -4200,7 +4228,7 @@ export default function App() {
                     <div className="text-app-text-muted text-lg">&gt;</div>
                  </div>
               </button>
-              <button className="p-4 text-left border-b border-app-border flex items-center gap-4 active:bg-app-card-hover transition-colors">
+              <button onClick={() => setShowReferEarn(true)} className="p-4 text-left border-b border-app-border flex items-center gap-4 active:bg-app-card-hover transition-colors">
                  <PlayCircle className="text-app-text-muted" size={22}/>
                  <div className="flex-1">
                    <div className="text-app-text font-bold text-sm">Refer & Earn</div>
@@ -4208,11 +4236,27 @@ export default function App() {
                  </div>
                  <div className="text-app-text-muted text-lg">&gt;</div>
               </button>
-              <button className="p-4 text-left flex items-center gap-4 active:bg-app-card-hover transition-colors">
+              <button onClick={() => setShowHowToPlay(true)} className="p-4 text-left border-b border-app-border flex items-center gap-4 active:bg-app-card-hover transition-colors">
                  <Info className="text-app-text-muted" size={22}/>
                  <div className="flex-1">
                    <div className="text-app-text font-bold text-sm">How To Play</div>
                    <div className="text-xs text-app-text-muted font-medium">Learn the rules and scoring</div>
+                 </div>
+                 <div className="text-app-text-muted text-lg">&gt;</div>
+              </button>
+              <button onClick={() => setShowFairPlayPolicy(true)} className="p-4 text-left border-b border-app-border flex items-center gap-4 active:bg-app-card-hover transition-colors">
+                 <CheckCircle className="text-emerald-500" size={22}/>
+                 <div className="flex-1">
+                   <div className="text-app-text font-bold text-sm">Fair Play Policy</div>
+                   <div className="text-xs text-app-text-muted font-medium">Our rules and integrity</div>
+                 </div>
+                 <div className="text-app-text-muted text-lg">&gt;</div>
+              </button>
+              <button onClick={() => setShowHelpSupport(true)} className="p-4 text-left flex items-center gap-4 active:bg-app-card-hover transition-colors">
+                 <Headphones className="text-purple-400" size={22}/>
+                 <div className="flex-1">
+                   <div className="text-app-text font-bold text-sm">Help & Support</div>
+                   <div className="text-xs text-app-text-muted font-medium">Get answers, contact us</div>
                  </div>
                  <div className="text-app-text-muted text-lg">&gt;</div>
               </button>
@@ -4222,7 +4266,10 @@ export default function App() {
               <div className="p-4 flex flex-col gap-3">
                  <div className="flex items-center gap-4">
                    <Settings className="text-app-text-muted" size={22}/>
-                   <div className="text-app-text font-bold text-sm">Theme Settings</div>
+                   <div className="flex-1">
+                       <div className="text-app-text font-bold text-sm">Settings</div>
+                       <div className="text-xs text-app-text-muted font-medium">Notifications, theme, language</div>
+                   </div>
                  </div>
                  <div className="flex items-center gap-2 mt-2">
                     <span className="text-xs font-bold text-app-text-muted uppercase w-16">Mode</span>
@@ -7004,6 +7051,57 @@ export default function App() {
     </div>
 
 <button 
+      onClick={() => setShowManageHelp(!showManageHelp)}
+      className={`flex items-center justify-between w-full mt-4 bg-[#13151c] border ${showManageHelp ? 'border-[#e5c158]/30 rounded-t-xl border-b-0 mb-0 bg-gradient-to-b from-[#e5c158]/5 to-transparent' : 'border-slate-800 rounded-xl mb-3 hover:border-[#e5c158]/30'} p-4 shadow-lg transition-all relative group overflow-hidden`}
+    >
+        <div className="absolute inset-0 bg-gradient-to-r from-yellow-500/0 via-yellow-500/5 to-yellow-500/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000"></div>
+        <h3 className="font-bold text-slate-200 tracking-wide flex items-center justify-between z-10">Manage Help Settings</h3>
+        <div className={`p-1.5 rounded-lg border transition-all z-10 ${showManageHelp ? 'text-black border-[#e5c158] bg-[#e5c158] shadow-[0_0_10px_rgba(229,193,88,0.5)]' : 'text-slate-500 border-slate-700 bg-black/40 group-hover:text-[#e5c158] group-hover:border-[#e5c158]/30'}`}>
+          {showManageHelp ? <ChevronUp size={16} strokeWidth={3} /> : <ChevronDown size={16} />}
+        </div>
+</button>
+{showManageHelp && (
+    <div className="bg-[#13151c] rounded-b-2xl shadow-lg border border-[#e5c158]/50 border-t-0 p-5 mb-6 backdrop-blur-sm relative before:absolute before:inset-0 before:bg-gradient-to-b before:from-yellow-500/5 before:to-transparent before:pointer-events-none">
+       <p className="text-xs text-slate-400 mb-5 pl-1 relative z-10">Configure Help & Support fields here.</p>
+       <div className="space-y-4 relative z-10 text-slate-300 text-sm">
+           <div className="flex flex-col gap-1">
+              <label className="font-bold text-xs">Support Email</label>
+              <input type="text" value={helpSettingsInput.email} onChange={e => setHelpSettingsInput({...helpSettingsInput, email: e.target.value})} className="bg-black/50 border border-slate-800 rounded p-2 focus:border-[#e5c158] outline-none" placeholder="help@example.com" />
+           </div>
+           <div className="flex flex-col gap-1">
+              <label className="font-bold text-xs">Telegram Channel Link</label>
+              <input type="text" value={helpSettingsInput.telegram} onChange={e => setHelpSettingsInput({...helpSettingsInput, telegram: e.target.value})} className="bg-black/50 border border-slate-800 rounded p-2 focus:border-[#e5c158] outline-none" placeholder="https://t.me/..." />
+           </div>
+           <div className="flex flex-col gap-1">
+              <label className="font-bold text-xs">WhatsApp Link</label>
+              <input type="text" value={helpSettingsInput.whatsapp} onChange={e => setHelpSettingsInput({...helpSettingsInput, whatsapp: e.target.value})} className="bg-black/50 border border-slate-800 rounded p-2 focus:border-[#e5c158] outline-none" placeholder="https://wa.me/..." />
+           </div>
+           <div className="flex flex-col gap-1">
+              <label className="font-bold text-xs">Help Image (e.g. Barcode)</label>
+              <input type="file" accept="image/*" onChange={e => {
+                  const file = e.target.files?.[0];
+                  if (file) {
+                      const reader = new FileReader();
+                      reader.onloadend = () => {
+                          setHelpSettingsInput({...helpSettingsInput, barcode: reader.result as string});
+                      };
+                      reader.readAsDataURL(file);
+                  }
+              }} className="bg-black/50 border border-slate-800 rounded p-2 focus:border-[#e5c158] outline-none text-xs" />
+              {helpSettingsInput.barcode && <img src={helpSettingsInput.barcode} alt="Barcode preview" className="w-20 h-20 mt-2 rounded border border-slate-800 object-contain" />}
+           </div>
+           <button onClick={async () => {
+              try {
+                  await setDoc(doc(db, 'adminSettings', 'helpSupport'), helpSettingsInput);
+                  setHelpSettings(helpSettingsInput);
+                  alert("Help settings saved!");
+              } catch(e: any) { alert("Failed to save: " + e.message); }
+           }} className="bg-[#e5c158] text-black font-bold uppercase disabled:opacity-50 py-2 px-4 rounded w-full">Save Settings</button>
+       </div>
+    </div>
+)}
+
+<button 
       onClick={() => setShowManageWithdrawals(!showManageWithdrawals)}
       className={`flex items-center justify-between w-full mt-4 bg-[#13151c] border ${showManageWithdrawals ? 'border-[#e5c158]/30 rounded-t-xl border-b-0 mb-0 bg-gradient-to-b from-[#e5c158]/5 to-transparent' : 'border-slate-800 rounded-xl mb-3 hover:border-[#e5c158]/30'} p-4 shadow-lg transition-all relative group overflow-hidden`}
     >
@@ -8444,6 +8542,207 @@ export default function App() {
                   <X size={24} />
               </button>
               <img src={selectedImageUrl} referrerPolicy="no-referrer" onError={(e) => { e.currentTarget.src = 'https://placehold.co/400x400?text=Format+Not+Supported'; }} alt="View" className="max-w-full max-h-[85vh] object-contain rounded-lg shadow-2xl border border-white/20" />
+          </div>
+      )}
+
+      {showFairPlayPolicy && (
+          <div className="fixed inset-0 z-[150] bg-app-bg text-app-text flex flex-col font-sans overflow-hidden max-w-md mx-auto">
+             <header className="p-4 flex items-center gap-4 bg-app-card border-b border-app-border shrink-0">
+                <button onClick={() => setShowFairPlayPolicy(false)} className="text-app-text-muted hover:text-app-text transition-colors"><ArrowLeft size={24}/></button>
+                <div className="flex-1">
+                   <h1 className="text-lg font-bold">Fair Play Policy</h1>
+                   <p className="text-[10px] text-app-text-muted">Our rules and integrity</p>
+                </div>
+             </header>
+             <div className="flex-1 overflow-y-auto p-5 text-sm space-y-4">
+                  <h3 className="font-bold text-app-text text-base">Introduction</h3>
+                  <p className="text-app-text-muted">Our commitment to Fair Play ensures all users have an equal opportunity to win based on their skills and sports knowledge.</p>
+                  
+                  <h3 className="font-bold text-app-text text-base">Transparency</h3>
+                  <p className="text-app-text-muted">We provide a reliable platform where match point updates are consistent and universally applied across all user teams at exactly the same time.</p>
+                  
+                  <h3 className="font-bold text-app-text text-base">Rules Violation</h3>
+                  <p className="text-app-text-muted">Any account found using automated bots, multiple accounts by the same individual, or attempting to manipulate our systems will be permanently banned and funds will be seized.</p>
+
+                  <h3 className="font-bold text-app-text text-base">Verified Results</h3>
+                  <p className="text-app-text-muted">Points are derived from official match scorecards and data providers.</p>
+             </div>
+          </div>
+      )}
+
+      {showHelpSupport && (
+          <div className="fixed inset-0 z-[150] bg-app-bg text-app-text flex flex-col font-sans overflow-hidden max-w-md mx-auto">
+             <header className="p-4 flex items-center gap-4 bg-app-card border-b border-app-border shrink-0">
+                <button onClick={() => setShowHelpSupport(false)} className="text-app-text-muted hover:text-app-text transition-colors"><ArrowLeft size={24}/></button>
+                <div className="flex-1">
+                   <h1 className="text-lg font-bold">Help & Support</h1>
+                   <p className="text-[10px] text-app-text-muted">Get answers, contact us</p>
+                </div>
+             </header>
+             <div className="flex-1 overflow-y-auto p-5 flex flex-col items-center">
+                  <Headphones size={60} className="text-app-accent mb-6 mt-4 opacity-80" />
+                  <p className="text-center text-sm text-app-text-muted mb-8 max-w-[250px]">If you have any issues with deposits, withdrawals, or gameplay, please reach out to us!</p>
+                  
+                  <div className="w-full bg-app-card-inner border border-app-border rounded-xl p-4 flex flex-col gap-4">
+                     {helpSettings.email ? (
+                         <div className="flex items-center gap-3 bg-app-card p-3 rounded-lg border border-app-border">
+                             <div className="w-8 h-8 rounded-full bg-blue-500/20 text-blue-500 flex items-center justify-center shrink-0">
+                                 <Mail size={16} />
+                             </div>
+                             <div className="flex flex-col overflow-hidden">
+                                 <span className="text-[10px] uppercase font-bold text-app-text-muted tracking-wider">Email Support</span>
+                                 <a href={`mailto:${helpSettings.email}`} className="font-medium text-sm text-app-text truncate hover:text-blue-500 transition-colors">{helpSettings.email}</a>
+                             </div>
+                         </div>
+                     ) : null}
+
+                     {helpSettings.telegram ? (
+                         <div className="flex items-center gap-3 bg-app-card p-3 rounded-lg border border-app-border">
+                             <div className="w-8 h-8 rounded-full bg-sky-500/20 text-sky-500 flex items-center justify-center shrink-0">
+                                 <Send size={14} />
+                             </div>
+                             <div className="flex flex-col overflow-hidden">
+                                 <span className="text-[10px] uppercase font-bold text-app-text-muted tracking-wider">Telegram Channel</span>
+                                 <a href={helpSettings.telegram} target="_blank" rel="noopener noreferrer" className="font-medium text-sm truncate text-sky-500 transition-colors line-clamp-1">{helpSettings.telegram}</a>
+                             </div>
+                         </div>
+                     ) : null}
+
+                     {helpSettings.whatsapp ? (
+                         <div className="flex items-center gap-3 bg-app-card p-3 rounded-lg border border-app-border">
+                             <div className="w-8 h-8 rounded-full bg-green-500/20 text-green-500 flex items-center justify-center shrink-0">
+                                 <Phone size={14} />
+                             </div>
+                             <div className="flex flex-col overflow-hidden">
+                                 <span className="text-[10px] uppercase font-bold text-app-text-muted tracking-wider">WhatsApp Contact</span>
+                                 <a href={helpSettings.whatsapp} target="_blank" rel="noopener noreferrer" className="font-medium text-sm truncate text-green-500 transition-colors line-clamp-1">{helpSettings.whatsapp}</a>
+                             </div>
+                         </div>
+                     ) : null}
+                  </div>
+
+                  {helpSettings.barcode ? (
+                      <div className="mt-8 flex flex-col items-center">
+                          <span className="text-[10px] text-app-text-muted font-bold uppercase tracking-widest mb-3">Scan to connect</span>
+                          <div className="bg-white p-2 rounded-xl shadow-lg border border-app-border">
+                             <img src={helpSettings.barcode} alt="Barcode" className="w-[180px] h-[180px] object-contain rounded-lg" onError={e => e.currentTarget.style.display = 'none'} />
+                          </div>
+                      </div>
+                  ) : null}
+
+                  {(!helpSettings.email && !helpSettings.telegram && !helpSettings.whatsapp && !helpSettings.barcode) && (
+                      <div className="text-center p-6 bg-app-card-inner rounded-xl border border-app-border w-full">
+                          <p className="text-sm font-bold text-app-text-muted">Support contact info will be added shortly.</p>
+                      </div>
+                  )}
+             </div>
+          </div>
+      )}
+
+      {showReferEarn && (
+          <div className="fixed inset-0 z-[150] bg-app-bg text-app-text flex flex-col font-sans overflow-hidden max-w-md mx-auto">
+             <header className="p-4 flex items-center gap-4 bg-app-card border-b border-app-border shrink-0">
+                <button onClick={() => setShowReferEarn(false)} className="text-app-text-muted hover:text-app-text transition-colors"><ArrowLeft size={24}/></button>
+                <div className="flex-1">
+                   <h1 className="text-lg font-bold">Refer & Earn</h1>
+                   <p className="text-[10px] text-app-text-muted">Get ₹100 for every friend</p>
+                </div>
+             </header>
+             <div className="flex-1 overflow-y-auto p-5 pb-20">
+                 <div className="bg-gradient-to-br from-[#e5c158]/20 to-orange-500/10 border border-[#e5c158]/50 rounded-2xl p-6 flex flex-col items-center text-center shadow-lg relative overflow-hidden">
+                     <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0IiBoZWlnaHQ9IjQiPgo8cmVjdCB3aWR0aD0iNCIgaGVpZ2h0PSI0IiBmaWxsPSIjZmZmIiAvPgo8Y2lyY2xlIGN4PSIxIiBjeT0iMSIgcj0iMSIgZmlsbD0iI2Y1ZjVmNSIgLz4KPC9zdmc+')] opacity-20 pointer-events-none mix-blend-overlay"></div>
+                     <Users size={60} className="text-[#e5c158] drop-shadow-[0_0_15px_rgba(229,193,88,0.6)] mb-4 z-10" />
+                     <h2 className="text-2xl font-black text-app-text z-10 mb-2">Invite Friends, <br/>Earn <span className="text-[#e5c158]">₹100</span></h2>
+                     <p className="text-sm text-app-text-muted z-10 font-medium">When your friend signs up and plays their first cash contest, you get ₹100 Bonus!</p>
+                 </div>
+
+                 <div className="mt-8 bg-app-card rounded-xl border border-app-border overflow-hidden">
+                    <div className="p-4 border-b border-app-border flex items-center justify-between">
+                       <span className="font-bold text-sm text-app-text">Your Referral Code</span>
+                    </div>
+                    <div className="p-4 flex flex-col gap-3">
+                        <div className="bg-app-bg border border-app-border rounded-lg p-4 flex items-center justify-between">
+                            <span className="font-mono text-lg font-bold tracking-widest text-[#e5c158]">{user?.id?.substring(0, 6).toUpperCase() || 'GUEST1'}</span>
+                            <button className="text-app-text-muted hover:text-white transition-colors p-2 active:scale-95 bg-app-card-hover rounded-full">
+                                <Copy size={20} />
+                            </button>
+                        </div>
+                        <button className="w-full bg-[#1da1f2] text-white font-bold py-3.5 rounded-xl flex items-center justify-center gap-2 shadow-lg active:scale-95 transition-transform hover:bg-[#1a91da]">
+                           Share via WhatsApp / Social
+                        </button>
+                    </div>
+                 </div>
+                 
+                 <div className="mt-8 px-2">
+                     <h3 className="font-bold text-app-text-muted text-sm uppercase tracking-wider mb-4">How it works</h3>
+                     <div className="flex flex-col gap-6 relative before:absolute before:left-3 before:top-4 before:bottom-4 before:w-px before:bg-app-border">
+                         <div className="flex gap-4 relative">
+                             <div className="w-6 h-6 rounded-full bg-app-card border-2 border-[#e5c158] text-[#e5c158] flex items-center justify-center text-xs font-bold font-mono z-10 shrink-0">1</div>
+                             <div className="flex flex-col pt-0.5">
+                                 <span className="font-bold text-app-text text-sm">Share Link</span>
+                                 <span className="text-xs text-app-text-muted">Share your unique link with friends</span>
+                             </div>
+                         </div>
+                         <div className="flex gap-4 relative">
+                             <div className="w-6 h-6 rounded-full bg-app-card border-2 border-[#e5c158] text-[#e5c158] flex items-center justify-center text-xs font-bold font-mono z-10 shrink-0">2</div>
+                             <div className="flex flex-col pt-0.5">
+                                 <span className="font-bold text-app-text text-sm">Friend Joins</span>
+                                 <span className="text-xs text-app-text-muted">They sign up using your link</span>
+                             </div>
+                         </div>
+                         <div className="flex gap-4 relative">
+                             <div className="w-6 h-6 rounded-full bg-[#e5c158] text-black flex items-center justify-center text-xs font-bold font-mono z-10 shrink-0"><Check size={14} strokeWidth={4}/></div>
+                             <div className="flex flex-col pt-0.5">
+                                 <span className="font-bold text-app-text text-sm">Earn Reward</span>
+                                 <span className="text-xs text-[#e5c158] font-bold">You get ₹100 Bonus!</span>
+                             </div>
+                         </div>
+                     </div>
+                 </div>
+             </div>
+          </div>
+      )}
+
+      {showHowToPlay && (
+          <div className="fixed inset-0 z-[150] bg-app-bg text-app-text flex flex-col font-sans overflow-hidden max-w-md mx-auto">
+             <header className="p-4 flex items-center gap-4 bg-app-card border-b border-app-border shrink-0">
+                <button onClick={() => setShowHowToPlay(false)} className="text-app-text-muted hover:text-app-text transition-colors"><ArrowLeft size={24}/></button>
+                <div className="flex-1">
+                   <h1 className="text-lg font-bold">How To Play</h1>
+                   <p className="text-[10px] text-app-text-muted">Learn the rules and scoring</p>
+                </div>
+             </header>
+             <div className="flex-1 overflow-y-auto p-5 text-sm space-y-6">
+                 <div>
+                    <h3 className="font-bold text-app-text text-base mb-2">1. Select a Match</h3>
+                    <p className="text-app-text-muted">Choose an upcoming match from the home screen.</p>
+                 </div>
+                 <div>
+                    <h3 className="font-bold text-app-text text-base mb-2">2. Create your Team</h3>
+                    <p className="text-app-text-muted">Use your sports knowledge to build a winning fantasy team with 100 credits.</p>
+                 </div>
+                 <div>
+                    <h3 className="font-bold text-app-text text-base mb-2">3. Join Contests</h3>
+                    <p className="text-app-text-muted">Join cash or practice contests to compete with other users.</p>
+                 </div>
+                 <div>
+                    <h3 className="font-bold text-app-text text-base mb-2">4. Follow Live & Win</h3>
+                    <p className="text-app-text-muted">Watch your team score points based on real-world performance! Top the leaderboard and win real money.</p>
+                 </div>
+
+                 <div className="bg-app-card border border-app-border rounded-xl p-4 mt-4">
+                     <h4 className="font-bold text-[#e5c158] mb-3 text-center uppercase tracking-wider text-xs">Standard Scoring Rules</h4>
+                     <ul className="space-y-2 text-xs">
+                        <li className="flex justify-between items-center"><span className="text-app-text-muted">Run</span> <span className="font-bold text-app-text">+1</span></li>
+                        <li className="flex justify-between items-center"><span className="text-app-text-muted">Boundary Bonus</span> <span className="font-bold text-app-text">+1</span></li>
+                        <li className="flex justify-between items-center"><span className="text-app-text-muted">Six Bonus</span> <span className="font-bold text-app-text">+2</span></li>
+                        <li className="flex justify-between items-center border-t border-app-border/50 pt-2"><span className="text-app-text-muted">Wicket</span> <span className="font-bold text-app-text">+25</span></li>
+                        <li className="flex justify-between items-center"><span className="text-app-text-muted">LBW/Bowled Bonus</span> <span className="font-bold text-app-text">+8</span></li>
+                        <li className="flex justify-between items-center border-t border-app-border/50 pt-2"><span className="text-app-text-muted">Catch</span> <span className="font-bold text-app-text">+8</span></li>
+                        <li className="flex justify-between items-center"><span className="text-slate-400">Stump/Run Out</span> <span className="font-bold text-app-text">+12</span></li>
+                     </ul>
+                 </div>
+             </div>
           </div>
       )}
 

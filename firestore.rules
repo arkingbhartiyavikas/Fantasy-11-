@@ -97,5 +97,9 @@ service cloud.firestore {
       allow get, list: if isAdmin() || (isSignedIn() && existing().userId == request.auth.uid);
       allow update, delete: if isAdmin();
     }
+    match /adminSettings/{docId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
   }
 }
