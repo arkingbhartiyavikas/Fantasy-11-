@@ -7066,17 +7066,18 @@ export default function App() {
                                                       throw new Error("Withdrawal request does not exist!");
                                                   }
                                                   
+                                                  const wDoc = await transaction.get(wRef);
+
                                                   const currentStatus = reqDoc.data().status;
                                                   if (currentStatus === 'Rejected' || currentStatus === 'Cancelled') {
                                                       throw new Error(`Request has already been processed as ${currentStatus}!`);
                                                   }
 
-                                                  // Update request status atomically to prevent double processing
-                                                  transaction.update(reqRef, { status: 'Rejected' });
-
-                                                  const wDoc = await transaction.get(wRef);
                                                   const currentWinning = wDoc.exists() ? Number(wDoc.data().winning || 0) : 0;
                                                   computedWinning = currentWinning + withdrawalAmount;
+
+                                                  // All writes at the end
+                                                  transaction.update(reqRef, { status: 'Rejected' });
                                                   transaction.set(wRef, { winning: computedWinning }, { merge: true });
                                               });
                                               if (computedWinning > 0) {
@@ -7158,11 +7159,17 @@ export default function App() {
                                          let newDepositBalance = 0;
                                          await runTransaction(db, async (transaction) => {
                                             const reqRef = doc(db, 'deposits', req.id);
+                                            // READS FIRST
+                                            let wDoc = null;
+                                            const wRef = req.userId ? doc(db, 'wallets', req.userId) : null;
+                                            if (wRef) {
+                                               wDoc = await transaction.get(wRef);
+                                            }
+
+                                            // WRITES SECOND
                                             transaction.update(reqRef, { status: 'Approved', screenshot: null });
                                             
-                                            if (req.userId) {
-                                               const wRef = doc(db, 'wallets', req.userId);
-                                               const wDoc = await transaction.get(wRef);
+                                            if (wDoc && wRef) {
                                                const amt = Number(req.amount) || 0;
                                                if (wDoc.exists() && amt > 0) {
                                                   newDepositBalance = (wDoc.data().deposit || 0) + amt;
