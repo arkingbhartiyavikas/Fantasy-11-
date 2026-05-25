@@ -142,6 +142,9 @@ interface DepositRequest {
 
 // Triple-Sync Helper (sync to Redis, Supabase, Firestore)
 export const syncWalletToBackend = async (dbInstance: any, userId: string, data: any) => {
+  // Always write directly to Firestore client-side
+  await setDoc(doc(dbInstance, 'wallets', userId), data, { merge: true });
+
   try {
     const res = await fetch('/api/sync', {
       method: 'POST',
@@ -150,8 +153,7 @@ export const syncWalletToBackend = async (dbInstance: any, userId: string, data:
     });
     if (!res.ok) throw new Error('API Sync Failed');
   } catch (err) {
-    console.warn("Triple-sync request failed, updating firestore directly:", err);
-    await setDoc(doc(dbInstance, 'wallets', userId), data, { merge: true });
+    console.warn("Triple-sync request failed", err);
   }
 };
 
@@ -1216,7 +1218,12 @@ export default function App() {
          // Perform DB sync OUTSIDE the setter to avoid repeated calls and side-effects in render cycle
          setTimeout(() => {
              if (user?.id) {
-                // Call our standard backend triple-sync
+                // ALWAYS update Firestore client-side directly
+                setDoc(doc(db, 'wallets', user.id), next, { merge: true }).catch(err => {
+                    handleFsError(err, 'sync_wallet_local', user.id);
+                });
+                
+                // Then call our standard backend triple-sync for Redis/Supabase
                 fetch('/api/sync', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
@@ -1227,10 +1234,6 @@ export default function App() {
                   })
                 }).catch(e => {
                   console.error("Triple-sync error:", e);
-                  // Optional fallback
-                  setDoc(doc(db, 'wallets', user.id), next, { merge: true }).catch(err => {
-                    handleFsError(err, 'sync_wallet_local', user.id);
-                  });
                 });
              }
          }, 10);
@@ -1497,11 +1500,28 @@ export default function App() {
                 timestamp: new Date().toLocaleTimeString()
               };
 
-              setDoc(doc(db, 'withdrawals', newReq.id), newReq).then(() => {
-                 updateWallet(prev => ({ ...prev, winning: prev.winning - withdrawAmount }));
+              const batch = writeBatch(db);
+              batch.set(doc(db, 'withdrawals', newReq.id), newReq);
+              
+              const newWalletState = { ...wallet, winning: wallet.winning - withdrawAmount };
+              batch.set(doc(db, 'wallets', user?.id || ''), { winning: newWalletState.winning }, { merge: true });
+
+              batch.commit().then(async () => {
+                 setWallet(newWalletState);
+                 try {
+                     await fetch('/api/sync', {
+                       method: 'POST',
+                       headers: { 'Content-Type': 'application/json' },
+                       body: JSON.stringify({ collection: 'wallets', id: user?.id, data: newWalletState })
+                     });
+                 } catch(e) {}
+                 
                  alert("Withdrawal request submitted! Admin will process it soon.");
                  setWithdrawAmount(0);
                  setView('WALLET');
+              }).catch((err) => {
+                 console.error("Withdrawal failed:", err);
+                 alert("Failed to process withdrawal. Please try again.");
               });
             }}
             disabled={withdrawAmount < 110 || !withdrawAccountId}
@@ -7134,16 +7154,29 @@ export default function App() {
                                  <button 
                                    onClick={async () => {
                                       // Accept Logic
-                                      await setDoc(doc(db, 'deposits', req.id), { ...req, status: 'Approved', screenshot: null });
-                                      if (req.userId) {
-                                         const wRef = doc(db, 'wallets', req.userId);
-                                         const wDoc = await getDoc(wRef);
-                                         if (wDoc.exists()) {
-                                            const curr = wDoc.data();
-                                            await setDoc(wRef, { ...curr, deposit: (curr.deposit || 0) + req.amount });
+                                      try {
+                                         let newDepositBalance = 0;
+                                         await runTransaction(db, async (transaction) => {
+                                            const reqRef = doc(db, 'deposits', req.id);
+                                            transaction.update(reqRef, { status: 'Approved', screenshot: null });
+                                            
+                                            if (req.userId) {
+                                               const wRef = doc(db, 'wallets', req.userId);
+                                               const wDoc = await transaction.get(wRef);
+                                               const amt = Number(req.amount) || 0;
+                                               if (wDoc.exists() && amt > 0) {
+                                                  newDepositBalance = (wDoc.data().deposit || 0) + amt;
+                                                  transaction.set(wRef, { deposit: newDepositBalance }, { merge: true });
+                                               }
+                                            }
+                                         });
+                                         if (newDepositBalance > 0 && req.userId) {
+                                            await syncWalletToBackend(db, req.userId, { deposit: newDepositBalance });
                                          }
+                                         alert(`Accepted! ₹${req.amount} added to user wallet.`);
+                                      } catch (err: any) {
+                                         alert("Error processing deposit: " + err.message);
                                       }
-                                      alert(`Accepted! ₹${req.amount} added to user wallet.`);
                                    }}
                                    className="flex-1 bg-green-500/20 hover:bg-green-500/30 text-green-400 border border-green-500/50 font-bold py-2.5 rounded-lg active:scale-[0.98] transition-all text-xs text-center uppercase tracking-widest"
                                  >
