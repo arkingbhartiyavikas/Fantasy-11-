@@ -1104,9 +1104,8 @@ export default function App() {
         if (isSubscribed) setBankAccounts(snap.docs.map(d => d.data() as BankAccount));
     }, (e) => handleFsError(e, 'listen_banks'));
 
-    // Optimization: Standard users only listen to their own teams.
-    // Admin should NOT listen to the entire userTeams collection in real-time as it kills quota.
-    const teamsQuery = query(collection(db, 'userTeams'), where('userId', '==', user.id));
+    // All users should listen to the entire userTeams collection so they can see opponents in contests.
+    const teamsQuery = collection(db, 'userTeams');
 
     const unsubUserTeams = onSnapshot(teamsQuery, (snap) => {
         if (!isSubscribed) return;
@@ -2430,6 +2429,29 @@ export default function App() {
 
     const instanceId = Math.floor(sameContestTeams.length / instanceSpots);
     
+    if (fee > 0 && user?.id && user?.id !== 'admin_bot' && user?.id !== 'admin_bot_boot') {
+        let nDep = wallet?.deposit || 0;
+        let nWin = wallet?.winning || 0;
+        let nBon = wallet?.bonus || 0;
+        const currentTotal = nDep + nWin + nBon;
+
+        if (currentTotal < fee) {
+            alert(`Insufficient wallet balance (₹${currentTotal}) to pay ₹${fee} entry fee. Please add cash.`);
+            setView('WALLET');
+            return;
+        }
+
+        let rem = fee;
+        if (nBon >= rem) { nBon -= rem; rem = 0; }
+        else { rem -= nBon; nBon = 0; }
+        if (rem > 0 && nDep >= rem) { nDep -= rem; rem = 0; }
+        else if (rem > 0) { rem -= nDep; nDep = 0; }
+        if (rem > 0 && nWin >= rem) { nWin -= rem; rem = 0; }
+        else if (rem > 0) { rem -= nWin; nWin = 0; }
+
+        updateWallet({ deposit: nDep, winning: nWin, bonus: nBon });
+    }
+    
     const liteMatch = activeMatch ? { id: activeMatch.id, series: activeMatch.series, team1: activeMatch.team1, team2: activeMatch.team2, status: activeMatch.status } : null;
 
     const newTeamMeta = {
@@ -2479,41 +2501,8 @@ export default function App() {
        setDoc(doc(db, 'userTeams', newId), newTeamMeta).catch(e => handleFsError(e, 'save_user_team', userTeamPath));
     }
 
-    // Optional: Deduct balance for Mega Contest
-    if (balance >= fee) {
-       updateWallet((prev: any) => {
-           let remaining = fee;
-           const newWal = { ...prev };
-           
-           if (newWal.deposit >= remaining) {
-               newWal.deposit -= remaining;
-               remaining = 0;
-           } else {
-               remaining -= newWal.deposit;
-               newWal.deposit = 0;
-           }
-
-           if (remaining > 0 && newWal.winning >= remaining) {
-               newWal.winning -= remaining;
-               remaining = 0;
-           } else if (remaining > 0) {
-               remaining -= newWal.winning;
-               newWal.winning = 0;
-           }
-
-           if (remaining > 0) {
-               newWal.bonus = Math.max(0, newWal.bonus - remaining);
-           }
-           
-           return newWal;
-       });
-
-       alert(`🎉 Successfully joined the ${contestName}!\n\n₹${fee} deducted from Wallet.`);
-       setView('MY_MATCHES');
-    } else {
-       alert("Team Saved! But insufficient balance to join contest. Add cash to wallet.");
-       setView('WALLET');
-    }
+    alert(`🎉 Successfully joined the ${contestName}!\n\n₹${fee} deducted from Wallet.`);
+    setView('MY_MATCHES');
   };
 
   // --- Common UI Components ---
@@ -7050,6 +7039,7 @@ export default function App() {
                                                   return;
                                               }
 
+                                              let computedWinning = 0;
                                               await runTransaction(db, async (transaction) => {
                                                   const reqDoc = await transaction.get(reqRef);
                                                   if (!reqDoc.exists()) {
@@ -7065,13 +7055,13 @@ export default function App() {
                                                   transaction.update(reqRef, { status: 'Rejected' });
 
                                                   const wDoc = await transaction.get(wRef);
-                                                  if (wDoc.exists()) {
-                                                      const currentWinning = Number(wDoc.data().winning || 0);
-                                                      const newWinningBalance = currentWinning + withdrawalAmount;
-                                                      // Update wallet winning balance atomically
-                                                      transaction.update(wRef, { winning: newWinningBalance });
-                                                  }
+                                                  const currentWinning = wDoc.exists() ? Number(wDoc.data().winning || 0) : 0;
+                                                  computedWinning = currentWinning + withdrawalAmount;
+                                                  transaction.set(wRef, { winning: computedWinning }, { merge: true });
                                               });
+                                              if (computedWinning > 0) {
+                                                  await syncWalletToBackend(db, req.userId, { winning: computedWinning });
+                                              }
                                               alert(`Withdrawal rejected. Amount strictly refunded to user wallet.`);
                                            } else {
                                               await setDoc(doc(db, 'withdrawals', req.id), { ...req, status: 'Rejected' });
