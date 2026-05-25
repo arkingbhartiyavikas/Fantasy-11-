@@ -556,7 +556,11 @@ const ContestDetailsView = ({
      // Calculate Dense Ranking: 1, 1, 2, 2, 3...
      let currentRank = 0;
      let lastPoints = -1;
+     const isUpcoming = activeMatch?.status === 'Upcoming';
      return sorted.map((team) => {
+        if (isUpcoming) {
+           return { ...team, rank: '-' };
+        }
         const p = team.points || 0;
         if (p !== lastPoints) {
            currentRank++;
@@ -564,7 +568,7 @@ const ContestDetailsView = ({
         }
         return { ...team, rank: currentRank };
      });
-  }, [contestTeams, appPlayers]);
+  }, [contestTeams, appPlayers, activeMatch?.status]);
 
   const getPayouts = () => {
     if (contest.payouts && contest.payouts.length > 0) {
