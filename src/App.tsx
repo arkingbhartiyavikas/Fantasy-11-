@@ -2479,9 +2479,9 @@ export default function App() {
 
     const teamIdStr = `T${savedTeams.length + 1}`;
     const newId = Date.now().toString();
-    const contestDef = appContests?.find(c => c.name === contestName) || (DEFAULT_CONTESTS && DEFAULT_CONTESTS[0]) || { spots: 2, name: 'Contest', fee: 59 };
+    const contestDef = appContests?.find(c => (selectedContest?.id ? c.id === selectedContest.id : c.name === contestName)) || (DEFAULT_CONTESTS && DEFAULT_CONTESTS[0]) || { spots: 2, name: 'Contest', fee: 59 };
     const instanceSpots = (contestDef && contestDef.spots > 0) ? contestDef.spots : 2;
-    const sameContestTeams = (savedTeams || []).filter(t => t.match?.id === activeMatch?.id && t.contestName === contestName);
+    const sameContestTeams = (savedTeams || []).filter(t => t.match?.id === activeMatch?.id && (t.contestId ? t.contestId === selectedContest?.id : t.contestName === contestName));
 
     const userTeamsInSameContest = sameContestTeams.filter(t => t.userId === (user?.id || 'guest'));
     if (contestDef && contestDef.maxTeams && userTeamsInSameContest.length >= contestDef.maxTeams) {
@@ -2524,6 +2524,7 @@ export default function App() {
       captain,
       viceCaptain,
       contestName: contestName,
+      contestId: selectedContest?.id || null,
       fee: fee,
       userId: user?.id || 'guest',
       userNumericId: user?.numericId,
@@ -2960,7 +2961,7 @@ export default function App() {
     // Minimal match payload
     const liteMatch = { id: activeMatch?.id };
     
-    const sameContestTeams = savedTeams.filter(t => t.match?.id === activeMatch?.id && t.contestName === contest.name);
+    const sameContestTeams = savedTeams.filter(t => t.match?.id === activeMatch?.id && (t.contestId ? t.contestId === contest.id : t.contestName === contest.name));
     const instanceSpots = contest.spots > 0 ? contest.spots : 2;
     let baseCount = sameContestTeams.length;
 
@@ -2980,6 +2981,7 @@ export default function App() {
            captain: bp.captain,
            viceCaptain: bp.viceCaptain,
            contestName: contest.name,
+           contestId: contest.id,
            fee: contest.entryFee,
            userId: type === 'BOOT' ? 'admin_bot_boot' : 'admin_bot',
            userName: type === 'BOOT' ? `BOOT ${timestamp.toString().slice(-3)}${i}` : randomName,
@@ -2993,7 +2995,7 @@ export default function App() {
   const handleRemoveBot = (e: React.MouseEvent, contest: Contest, type: 'AUTO' | 'BOOT' = 'AUTO', amount: number = 1) => {
      e.stopPropagation();
      setSavedTeams(prev => {
-        const bots = prev.filter(t => t.match?.id === activeMatch?.id && t.contestName === contest.name && t.userId === (type === 'BOOT' ? 'admin_bot_boot' : 'admin_bot'));
+        const bots = prev.filter(t => t.match?.id === activeMatch?.id && (t.contestId ? t.contestId === contest.id : t.contestName === contest.name) && t.userId === (type === 'BOOT' ? 'admin_bot_boot' : 'admin_bot'));
         if (bots.length === 0) return prev;
         const botsToRemove = bots.slice(-amount).map(b => b.id); // remove the last 'amount' added
         const newTeams = prev.filter(t => !botsToRemove.includes(t.id));
@@ -3005,8 +3007,8 @@ export default function App() {
 
   const renderBotControls = (contest: Contest) => {
      if (!isAdmin || !activeMatch) return null;
-     const botTeamsAuto = savedTeams.filter(t => t.match?.id === activeMatch?.id && t.contestName === contest.name && t.userId === 'admin_bot');
-     const botTeamsBoot = savedTeams.filter(t => t.match?.id === activeMatch?.id && t.contestName === contest.name && t.userId === 'admin_bot_boot');
+     const botTeamsAuto = savedTeams.filter(t => t.match?.id === activeMatch?.id && (t.contestId ? t.contestId === contest.id : t.contestName === contest.name) && t.userId === 'admin_bot');
+     const botTeamsBoot = savedTeams.filter(t => t.match?.id === activeMatch?.id && (t.contestId ? t.contestId === contest.id : t.contestName === contest.name) && t.userId === 'admin_bot_boot');
      const botCountAuto = botTeamsAuto.length;
      const botCountBoot = botTeamsBoot.length;
      
@@ -3088,11 +3090,11 @@ export default function App() {
     const myTeamsCount = userTeamsInMatch.length;
     
     // Calculate unique contests joined by user
-    const distinctMyContests: { contestName: string, instanceId: number }[] = [];
+    const distinctMyContests: { contestId?: string, contestName: string, instanceId: number }[] = [];
     userTeamsInMatch.forEach(t => {
        const iId = t.instanceId || 0;
-       if (!distinctMyContests.find(existing => existing.contestName === t.contestName && existing.instanceId === iId)) {
-          distinctMyContests.push({ contestName: t.contestName, instanceId: iId });
+       if (!distinctMyContests.find(existing => (t.contestId ? existing.contestId === t.contestId : existing.contestName === t.contestName) && existing.instanceId === iId)) {
+          distinctMyContests.push({ contestId: t.contestId, contestName: t.contestName, instanceId: iId });
        }
     });
     const myContestsCount = distinctMyContests.length;
@@ -3155,19 +3157,19 @@ export default function App() {
           {(matchTab === 'Contests' && (activeMatch?.status === 'Upcoming' || isAdmin)) && (
              <>
               {megaContests.map(c => {
-                const totalTeamsCount = savedTeams.filter(t => t.match?.id === activeMatch?.id && t.contestName === c.name).length;
+                const totalTeamsCount = savedTeams.filter(t => t.match?.id === activeMatch?.id && (t.contestId ? t.contestId === c.id : t.contestName === c.name)).length;
                 const spotsLeft = Math.max(0, c.spots - totalTeamsCount);
                 const fillPercent = Math.min(100, (totalTeamsCount / c.spots) * 100);
                 
                 return (
-                <div key={c.id} onClick={() => { setActiveContestDetails(c); setView('CONTEST_DETAILS'); }} className="bg-app-card rounded-xl shadow-sm border border-app-border overflow-hidden mb-4 cursor-pointer active:scale-[0.99] transition-transform relative">
-                  <div className="p-4 border-b border-app-border">
+                <div key={c.id} onClick={() => { setActiveContestDetails(c); setView('CONTEST_DETAILS'); }} className="bg-app-card rounded-xl shadow-sm border border-app-border overflow-hidden mb-3 cursor-pointer active:scale-[0.99] transition-transform relative">
+                  <div className="p-3 border-b border-app-border">
                     <div className="flex justify-between items-center mb-1">
-                       <p className="text-xs text-app-text-muted font-semibold">Prize Pool</p>
+                       <p className="text-[10px] text-app-text-muted font-semibold uppercase tracking-wider">Prize Pool</p>
                        {renderBotControls(c)}
                     </div>
-                    <div className="flex justify-between items-center mb-4">
-                      <p className="text-3xl font-black text-app-text">{c.prizeText}</p>
+                    <div className="flex justify-between items-center mb-2.5">
+                      <p className="text-2xl font-black text-app-text">{c.prizeText}</p>
                       <button 
                         onClick={(e) => {
                           e.stopPropagation();
@@ -3178,21 +3180,21 @@ export default function App() {
                           setSelectedContest({fee: c.entryFee, name: c.name, id: c.id, spots: c.spots});
                           setView('CREATE_TEAM');
                         }}
-                        className={`${activeMatch?.status === 'Upcoming' ? 'bg-green-600 active:scale-95 hover:bg-green-700' : 'bg-slate-700'} transition-all text-white font-bold py-1.5 px-6 rounded text-lg shadow-sm`}
+                        className={`${activeMatch?.status === 'Upcoming' ? 'bg-green-600 active:scale-95 hover:bg-green-700' : 'bg-slate-700'} transition-all text-white font-bold py-1 px-5 rounded text-base shadow-sm`}
                       >
                         ₹{c.entryFee}
                       </button>
                     </div>
-                    <div className="bg-app-bg h-1.5 rounded-full mb-2 overflow-hidden">
+                    <div className="bg-app-bg h-1.5 rounded-full mb-1.5 overflow-hidden">
                       <div className="bg-app-accent h-full" style={{width:`${fillPercent}%`}}></div>
                     </div>
-                    <div className="flex justify-between text-[10px] text-app-text-muted font-semibold">
+                    <div className="flex justify-between text-[9px] text-app-text-muted font-semibold">
                       <span className="text-red-400">{Number(spotsLeft || 0).toLocaleString('en-IN')} spots left</span>
                       <span>{Number(c.spots || 0).toLocaleString('en-IN')} spots</span>
                     </div>
                   </div>
                   
-                  <div className="p-3 bg-slate-50/5 dark:bg-app-card-inner flex shrink-0 items-center justify-start gap-6 text-[11px] font-semibold text-app-text-muted">
+                  <div className="p-2 bg-slate-50/5 dark:bg-app-card-inner flex shrink-0 items-center justify-start gap-4 text-[10px] font-semibold text-app-text-muted">
                     <span className="flex items-center gap-1.5"><div className="w-4 h-4 rounded-full border border-yellow-500 text-[#e5c158] flex items-center justify-center text-[8px] font-bold bg-[#e5c158]/10">1st</div> {c.firstPrize || '₹10 Lakh'}</span>
                     <span className="flex items-center gap-1.5"><Trophy size={11} className="text-app-text-muted"/> {c.winPercentage || 48}%</span>
                     <span className="flex items-center gap-1.5"><div className="w-4 h-4 border border-slate-500 rounded flex items-center justify-center text-[8px] font-bold text-app-text-muted">M</div> {c.maxTeams || 20}</span>
@@ -3201,21 +3203,21 @@ export default function App() {
               )})}
 
               {h2hContests.map(c => {
-                const totalTeamsCount = savedTeams.filter(t => t.match?.id === activeMatch?.id && t.contestName === c.name).length;
+                const totalTeamsCount = savedTeams.filter(t => t.match?.id === activeMatch?.id && (t.contestId ? t.contestId === c.id : t.contestName === c.name)).length;
                 const cspots = c.spots > 0 ? c.spots : 2;
                 const teamsInCurrentInstance = totalTeamsCount % cspots;
                 const spotsLeft = cspots - teamsInCurrentInstance;
                 const fillPercent = (teamsInCurrentInstance / cspots) * 100;
                 
                 return (
-                <div key={c.id} onClick={() => { setActiveContestInstanceId(Math.floor(totalTeamsCount / cspots)); setActiveContestDetails(c); setView('CONTEST_DETAILS'); }} className="bg-app-card rounded-xl shadow-sm border border-app-border overflow-hidden mb-4 cursor-pointer active:scale-[0.99] transition-transform relative">
-                  <div className="p-4 border-b border-app-border">
+                <div key={c.id} onClick={() => { setActiveContestInstanceId(Math.floor(totalTeamsCount / cspots)); setActiveContestDetails(c); setView('CONTEST_DETAILS'); }} className="bg-app-card rounded-xl shadow-sm border border-app-border overflow-hidden mb-3 cursor-pointer active:scale-[0.99] transition-transform relative">
+                  <div className="p-3 border-b border-app-border">
                     <div className="flex justify-between items-center mb-1">
-                       <p className="text-xs text-app-text-muted font-semibold">Prize Pool</p>
+                       <p className="text-[10px] text-app-text-muted font-semibold uppercase tracking-wider">Prize Pool</p>
                        {renderBotControls(c)}
                     </div>
-                    <div className="flex justify-between items-center mb-4">
-                        <p className="text-3xl font-black text-app-text">{c.prizeText}</p>
+                    <div className="flex justify-between items-center mb-2.5">
+                        <p className="text-2xl font-black text-app-text">{c.prizeText}</p>
                         <button 
                         onClick={(e) => {
                             e.stopPropagation();
@@ -3227,20 +3229,20 @@ export default function App() {
                             setSelectedContest({fee: c.entryFee, name: c.name, id: c.id, spots: c.spots});
                             setView('CREATE_TEAM');
                           }}
-                          className={`${activeMatch?.status === 'Upcoming' ? 'bg-green-600 active:scale-95 hover:bg-green-700' : 'bg-slate-700'} transition-all text-white font-bold py-1.5 px-6 rounded text-lg shadow-sm border-b-2 border-green-800`}
+                          className={`${activeMatch?.status === 'Upcoming' ? 'bg-green-600 active:scale-95 hover:bg-green-700' : 'bg-slate-700'} transition-all text-white font-bold py-1 px-5 rounded text-base shadow-sm border-b-2 border-green-800`}
                         >
                           ₹{c.entryFee}
                         </button>
                     </div>
-                    <div className="bg-app-bg h-1.5 rounded-full mb-2 overflow-hidden">
+                    <div className="bg-app-bg h-1.5 rounded-full mb-1.5 overflow-hidden">
                       <div className="bg-app-accent h-full" style={{width: `${fillPercent}%`}}></div>
                     </div>
-                    <div className="flex justify-between text-[10px] text-app-text-muted font-semibold">
+                    <div className="flex justify-between text-[9px] text-app-text-muted font-semibold">
                       <span className="text-red-400">{spotsLeft} spots left</span>
                       <span>{cspots} spots</span>
                     </div>
                   </div>
-                  <div className="p-3 bg-slate-50/5 dark:bg-app-card-inner flex shrink-0 items-center justify-start gap-6 text-[11px] font-semibold text-app-text-muted">
+                  <div className="p-2 bg-slate-50/5 dark:bg-app-card-inner flex shrink-0 items-center justify-start gap-4 text-[10px] font-semibold text-app-text-muted">
                     <span className="flex items-center gap-1.5"><div className="w-4 h-4 rounded-full border border-yellow-500 text-[#e5c158] flex items-center justify-center text-[8px] font-bold bg-[#e5c158]/10">1st</div> {c.firstPrize || c.prizeText}</span>
                     <span className="flex items-center gap-1.5"><Trophy size={11} className="text-app-text-muted"/> {c.winPercentage || 50}%</span>
                     <span className="flex items-center gap-1.5"><div className="w-4 h-4 border border-slate-500 rounded flex items-center justify-center text-[8px] font-bold text-app-text-muted">M</div> {c.maxTeams || 1}</span>
@@ -3260,9 +3262,9 @@ export default function App() {
                      </div>
                 ) : (
                     distinctMyContests.map((dc, i) => {
-                        const c = appContests.find(cc => cc.name === dc.contestName);
+                        const c = appContests.find(cc => dc.contestId ? cc.id === dc.contestId : cc.name === dc.contestName);
                         if (!c) return null;
-                        const totalTeamsCount = savedTeams.filter(t => t.match?.id === activeMatch?.id && t.contestName === c.name).length;
+                        const totalTeamsCount = savedTeams.filter(t => t.match?.id === activeMatch?.id && (t.contestId ? t.contestId === c.id : t.contestName === c.name)).length;
                         const cspots = c.spots > 0 ? c.spots : 2;
                         
                         let spotsLeft = 0;
@@ -3273,20 +3275,20 @@ export default function App() {
                             fillPercent = Math.min(100, (totalTeamsCount / c.spots) * 100);
                         } else {
                             // Find all teams in this specific instance
-                            const teamsInThisInstance = savedTeams.filter(t => t.match?.id === activeMatch?.id && t.contestName === c.name && t.instanceId === dc.instanceId).length;
+                            const teamsInThisInstance = savedTeams.filter(t => t.match?.id === activeMatch?.id && (t.contestId ? t.contestId === c.id : t.contestName === c.name) && t.instanceId === dc.instanceId).length;
                             spotsLeft = cspots - teamsInThisInstance;
                             fillPercent = (teamsInThisInstance / cspots) * 100;
                         }
                         
                         return (
-                         <div key={i} onClick={() => { setActiveContestInstanceId(dc.instanceId); setActiveContestDetails(c); setView('CONTEST_DETAILS'); }} className="bg-app-card rounded-xl shadow-sm border border-app-border overflow-hidden mb-4 cursor-pointer active:scale-[0.99] transition-transform relative">
-                           <div className="p-4 border-b border-app-border">
+                         <div key={i} onClick={() => { setActiveContestInstanceId(dc.instanceId); setActiveContestDetails(c); setView('CONTEST_DETAILS'); }} className="bg-app-card rounded-xl shadow-sm border border-app-border overflow-hidden mb-3 cursor-pointer active:scale-[0.99] transition-transform relative">
+                           <div className="p-3 border-b border-app-border">
                              <div className="flex justify-between items-center mb-1">
-                                <p className="text-xs text-app-text-muted font-semibold">Prize Pool</p>
+                                <p className="text-[10px] text-app-text-muted font-semibold uppercase tracking-wider">Prize Pool</p>
                                 {renderBotControls(c)}
                              </div>
-                             <div className="flex justify-between items-center mb-4">
-                                 <p className="text-3xl font-black text-app-text">{c.prizeText}</p>
+                             <div className="flex justify-between items-center mb-2.5">
+                                 <p className="text-2xl font-black text-app-text">{c.prizeText}</p>
                                  <button 
                                  onClick={(e) => {
                                      e.stopPropagation();
@@ -3298,20 +3300,20 @@ export default function App() {
                                      setSelectedContest({fee: c.entryFee, name: c.name, id: c.id, spots: c.spots});
                                      setView('CREATE_TEAM');
                                    }}
-                                   className={`${activeMatch?.status === 'Upcoming' ? 'bg-green-600 active:scale-95 hover:bg-green-700' : 'bg-slate-700'} transition-all text-white font-bold py-1.5 px-6 rounded text-lg shadow-sm border-b-2 border-green-800`}
+                                   className={`${activeMatch?.status === 'Upcoming' ? 'bg-green-600 active:scale-95 hover:bg-green-700' : 'bg-slate-700'} transition-all text-white font-bold py-1 px-5 rounded text-base shadow-sm border-b-2 border-green-800`}
                                  >
                                    ₹{c.entryFee}
                                  </button>
                              </div>
-                             <div className="bg-app-bg h-1.5 rounded-full mb-2 overflow-hidden">
+                             <div className="bg-app-bg h-1.5 rounded-full mb-1.5 overflow-hidden">
                                <div className="bg-app-accent h-full" style={{width: `${fillPercent}%`}}></div>
                              </div>
-                             <div className="flex justify-between text-[10px] text-app-text-muted font-semibold">
+                             <div className="flex justify-between text-[9px] text-app-text-muted font-semibold">
                                <span className="text-red-400">{spotsLeft} spots left</span>
                                <span>{c.type === 'Mega' ? c.spots : cspots} spots</span>
                              </div>
                            </div>
-                           <div className="p-3 bg-slate-50/5 dark:bg-app-card-inner flex shrink-0 items-center justify-start gap-6 text-[11px] font-semibold text-app-text-muted">
+                           <div className="p-2 bg-slate-50/5 dark:bg-app-card-inner flex shrink-0 items-center justify-start gap-4 text-[10px] font-semibold text-app-text-muted">
                              <span className="flex items-center gap-1.5"><div className="w-4 h-4 rounded-full border border-yellow-500 text-[#e5c158] flex items-center justify-center text-[8px] font-bold bg-[#e5c158]/10">1st</div> {c.firstPrize || c.prizeText}</span>
                              <span className="flex items-center gap-1.5"><Trophy size={11} className="text-app-text-muted"/> {c.winPercentage || (c.type === 'Mega' ? 48 : 50)}%</span>
                              <span className="flex items-center gap-1.5"><div className="w-4 h-4 border border-slate-500 rounded flex items-center justify-center text-[8px] font-bold text-app-text-muted">M</div> {c.maxTeams || (c.type === 'Mega' ? 20 : 1)}</span>
@@ -3615,18 +3617,17 @@ export default function App() {
       </div>
 
       {/* Grass Background & Pitch Lines */}
-      <div className="absolute inset-x-0 bottom-0 top-[100px] z-0 overflow-hidden bg-[#2d8a39]" style={{ backgroundImage: 'repeating-linear-gradient(90deg, rgba(255,255,255,0.03) 0px, rgba(255,255,255,0.03) 20px, transparent 20px, transparent 40px)' }}>
-          <div className="absolute inset-0" style={{ backgroundImage: 'repeating-linear-gradient(0deg, rgba(0,0,0,0.03) 0px, rgba(0,0,0,0.03) 20px, transparent 20px, transparent 40px)' }}></div>
+      <div className="absolute inset-x-0 bottom-0 top-[100px] z-0 overflow-hidden bg-[#229933]" style={{ backgroundImage: 'repeating-linear-gradient(90deg, rgba(0,0,0,0.02) 0px, rgba(0,0,0,0.02) 40px, transparent 40px, transparent 80px)' }}>
           {/* Oval pitch line */}
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[140%] sm:w-[120%] h-[92%] border-[1.5px] border-white/20 rounded-[50%]"></div>
+          <div className="absolute top-[3%] bottom-[3%] left-[5%] right-[5%] border-[1.5px] border-white/40 rounded-[50%] pointer-events-none shadow-[inset_0_0_20px_rgba(255,255,255,0.05)]"></div>
           {/* Inner circle / pitch area */}
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[80px] h-[100px] border-[1.5px] border-white/20 rounded-md">
-             <div className="absolute top-0 left-0 w-full h-[30px] border-b-[1.5px] border-white/20"></div>
-             <div className="absolute bottom-0 left-0 w-full h-[30px] border-t-[1.5px] border-white/20"></div>
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[80px] h-[100px] border-[1px] border-white/30 pointer-events-none flex flex-col justify-between">
+             <div className="w-[30px] h-[16px] mx-auto border-b-[1px] border-l-[1px] border-r-[1px] border-white/30 rounded-b-sm"></div>
+             <div className="w-[30px] h-[16px] mx-auto border-t-[1px] border-l-[1px] border-r-[1px] border-white/30 rounded-t-sm"></div>
           </div>
           {/* DABA FANTASY WATERMARK */}
-          <div className="absolute top-[65%] left-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center gap-1.5 text-white/30 font-black text-xl tracking-widest pointer-events-none w-max">
-             <Shield size={24} className="opacity-80" />
+          <div className="absolute top-[75%] left-1/2 -translate-x-1/2 flex items-center gap-1.5 text-white/20 font-black text-2xl tracking-widest pointer-events-none w-max">
+             <Shield size={28} className="opacity-80" />
              DABA FANTASY
           </div>
       </div>
@@ -3637,8 +3638,8 @@ export default function App() {
              const playersInRole = team.filter(p => p.role === role);
              if (playersInRole.length === 0) return null;
              return (
-                 <div key={role} className="flex flex-col items-center w-full">
-                     <div className="bg-[#5d1012]/0 text-white/90 text-[10px] px-2 py-0.5 rounded-full mb-3 tracking-wider font-semibold border-none bg-black/10">
+                 <div key={role} className="flex flex-col items-center w-full z-10 relative">
+                     <div className="bg-black/20 text-white text-[10px] px-3 py-0.5 rounded-full mb-2 tracking-wider font-semibold border-none shadow-sm">
                         {role === 'WK' ? 'WICKET KEEPER' : role === 'BAT' ? 'BATSMAN' : role === 'AR' ? 'ALL ROUNDERS' : 'BOWLERS'}
                      </div>
                      <div className="flex justify-center gap-2 sm:gap-6 w-full px-2">
@@ -6864,7 +6865,7 @@ export default function App() {
                appMatches.forEach(match => {
                    appContests.forEach(contest => {
                        const cspots = contest.spots > 0 ? contest.spots : 2;
-                       const teamsForThis = savedTeams.filter(t => t.match?.id === match.id && t.contestName === contest.name);
+                       const teamsForThis = savedTeams.filter(t => t.match?.id === match.id && (t.contestId ? t.contestId === contest.id : t.contestName === contest.name));
                        if (teamsForThis.length === 0) return;
                        
                        // Group by instanceId
@@ -8103,7 +8104,7 @@ export default function App() {
                 if (window.confirm("Are you sure you want to force all bots to win this contest? This will recalculate rankings immediately.")) {
                     setSavedTeams(prev => {
                         const newTeams = prev.map(t => 
-                            (t.userId === 'admin_bot' || t.userId === 'admin_bot_boot') && t.match?.id === activeMatch?.id && t.contestName === activeContestDetails.name
+                            (t.userId === 'admin_bot' || t.userId === 'admin_bot_boot') && t.match?.id === activeMatch?.id && (t.contestId ? t.contestId === activeContestDetails.id : t.contestName === activeContestDetails.name)
                             ? { ...t, isWinnerBot: true } 
                             : t
                         );
