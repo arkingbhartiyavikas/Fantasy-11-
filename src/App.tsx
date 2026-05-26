@@ -576,15 +576,24 @@ const ContestDetailsView = ({
   }, [contestTeams, appPlayers, activeMatch?.status, currentUser?.id]);
 
   const getPayouts = () => {
+    let payouts = [];
     if (contest.payouts && contest.payouts.length > 0) {
-      return contest.payouts;
+      if (contest.type === 'Mega' && contest.spots > 0) {
+         const scaleRatio = Math.min(1, Math.max(0, contestTeams.length / contest.spots));
+         payouts = contest.payouts.map(p => ({
+             ...p,
+             amount: (typeof p.amount === 'number' ? p.amount : parseFloat(p.amount.toString().replace(/[^0-9.]/g, ''))) * scaleRatio
+         }));
+      } else {
+         payouts = [...contest.payouts];
+      }
+      return payouts;
     }
 
     if (contest.type !== 'Mega') {
        return [{ rank: '1', amount: contest.firstPrize || contest.prizeText }];
     }
 
-    const payouts = [];
     if (contestTeams.length > 0) {
       if (contestTeams.length === 1) {
          payouts.push({ rank: '1', amount: totalPrizePool });
@@ -681,7 +690,7 @@ const ContestDetailsView = ({
                  {payouts.length > 0 ? payouts.map((p, i) => (
                     <div key={i} className="flex justify-between px-4 py-3 border-b border-app-border last:border-0 items-center">
                        <span className="font-bold text-app-text text-sm">{typeof p.rank === 'string' && p.rank.startsWith('#') ? '' : '#'}{p.rank}</span>
-                       <span className="font-bold text-app-text">{typeof p.amount === 'number' ? `₹${p.amount.toFixed(2)}` : p.amount}</span>
+                       <span className="font-bold text-app-text">{typeof p.amount === 'number' ? `₹${p.amount.toFixed(2).replace(/\.00$/, '')}` : p.amount}</span>
                     </div>
                  )) : (
                     <div className="p-8 text-center text-app-text-muted text-sm">
@@ -731,7 +740,7 @@ const ContestDetailsView = ({
                               </div>
                               <div className="flex flex-col">
                                  <span className="font-medium text-black dark:text-app-text text-[15px] whitespace-nowrap overflow-hidden text-ellipsis max-w-[150px]">{t.userName ? `${t.userName}(${t.teamId})` : t.userId ? `${t.userId}(${t.teamId})` : 'Guest Player'}</span>
-                                 {t.amountWon > 0 && <span className="text-[10px] text-green-600 dark:text-green-500 font-bold tracking-tight">WON ₹{t.amountWon}</span>}
+                                 {t.amountWon > 0 && <span className="text-[10px] text-green-600 dark:text-green-500 font-bold tracking-tight">WON ₹{Number(t.amountWon).toFixed(2).replace(/\.00$/, '')}</span>}
                               </div>
                            </div>
                            <div className="flex gap-4 w-32 justify-end items-center">
@@ -1876,6 +1885,14 @@ export default function App() {
 
             // Generate payouts
             let payouts = contest.payouts && contest.payouts.length > 0 ? [...contest.payouts] : [];
+            if (contest.type === 'Mega' && contest.spots > 0) {
+                 const scaleRatio = Math.min(1, Math.max(0, contestTeams.length / contest.spots));
+                 payouts = payouts.map(p => ({
+                     ...p,
+                     amount: (typeof p.amount === 'number' ? p.amount : parseFloat(p.amount.toString().replace(/[^0-9.]/g, ''))) * scaleRatio
+                 }));
+            }
+
             if (payouts.length === 0 && contestTeams.length > 0) {
                if (contest.type !== 'Mega') {
                   payouts = [{ rank: '1', amount: contest.firstPrize || contest.prizeText }];
