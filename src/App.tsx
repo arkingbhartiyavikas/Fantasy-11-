@@ -3617,32 +3617,32 @@ export default function App() {
       </div>
 
       {/* Grass Background & Pitch Lines */}
-      <div className="absolute inset-x-0 bottom-0 top-[100px] z-0 overflow-hidden bg-[#229933]" style={{ backgroundImage: 'repeating-linear-gradient(90deg, rgba(0,0,0,0.02) 0px, rgba(0,0,0,0.02) 40px, transparent 40px, transparent 80px)' }}>
+      <div className="absolute inset-x-0 bottom-0 top-[90px] z-0 overflow-hidden bg-[#229933]" style={{ backgroundImage: 'repeating-linear-gradient(90deg, rgba(0,0,0,0.02) 0px, rgba(0,0,0,0.02) 40px, transparent 40px, transparent 80px)' }}>
           {/* Oval pitch line */}
           <div className="absolute top-[3%] bottom-[3%] left-[5%] right-[5%] border-[1.5px] border-white/40 rounded-[50%] pointer-events-none shadow-[inset_0_0_20px_rgba(255,255,255,0.05)]"></div>
           {/* Inner circle / pitch area */}
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[80px] h-[100px] border-[1px] border-white/30 pointer-events-none flex flex-col justify-between">
-             <div className="w-[30px] h-[16px] mx-auto border-b-[1px] border-l-[1px] border-r-[1px] border-white/30 rounded-b-sm"></div>
-             <div className="w-[30px] h-[16px] mx-auto border-t-[1px] border-l-[1px] border-r-[1px] border-white/30 rounded-t-sm"></div>
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[60px] h-[80px] border-[1px] border-white/30 pointer-events-none flex flex-col justify-between">
+             <div className="w-[20px] h-[12px] mx-auto border-b-[1px] border-l-[1px] border-r-[1px] border-white/30 rounded-b-sm"></div>
+             <div className="w-[20px] h-[12px] mx-auto border-t-[1px] border-l-[1px] border-r-[1px] border-white/30 rounded-t-sm"></div>
           </div>
           {/* DABA FANTASY WATERMARK */}
-          <div className="absolute top-[75%] left-1/2 -translate-x-1/2 flex items-center gap-1.5 text-white/20 font-black text-2xl tracking-widest pointer-events-none w-max">
-             <Shield size={28} className="opacity-80" />
+          <div className="absolute top-[75%] left-1/2 -translate-x-1/2 flex items-center gap-1 text-white/20 font-black text-xl tracking-widest pointer-events-none w-max">
+             <Shield size={24} className="opacity-80" />
              DABA FANTASY
           </div>
       </div>
 
       {/* Players Area */}
-      <div className="flex-1 relative z-10 flex flex-col justify-around py-4">
+      <div className="flex-1 relative z-10 flex flex-col justify-around py-1 pb-4">
          {(['WK', 'BAT', 'AR', 'BOWL'] as Role[]).map(role => {
              const playersInRole = team.filter(p => p.role === role);
              if (playersInRole.length === 0) return null;
              return (
                  <div key={role} className="flex flex-col items-center w-full z-10 relative">
-                     <div className="bg-black/20 text-white text-[10px] px-3 py-0.5 rounded-full mb-2 tracking-wider font-semibold border-none shadow-sm">
+                     <div className="bg-black/20 text-white text-[9px] px-2.5 py-0.5 rounded-full mb-1 tracking-wider font-semibold border-none shadow-sm">
                         {role === 'WK' ? 'WICKET KEEPER' : role === 'BAT' ? 'BATSMAN' : role === 'AR' ? 'ALL ROUNDERS' : 'BOWLERS'}
                      </div>
-                     <div className="flex justify-center gap-2 sm:gap-6 w-full px-2">
+                     <div className="flex justify-center gap-1.5 sm:gap-4 w-full px-1">
                          {playersInRole.map(p => {
                              if (!p) return null;
                              const latestP = appPlayers.find(ap => ap.id === p.id) || p;
@@ -3651,8 +3651,8 @@ export default function App() {
                              const pName = p.name || 'Player';
                              const pPoints = Number((latestP.livePoints ?? latestP.points) || 0);
                              return (
-                             <div key={p.id} className="flex flex-col items-center cursor-pointer relative group mt-2">
-                                 <div className="relative mb-2 flex flex-col items-center">
+                             <div key={p.id} className="flex flex-col items-center cursor-pointer relative group">
+                                 <div className="relative mb-1 flex flex-col items-center">
                                      {/* Styled Avatar Circle matching Create Team */}
                                      {(() => {
                                         const isTeam1 = p.team === activeMatch?.team1?.shortFrame;
@@ -3661,18 +3661,18 @@ export default function App() {
                                         const tBorderCls = tColorRaw?.startsWith('bg-') ? tColorRaw.replace('bg-', 'border-') : tColorRaw?.startsWith('text-') ? tColorRaw.replace('text-', 'border-') : (tColorRaw?.startsWith('border-') ? tColorRaw : '');
                                         const custStyle = (!tColorRaw?.startsWith('bg-') && !tColorRaw?.startsWith('text-') && !tColorRaw?.startsWith('border-')) ? { color: tColorRaw, borderColor: tColorRaw } : {};
                                         return (
-                                           <div className="relative shrink-0 w-[50px] h-[54px] flex flex-col items-center justify-start drop-shadow-md">
+                                           <div className="relative shrink-0 w-[42px] h-[46px] flex flex-col items-center justify-start drop-shadow-sm">
                                              <div 
-                                               className={`w-[48px] h-[48px] rounded-full flex items-end justify-center relative overflow-hidden shadow-[0_0_8px_rgba(0,0,0,0.5)] border-[2px] z-10 bg-slate-800 ${tBorderCls || 'border-app-border-hover'}`}
+                                               className={`w-[40px] h-[40px] rounded-full flex items-end justify-center relative overflow-hidden shadow-[0_0_6px_rgba(0,0,0,0.5)] border-[2px] z-10 bg-slate-800 ${tBorderCls || 'border-app-border-hover'}`}
                                                style={custStyle.borderColor ? { borderColor: custStyle.borderColor } : {}}
                                              >
                                                <div className="w-full h-full flex flex-col items-center justify-end bg-gradient-to-b from-transparent to-black/40">
-                                                   <User size={36} className="text-slate-400 translate-y-1 relative z-0 drop-shadow-md" />
+                                                   <User size={30} className="text-slate-400 translate-y-1 relative z-0 drop-shadow-sm" />
                                                </div>
                                              </div>
                                              
                                              <div 
-                                               className="absolute -bottom-[2px] z-20 px-[5px] py-[2px] rounded-[4px] text-[8px] tracking-widest font-black uppercase shadow-[0_2px_4px_rgba(0,0,0,0.5)] border border-white/20 bg-[#0f172a] text-white"
+                                               className="absolute -bottom-[2px] z-20 px-[4px] py-[1px] rounded-[3px] text-[7px] tracking-widest font-black uppercase shadow-[0_2px_4px_rgba(0,0,0,0.5)] border border-white/20 bg-[#0f172a] text-white"
                                              >
                                                {p.team}
                                              </div>
@@ -3681,14 +3681,14 @@ export default function App() {
                                      })()}
 
                                    {(isC || isVC) && (
-                                     <div className={`absolute top-0 -left-2 w-[18px] h-[18px] border border-white text-white rounded-full flex items-center justify-center text-[9px] font-bold shadow-[0_0_8px_rgba(0,0,0,0.8)] z-30 ${isC ? 'bg-[#d32f2f]' : 'bg-slate-700 text-white'}`}>
+                                     <div className={`absolute -top-1 -left-1 w-[16px] h-[16px] border border-white text-white rounded-full flex items-center justify-center text-[8px] font-bold shadow-[0_0_6px_rgba(0,0,0,0.8)] z-30 ${isC ? 'bg-[#d32f2f]' : 'bg-slate-700 text-white'}`}>
                                        {isC ? 'C' : 'VC'}
                                      </div>
                                    )}
                                  </div>
-                                 <div className="bg-black/80 backdrop-blur-sm border border-white/10 text-white text-[10px] font-medium px-2 py-0.5 rounded shadow-lg whitespace-nowrap min-w-[65px] max-w-[75px] text-center truncate relative z-10">{pName}</div>
-                                 <span className="text-white text-[10px] mt-1 font-semibold drop-shadow-sm">
-                                   {isLiveOrCompleted ? `${(pPoints * (isC ? 2 : isVC ? 1.5 : 1)).toFixed(1)} Pt.` : `${p.credits || 0} Cr`}
+                                 <div className="bg-black/90 backdrop-blur-md border border-white/20 text-white text-[9px] font-medium px-1.5 py-0.5 rounded shadow-xl whitespace-nowrap min-w-[55px] max-w-[65px] text-center truncate relative z-10">{pName}</div>
+                                 <span className="text-white text-[9px] mt-0.5 font-bold drop-shadow-md">
+                                   {isLiveOrCompleted ? `${(pPoints * (isC ? 2 : isVC ? 1.5 : 1)).toFixed(1)} Pt` : `${p.credits || 0} Cr`}
                                  </span>
                              </div>
                              )
