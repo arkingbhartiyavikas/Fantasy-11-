@@ -2856,64 +2856,103 @@ export default function App() {
 
   const renderMatchCard = (match: Match) => {
     const isLineupsOut = match.lineupStatus === 'OUT' && match.status === 'Upcoming';
+    
+    // Calculate user stats for this match if it's on the home screen
+    const userTeamsForMatch = savedTeams.filter(t => t.match?.id === match.id && t.userId === (user?.id || 'guest'));
+    const distinctContestsCount = new Set(userTeamsForMatch.filter(t => (t.contestId || t.contestName)).map(t => t.contestId || t.contestName)).size;
+    const distinctTeamsCount = new Set(userTeamsForMatch.map(t => t.teamId)).size;
+    
+    // Using gradient hints based on team colors, but muted for dark theme
+    const t1Bg = !match?.team1?.color?.startsWith('bg-') ? match?.team1?.color : 'transparent';
+    const t2Bg = !match?.team2?.color?.startsWith('bg-') ? match?.team2?.color : 'transparent';
+
     return (
     <div 
       key={match.id} 
       onClick={() => handleSelectMatch(match)}
-      className="bg-app-card rounded-xl shadow-sm border border-app-border overflow-hidden mb-2.5 relative cursor-pointer active:bg-app-card-hover border-b-2"
+      className="bg-app-card rounded-xl shadow-sm border border-app-border overflow-hidden mb-3 relative cursor-pointer active:scale-[0.99] transition-transform"
     >
-      <div className="px-3 py-1.5 border-b border-app-border relative flex items-center justify-between text-[9px] text-app-text-muted font-bold bg-black/5">
-         <span>{match.seriesTitle || 'Cricket Match'}</span>
-         {match.status === 'Upcoming' && <span>{match.date?.replace(', 2026', '')}</span>}
+      <div className="px-2 pt-2.5 pb-1 text-center text-[10px] text-app-text-muted font-semibold relative">
+          <span>{match.seriesTitle || 'Cricket Match'}</span>
+          {/* Gradient line border */}
+          <div className="absolute bottom-0 left-8 right-8 h-[1px] bg-gradient-to-r from-transparent via-red-500/50 to-transparent"></div>
       </div>
 
-      <div className="px-3 py-2 flex justify-between items-center relative">
-        <div className="flex items-center gap-2 flex-1 min-w-0">
-          <div className={`w-8 h-8 rounded shrink-0 border border-app-border-hover flex items-center justify-center overflow-hidden ${match?.team1?.color?.startsWith('bg-') ? match.team1.color : ''}`} style={!match?.team1?.color?.startsWith('bg-') ? {backgroundColor: match?.team1?.color} : {}}>
-             {match?.team1?.flagUrl ? (
-                 <img src={match?.team1?.flagUrl} alt={match?.team1?.shortFrame} className={`w-full h-full ${match?.team1?.flagFit === 'contain' ? 'object-contain' : 'object-cover'}`} />
-             ) : (
-                 <span className="text-[10px] font-bold text-white">{match?.team1?.shortFrame}</span>
-             )}
+      <div className="px-3 pt-4 pb-8 flex justify-between items-center relative z-10">
+          {/* Left side fading background */}
+          <div className="absolute left-0 top-0 bottom-0 w-2/5 overflow-hidden rounded-l-xl z-0 pointer-events-none opacity-20">
+             <div className="absolute inset-0 bg-gradient-to-r from-current to-transparent" style={{ color: t1Bg }}></div>
           </div>
-          <div className="flex flex-col min-w-0">
-            <span className="text-xs font-black text-app-text truncate">{match?.team1?.shortFrame}</span>
-            <span className="text-[9px] text-app-text-muted truncate max-w-[65px]">{match?.team1?.name}</span>
+          {/* Right side fading background */}
+          <div className="absolute right-0 top-0 bottom-0 w-2/5 overflow-hidden rounded-r-xl z-0 pointer-events-none opacity-20">
+             <div className="absolute inset-0 bg-gradient-to-l from-current to-transparent" style={{ color: t2Bg }}></div>
           </div>
-        </div>
-        
-        <div className="flex flex-col items-center justify-center flex-1 shrink-0 px-2">
-          {match.status === 'Completed' ? (
-             <div className="text-app-text-muted text-[10px] font-black uppercase tracking-widest bg-app-border/50 px-2 py-0.5 rounded">Completed</div>
-          ) : match.status === 'Live' ? (
-             <div className="text-app-accent text-[10px] font-black flex items-center gap-1 bg-red-500/10 px-2 py-0.5 rounded-full"><span className="w-1.5 h-1.5 rounded-full bg-app-accent animate-pulse"></span> LIVE</div>
-          ) : (
-             <div className="text-[#e5c158] text-[10px] font-bold bg-yellow-500/10 px-2.5 py-0.5 border border-yellow-500/20 rounded">
-                {getFormattedTimer(match)}
-             </div>
-          )}
-        </div>
 
-        <div className="flex items-center gap-2 flex-1 min-w-0 justify-end flex-row-reverse text-right">
-          <div className={`w-8 h-8 rounded shrink-0 border border-app-border-hover flex items-center justify-center overflow-hidden ${match?.team2?.color?.startsWith('bg-') ? match.team2.color : ''}`} style={!match?.team2?.color?.startsWith('bg-') ? {backgroundColor: match?.team2?.color} : {}}>
-             {match?.team2?.flagUrl ? (
-                 <img src={match?.team2?.flagUrl} alt={match?.team2?.shortFrame} className={`w-full h-full ${match?.team2?.flagFit === 'contain' ? 'object-contain' : 'object-cover'}`} />
-             ) : (
-                 <span className="text-[10px] font-bold text-white">{match?.team2?.shortFrame}</span>
-             )}
+          {/* Left Team */}
+          <div className="flex flex-col items-start gap-1 z-10 w-[35%] relative">
+             <span className="text-[10px] sm:text-[11px] font-semibold text-app-text truncate w-full">{match.team1.name}</span>
+             <div className="flex items-center gap-2">
+                <div className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full shrink-0 border border-app-border flex items-center justify-center overflow-hidden bg-slate-800 ${match?.team1?.color?.startsWith('bg-') ? match.team1.color : ''}`} style={!match?.team1?.color?.startsWith('bg-') ? {backgroundColor: match?.team1?.color} : {}}>
+                   {match?.team1?.flagUrl ? (
+                       <img src={match?.team1?.flagUrl} alt={match?.team1?.shortFrame} className={`w-full h-full ${match?.team1?.flagFit === 'contain' ? 'object-contain' : 'object-cover'}`} />
+                   ) : (
+                       <span className="text-[9px] font-bold text-white">{match?.team1?.shortFrame}</span>
+                   )}
+                </div>
+                <span className="text-xs sm:text-sm font-bold text-app-text">{match.team1.shortFrame}</span>
+             </div>
           </div>
-          <div className="flex flex-col min-w-0">
-            <span className="text-xs font-black text-app-text truncate">{match?.team2?.shortFrame}</span>
-            <span className="text-[9px] text-app-text-muted truncate max-w-[65px]">{match?.team2?.name}</span>
+
+          {/* VS Center */}
+          <div className="z-10 flex flex-col items-center absolute left-1/2 -translate-x-1/2 top-1/2 -translate-y-[60%]">
+              <div className="text-3xl sm:text-4xl font-black italic text-red-600 drop-shadow-md" style={{WebkitTextStroke: '1px rgba(255,255,255,0.8)'}}>VS</div>
           </div>
-        </div>
+
+          {/* Right Team */}
+          <div className="flex flex-col items-end gap-1 z-10 w-[35%] relative text-right">
+             <span className="text-[10px] sm:text-[11px] font-semibold text-app-text truncate w-full">{match.team2.name}</span>
+             <div className="flex items-center gap-2">
+                <span className="text-xs sm:text-sm font-bold text-app-text">{match.team2.shortFrame}</span>
+                <div className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full shrink-0 border border-app-border flex items-center justify-center overflow-hidden bg-slate-800 ${match?.team2?.color?.startsWith('bg-') ? match.team2.color : ''}`} style={!match?.team2?.color?.startsWith('bg-') ? {backgroundColor: match?.team2?.color} : {}}>
+                   {match?.team2?.flagUrl ? (
+                       <img src={match?.team2?.flagUrl} alt={match?.team2?.shortFrame} className={`w-full h-full ${match?.team2?.flagFit === 'contain' ? 'object-contain' : 'object-cover'}`} />
+                   ) : (
+                       <span className="text-[9px] font-bold text-white">{match?.team2?.shortFrame}</span>
+                   )}
+                </div>
+             </div>
+          </div>
       </div>
       
-      {isLineupsOut && (
-        <div className="bg-green-500/10 border-t border-green-500/20 px-3 py-1 flex items-center justify-center">
-             <span className="text-[9px] text-green-500 font-bold flex gap-1 items-center uppercase tracking-widest"><CheckCircle size={10} /> Lineups Out</span>
-        </div>
+      {/* Overlapping Pill for Time/Status */}
+      <div className="relative flex justify-center z-20 top-2.5 -mt-6">
+         <div className="absolute h-[1px] bg-gradient-to-r from-transparent via-[#d6a596]/30 dark:via-red-500/30 to-transparent inset-x-2 top-1/2 -translate-y-1/2"></div>
+         {match.status === 'Completed' ? (
+            <div className="bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-400 rounded-xl px-4 py-0.5 text-[9px] font-bold z-10 shadow-sm border border-white dark:border-green-600 tracking-wider">
+               Completed
+            </div>
+         ) : match.status === 'Live' ? (
+            <div className="bg-white dark:bg-black text-red-600 rounded-xl px-4 py-0.5 text-[9px] font-bold z-10 shadow-sm border border-red-200 dark:border-red-800 tracking-wider flex items-center gap-1">
+               Live
+            </div>
+         ) : (
+            <div className="bg-red-600 text-white rounded-t-xl px-4 py-0.5 text-[9px] font-bold z-10 shadow-sm tracking-wider">
+               {getFormattedTimer(match)}
+            </div>
+         )}
+      </div>
+
+      {/* Overlapping Pill for Time/Status line fill (to cover bottom part for Upcoming) */}
+      {match.status === 'Upcoming' && (
+         <div className="relative flex justify-center z-[19] top-0 pointer-events-none">
+            <div className="w-24 h-2 bg-red-600 absolute -top-4 rounded-b-xl z-10"></div>
+         </div>
       )}
+
+      {/* Bottom Footer Section */}
+      <div className="bg-[#fadadd]/20 dark:bg-[#4a1c1d]/30 px-3 py-2 text-[10px] text-[#933034] dark:text-[#f8a8a9] font-bold font-sans mt-0 relative z-20">
+         {distinctTeamsCount} {distinctTeamsCount === 1 ? 'Team' : 'Teams'} - {distinctContestsCount} {distinctContestsCount === 1 ? 'Contest' : 'Contests'} Joined
+      </div>
     </div>
   );};
 
@@ -3795,6 +3834,9 @@ export default function App() {
          return currentMatchStatus === myMatchesTab;
      });
 
+     const uniqueMatchIds = Array.from(new Set(filteredTeams.map(st => st.match?.id))).filter(Boolean);
+     const joinedMatches = uniqueMatchIds.map(id => appMatches.find(m => m.id === id)).filter(Boolean) as Match[];
+
      return (
        <div className="flex flex-col h-full bg-app-bg">
           <header className="bg-app-bg text-app-text border-b border-app-border pt-4 shadow-sm shrink-0">
@@ -3804,39 +3846,22 @@ export default function App() {
                    <button 
                       key={tab}
                       onClick={() => setMyMatchesTab(tab)}
-                      className={`flex-1 py-3 text-center border-b-2 transition-colors ${myMatchesTab === tab ? 'border-app-accent text-app-accent' : 'border-transparent'}`}
+                      className={`flex-1 py-3 text-center border-b-[3px] transition-colors ${myMatchesTab === tab ? 'border-red-600 text-red-600' : 'border-transparent text-app-text-muted/60'}`}
                    >
                       {tab}
                    </button>
                 ))}
              </div>
           </header>
-          <div className="flex-1 overflow-y-auto p-4 space-y-4">
-
-             {filteredTeams.length === 0 ? (
-                 <div className="flex flex-col items-center justify-center h-full opacity-60 mt-10">
+          <div className="flex-1 overflow-y-auto px-4 py-3 bg-[rgba(255,255,255,0.03)] text-app-text">
+             {joinedMatches.length === 0 ? (
+                 <div className="flex flex-col items-center justify-center h-full opacity-60">
                     <Trophy size={60} className="text-app-text-muted mb-4" />
                     <p className="font-bold text-app-text-muted">No {myMatchesTab} matches!</p>
                     <p className="text-sm text-app-text-muted">Join a contest to see it here.</p>
                  </div>
              ) : (
-                 filteredTeams.map((st, i) => {
-                     // Check current match status from appMatches
-                     const currentMatchFromApp = appMatches.find(m => m.id === st.match?.id);
-                     const currentMatchStatus = currentMatchFromApp?.status || 'Completed';
-                     
-                     // Calculate dynamic points
-                     const totalPoints = (st.players || []).reduce((acc: number, player: Player) => {
-                        const livePlayer = appPlayers.find(p => p.id === player.id) || player;
-                        let mult = 1;
-                        if (livePlayer.id === st.captain) mult = 2;
-                        else if (livePlayer.id === st.viceCaptain) mult = 1.5;
-                        const pts = Number((livePlayer.livePoints ?? livePlayer.points) || 0);
-                        return acc + (pts * mult);
-                     }, 0);
-
-                     return renderTeamCardUI(st, i, 'MY_MATCHES', currentMatchStatus, totalPoints);
-                 })
+                 joinedMatches.map(match => renderMatchCard(match))
              )}
           </div>
           {renderBottomNav()}
