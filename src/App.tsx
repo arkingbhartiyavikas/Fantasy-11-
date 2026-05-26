@@ -576,24 +576,15 @@ const ContestDetailsView = ({
   }, [contestTeams, appPlayers, activeMatch?.status, currentUser?.id]);
 
   const getPayouts = () => {
-    let payouts = [];
     if (contest.payouts && contest.payouts.length > 0) {
-      if (contest.type === 'Mega' && contest.spots > 0) {
-         const scaleRatio = Math.min(1, Math.max(0, contestTeams.length / contest.spots));
-         payouts = contest.payouts.map(p => ({
-             ...p,
-             amount: (typeof p.amount === 'number' ? p.amount : parseFloat(p.amount.toString().replace(/[^0-9.]/g, ''))) * scaleRatio
-         }));
-      } else {
-         payouts = [...contest.payouts];
-      }
-      return payouts;
+      return contest.payouts;
     }
 
     if (contest.type !== 'Mega') {
        return [{ rank: '1', amount: contest.firstPrize || contest.prizeText }];
     }
 
+    const payouts = [];
     if (contestTeams.length > 0) {
       if (contestTeams.length === 1) {
          payouts.push({ rank: '1', amount: totalPrizePool });
