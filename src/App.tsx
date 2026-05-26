@@ -1501,6 +1501,11 @@ export default function App() {
             </div>
           )}
 
+          <div className="mt-6 mb-4 bg-[#e5c158]/10 border border-[#e5c158]/30 rounded-xl p-4 flex gap-3 text-gray-300 text-xs">
+              <Info className="text-[#e5c158] shrink-0" size={16} />
+              <p>Maximum withdrawal time is <strong className="text-[#e5c158]">24 hours</strong>. If it is not credited within this time, please contact our Help Center.</p>
+          </div>
+
           <button 
             onClick={() => {
               if (withdrawAmount < 110) {
@@ -1555,6 +1560,11 @@ export default function App() {
           >
             Withdrawal
           </button>
+          
+          <div className="mt-8 bg-[#e5c158]/10 border border-[#e5c158]/30 rounded-xl p-4 flex gap-3 text-app-text-muted text-xs">
+              <Info className="text-[#e5c158] shrink-0" size={16} />
+              <p>Maximum withdrawal time is <strong className="text-[#e5c158]">24 hours</strong>. If your withdrawal is not processed within this time, please contact our Help Center.</p>
+          </div>
         </div>
       </div>
     );
@@ -2598,6 +2608,162 @@ export default function App() {
      </header>
   );
 
+  const renderTeamCardUI = (st: any, i: number, source: 'MATCH' | 'MY_MATCHES', currentMatchStatus: string, totalPoints: number) => {
+      const t1Count = (st.players || []).filter((p: any) => p.team === st.match?.team1?.shortFrame || p.team === st.match?.team1?.name).length;
+      const t2Count = (st.players || []).filter((p: any) => p.team === st.match?.team2?.shortFrame || p.team === st.match?.team2?.name).length;
+      
+      const wkCount = (st.players || []).filter((p: any) => p.role === 'WK').length;
+      const batCount = (st.players || []).filter((p: any) => p.role === 'BAT').length;
+      const arCount = (st.players || []).filter((p: any) => p.role === 'AR').length;
+      const bowlCount = (st.players || []).filter((p: any) => p.role === 'BOWL').length;
+
+      const cap = (st.players || []).find((p: any) => p.id === st.captain);
+      const vcap = (st.players || []).find((p: any) => p.id === st.viceCaptain);
+
+      return (
+          <div key={i} className={`rounded-xl shadow-md border border-app-border overflow-hidden mb-4 ${currentMatchStatus === 'Completed' ? 'opacity-80' : ''}`} onClick={() => {
+                if (source === 'MY_MATCHES' && currentMatchStatus === 'Upcoming') {
+                    setPreviewSource(source);
+                    setPreviewTeamInfo(null);
+                    setTeam(st.players);
+                    setCaptain(st.captain);
+                    setViceCaptain(st.viceCaptain);
+                    setActiveMatch(st.match);
+                    const c = appContests.find((c: any) => c.name === st.contestName);
+                    if (c) setActiveContestDetails(c);
+                    setView('TEAM_PREVIEW');
+                    return;
+                }
+                
+                setActiveMatch(st.match);
+                setSelectedContest({ fee: st.fee, name: st.contestName });
+                const c = appContests.find((c: any) => c.name === st.contestName) || appContests[0];
+                setActiveContestInstanceId(st.instanceId);
+                setActiveContestDetails(c);
+                setView('CONTEST_DETAILS');
+            }}>
+             <div className="relative h-[130px] bg-[#2a7a37] overflow-hidden">
+                 <div className="absolute inset-0 bg-[url('https://upload.wikimedia.org/wikipedia/commons/4/4b/Cricket_field_in_green.png')] bg-cover bg-center mix-blend-overlay opacity-60"></div>
+                 
+                 <div className="absolute top-2 left-3 z-10 text-white font-medium text-sm tracking-wide shadow-sm">
+                    {st.teamId}
+                 </div>
+                 
+                 <div className="absolute top-2 right-2 z-10 flex bg-black/60 backdrop-blur-sm rounded-lg overflow-hidden border border-white/20" onClick={e => e.stopPropagation()}>
+                    <button onClick={() => {
+                        setPreviewSource(source);
+                        setPreviewTeamInfo(null);
+                        setActiveMatch(st.match);
+                        setTeam(st.players);
+                        setCaptain(st.captain);
+                        setViceCaptain(st.viceCaptain);
+                        setView('TEAM_PREVIEW');
+                    }} className="p-2 text-white hover:bg-white/20 transition-colors">
+                        <ZoomIn size={16} />
+                    </button>
+                    {currentMatchStatus === 'Upcoming' && (
+                        <button onClick={() => {
+                            const realIndex = savedTeams.findIndex(orig => orig.id === st.id);
+                            setEditingSavedTeamIndex(realIndex);
+                            setEditReturnView(source);
+                            setActiveMatch(st.match);
+                            const cMatch = appContests.find((cc: any) => cc.name === st.contestName);
+                            if (cMatch) setActiveContestDetails(cMatch);
+                            setActiveContestInstanceId(st.instanceId);
+                            setSelectedContest({ fee: st.fee, name: st.contestName });
+                            setTeam(st.players || []);
+                            setCaptain(st.captain || null);
+                            setViceCaptain(st.viceCaptain || null);
+                            setView('CREATE_TEAM');
+                        }} className="p-2 text-white hover:bg-white/20 transition-colors border-l border-white/20">
+                            <Edit2 size={16} />
+                        </button>
+                    )}
+                    <button onClick={() => {
+                        setActiveMatch(st.match);
+                        const cMatch = appContests.find((cc: any) => cc.name === st.contestName);
+                        if (cMatch) setActiveContestDetails(cMatch);
+                        setActiveContestInstanceId(st.instanceId);
+                        setSelectedContest({ fee: st.fee, name: st.contestName });
+                        setTeam(st.players);
+                        setCaptain(null);
+                        setViceCaptain(null);
+                        setView('SELECT_CAPTAIN');
+                    }} className="p-2 text-white hover:bg-white/20 transition-colors border-l border-white/20">
+                        <Copy size={16} />
+                    </button>
+                 </div>
+                 
+                 <div className="absolute bottom-2 left-3 right-3 flex justify-between items-end z-10">
+                    <div className="flex gap-2">
+                        <div className="flex flex-col items-center">
+                            <span className="text-[10px] font-bold text-white mb-0.5">{st.match?.team1?.shortFrame}</span>
+                            <div className="bg-[#1b5e20] text-white font-bold w-9 h-9 rounded shadow border border-white/20 flex items-center justify-center text-sm">
+                                {t1Count}
+                            </div>
+                        </div>
+                        <div className="flex flex-col items-center">
+                            <span className="text-[10px] font-bold text-white mb-0.5">{st.match?.team2?.shortFrame}</span>
+                            <div className="bg-[#1b5e20] text-white font-bold w-9 h-9 rounded shadow border border-white/20 flex items-center justify-center text-sm">
+                                {t2Count}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div className="flex gap-4">
+                        {cap && (
+                            <div className="flex flex-col items-center relative">
+                                <div className="absolute -top-1 -left-1 bg-[#d32f2f] text-white text-[10px] font-black w-4 h-4 flex items-center justify-center rounded-full border border-white z-10 shadow-sm">C</div>
+                                <div className="w-12 h-12 rounded-full overflow-hidden bg-slate-200 border-2 border-white shadow-md relative">
+                                   {cap.image ? <img src={cap.image} alt={cap.name} className="w-full h-full object-cover" /> : <User size={28} className="text-slate-400 absolute bottom-0 left-1/2 -translate-x-1/2" />}
+                                </div>
+                                <span className="bg-white text-black text-[9px] font-bold px-2 py-0.5 mt-1 rounded shadow-sm border border-slate-200 truncate max-w-[70px]">{cap.name.split(' ')[0]}</span>
+                            </div>
+                        )}
+                        {vcap && (
+                            <div className="flex flex-col items-center relative">
+                                <div className="absolute -top-1 -left-1 bg-[#546e7a] text-white text-[10px] font-black w-4 h-4 flex items-center justify-center rounded-full border border-white z-10 shadow-sm">VC</div>
+                                <div className="w-12 h-12 rounded-full overflow-hidden bg-slate-200 border-2 border-white shadow-md relative">
+                                   {vcap.image ? <img src={vcap.image} alt={vcap.name} className="w-full h-full object-cover" /> : <User size={28} className="text-slate-400 absolute bottom-0 left-1/2 -translate-x-1/2" />}
+                                </div>
+                                <span className="bg-white text-black text-[9px] font-bold px-2 py-0.5 mt-1 rounded shadow-sm border border-slate-200 truncate max-w-[70px]">{vcap.name.split(' ')[0]}</span>
+                            </div>
+                        )}
+                    </div>
+                 </div>
+                 
+                 {(currentMatchStatus === 'Live' || currentMatchStatus === 'Completed') && (
+                     <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-black/60 px-3 py-1 rounded-full border border-white/20 text-center backdrop-blur-sm z-20 shadow-lg">
+                         <span className="text-[10px] text-white/80 uppercase font-bold tracking-wider mb-0.5 block">Points</span>
+                         <span className="text-white font-black leading-none">{totalPoints}</span>
+                     </div>
+                 )}
+             </div>
+             
+             <div className="bg-[#ffe4e6] dark:bg-[#4c1d2e] px-4 py-2 flex justify-between items-center text-[10px] font-bold text-slate-700 dark:text-red-100 tracking-wide">
+                 <span>WK <span className="text-black dark:text-white font-black">{wkCount}</span></span>
+                 <span>BAT <span className="text-black dark:text-white font-black">{batCount}</span></span>
+                 <span>AR <span className="text-black dark:text-white font-black">{arCount}</span></span>
+                 <span>BOWL <span className="text-black dark:text-white font-black">{bowlCount}</span></span>
+             </div>
+             
+             {(currentMatchStatus === 'Completed' && st.prizeDistributed && st.amountWon !== undefined && st.amountWon > 0) && (
+                 <div className="px-4 py-1.5 bg-yellow-500/10 border-t border-[#e5c158]/30 flex justify-center text-[11px] font-black text-[#e5c158] tracking-wider uppercase">
+                     Won ₹{Number(st.amountWon || 0).toFixed(2)}
+                 </div>
+             )}
+             
+             {/* Contest Info label if present */}
+             {(st.contestName) && (
+                <div className="bg-app-bg px-3 py-1.5 border-t border-app-border flex justify-between items-center text-[10px] font-bold text-app-text-muted">
+                    <span>{st.contestName}</span>
+                    <span>Entry: ₹{st.fee}</span>
+                </div>
+             )}
+          </div>
+      )
+  };
+
   // --- Main Screens ---
 
   const renderHome = () => (
@@ -2687,58 +2853,68 @@ export default function App() {
     </div>
   );
 
-  const renderMatchCard = (match: Match) => (
+  const renderMatchCard = (match: Match) => {
+    const isLineupsOut = match.lineupStatus === 'OUT' && match.status === 'Upcoming';
+    return (
     <div 
       key={match.id} 
       onClick={() => handleSelectMatch(match)}
-      className="bg-app-card rounded-xl relative flex flex-col p-4 pb-2 cursor-pointer active:scale-[0.98] transition-all shadow-sm border border-app-border/50"
+      className="bg-app-card rounded-xl shadow-sm border border-app-border overflow-hidden mb-2.5 relative cursor-pointer active:bg-app-card-hover border-b-2"
     >
-      <div className="flex justify-between items-center mb-3">
-        <div className="flex flex-col items-center">
-          <div className={`w-12 h-12 rounded-full flex items-center justify-center font-bold text-lg text-app-text border-2 border-app-border-hover overflow-hidden shadow-inner ${match?.team1?.color?.startsWith('bg-') ? match.team1.color : ''}`} style={!match?.team1?.color?.startsWith('bg-') ? {backgroundColor: match?.team1?.color} : {}}>
+      <div className="px-3 py-1.5 border-b border-app-border relative flex items-center justify-between text-[9px] text-app-text-muted font-bold bg-black/5">
+         <span>{match.seriesTitle || 'Cricket Match'}</span>
+         {match.status === 'Upcoming' && <span>{match.date?.replace(', 2026', '')}</span>}
+      </div>
+
+      <div className="px-3 py-2 flex justify-between items-center relative">
+        <div className="flex items-center gap-2 flex-1 min-w-0">
+          <div className={`w-8 h-8 rounded shrink-0 border border-app-border-hover flex items-center justify-center overflow-hidden ${match?.team1?.color?.startsWith('bg-') ? match.team1.color : ''}`} style={!match?.team1?.color?.startsWith('bg-') ? {backgroundColor: match?.team1?.color} : {}}>
              {match?.team1?.flagUrl ? (
                  <img src={match?.team1?.flagUrl} alt={match?.team1?.shortFrame} className={`w-full h-full ${match?.team1?.flagFit === 'contain' ? 'object-contain' : 'object-cover'}`} />
              ) : (
-                 match?.team1?.shortFrame
+                 <span className="text-[10px] font-bold text-white">{match?.team1?.shortFrame}</span>
              )}
           </div>
-          <span className="text-xs text-app-text mt-1 font-semibold">{match?.team1?.shortFrame}</span>
+          <div className="flex flex-col min-w-0">
+            <span className="text-xs font-black text-app-text truncate">{match?.team1?.shortFrame}</span>
+            <span className="text-[9px] text-app-text-muted truncate max-w-[65px]">{match?.team1?.name}</span>
+          </div>
         </div>
         
-        <div className="flex flex-col items-center">
-          <span className="text-[10px] text-app-text-muted font-bold mb-0.5">VS</span>
-          {match.lineupStatus === 'OUT' && match.status === 'Upcoming' && <span className="text-[8px] bg-green-500/20 text-green-500 border border-green-500/30 font-bold px-1.5 py-0.5 rounded-sm mb-1 uppercase tracking-wider">LINEUPS OUT</span>}
+        <div className="flex flex-col items-center justify-center flex-1 shrink-0 px-2">
           {match.status === 'Completed' ? (
-             <div className="bg-app-card-hover text-app-text-muted text-[10px] font-bold px-2 py-0.5 rounded">COMPLETED</div>
+             <div className="text-app-text-muted text-[10px] font-black uppercase tracking-widest bg-app-border/50 px-2 py-0.5 rounded">Completed</div>
           ) : match.status === 'Live' ? (
-             <div className="text-app-accent text-xs font-bold flex items-center gap-1"><div className="w-1.5 h-1.5 rounded-full bg-app-accent animate-pulse"></div> LIVE</div>
+             <div className="text-app-accent text-[10px] font-black flex items-center gap-1 bg-red-500/10 px-2 py-0.5 rounded-full"><span className="w-1.5 h-1.5 rounded-full bg-app-accent animate-pulse"></span> LIVE</div>
           ) : (
-             <div className="text-[#FFD700] text-xs font-bold">{getFormattedTimer(match)}</div>
+             <div className="text-[#e5c158] text-[10px] font-bold bg-yellow-500/10 px-2.5 py-0.5 border border-yellow-500/20 rounded">
+                {getFormattedTimer(match)}
+             </div>
           )}
         </div>
 
-        <div className="flex flex-col items-center">
-          <div className={`w-12 h-12 rounded-full flex items-center justify-center font-bold text-lg text-app-text border-2 border-app-border-hover overflow-hidden shadow-inner ${match?.team2?.color?.startsWith('bg-') ? match.team2.color : ''}`} style={!match?.team2?.color?.startsWith('bg-') ? {backgroundColor: match?.team2?.color} : {}}>
+        <div className="flex items-center gap-2 flex-1 min-w-0 justify-end flex-row-reverse text-right">
+          <div className={`w-8 h-8 rounded shrink-0 border border-app-border-hover flex items-center justify-center overflow-hidden ${match?.team2?.color?.startsWith('bg-') ? match.team2.color : ''}`} style={!match?.team2?.color?.startsWith('bg-') ? {backgroundColor: match?.team2?.color} : {}}>
              {match?.team2?.flagUrl ? (
                  <img src={match?.team2?.flagUrl} alt={match?.team2?.shortFrame} className={`w-full h-full ${match?.team2?.flagFit === 'contain' ? 'object-contain' : 'object-cover'}`} />
              ) : (
-                 match?.team2?.shortFrame
+                 <span className="text-[10px] font-bold text-white">{match?.team2?.shortFrame}</span>
              )}
           </div>
-          <span className="text-xs text-app-text mt-1 font-semibold">{match?.team2?.shortFrame}</span>
+          <div className="flex flex-col min-w-0">
+            <span className="text-xs font-black text-app-text truncate">{match?.team2?.shortFrame}</span>
+            <span className="text-[9px] text-app-text-muted truncate max-w-[65px]">{match?.team2?.name}</span>
+          </div>
         </div>
       </div>
       
-      <div className="bg-app-card-hover rounded-lg flex justify-between p-2 mt-2 -mx-2 -mb-2 items-center">
-        <div className="flex items-center text-[10px] font-bold text-app-text-muted gap-1.5">
-          {match.status === 'Live' ? <div className="text-app-accent hover:animate-pulse">● In Progress</div> : <div><Clock size={10} className="inline mr-1 -mt-0.5"/> {match.time}</div>}
+      {isLineupsOut && (
+        <div className="bg-green-500/10 border-t border-green-500/20 px-3 py-1 flex items-center justify-center">
+             <span className="text-[9px] text-green-500 font-bold flex gap-1 items-center uppercase tracking-widest"><CheckCircle size={10} /> Lineups Out</span>
         </div>
-        <div className="flex items-center text-[10px] font-bold text-app-text-muted">
-           <Trophy size={10} className="text-[#e5c158] mr-1"/> {match.totalPrize}
-        </div>
-      </div>
+      )}
     </div>
-  );
+  );};
 
   const handleAddBot = (e: React.MouseEvent, contest: Contest, type: 'AUTO' | 'BOOT' = 'AUTO', amount: number = 1) => {
     e.stopPropagation();
@@ -3157,7 +3333,7 @@ export default function App() {
                      </div>
                 ) : (
                    savedTeams.filter(t => t.match?.id === activeMatch?.id && t.userId === (user?.id || 'guest')).map((st, i) => {
-                       const currentMatchStatus = activeMatch?.status;
+                       const currentMatchStatus = activeMatch?.status || 'Completed';
                        const totalPoints = (st.players || []).reduce((acc: number, player: Player) => {
                           const livePlayer = appPlayers.find(p => p.id === player.id) || player;
                           let mult = 1;
@@ -3165,43 +3341,7 @@ export default function App() {
                           else if (livePlayer.id === st.viceCaptain) mult = 1.5;
                           return acc + ((livePlayer.livePoints ?? livePlayer.points) * mult);
                        }, 0);
-                       return (
-                           <div key={i} className={`bg-app-card rounded-xl shadow-sm border border-app-border overflow-hidden ${currentMatchStatus === 'Completed' ? 'opacity-60' : ''}`}>
-                              <div className="p-4 flex flex-col gap-3 text-sm">
-                                 <div className="flex justify-between items-center">
-                                   <span className="font-bold">{st.match?.team1?.name}</span>
-                                   <div className="flex flex-col items-center">
-                                      <span className="bg-red-50 text-app-accent px-2 py-1 rounded text-[10px] font-bold">{currentMatchStatus === 'Live' ? 'In Progress' : currentMatchStatus === 'Completed' ? 'Ended' : st.match?.time}</span>
-                                      {(currentMatchStatus === 'Live' || currentMatchStatus === 'Completed') && (
-                                         <span className="text-sm font-black text-green-500 mt-1">{totalPoints} pts</span>
-                                      )}
-                                      {currentMatchStatus === 'Completed' && st.prizeDistributed && st.amountWon !== undefined && (
-                                         <span className="text-xs font-black text-[#e5c158] mt-0.5 tracking-tight uppercase">Won ₹{Number(st.amountWon || 0).toFixed(2)}</span>
-                                      )}
-                                   </div>
-                                   <span className="font-bold">{st.match?.team2?.name}</span>
-                                 </div>
-                                 <div className="bg-app-bg rounded p-2 flex justify-between items-center border border-app-border">
-                                   <span className="text-xs font-bold text-app-text-muted">{st.contestName}</span>
-                                   <span className="text-xs font-bold text-app-text-muted">Entry: ₹{st.fee}</span>
-                                 </div>
-                              </div>
-                              <div className="px-4 py-3 bg-app-card-inner border-t border-app-border flex justify-between items-center gap-3">
-                                 <button 
-                                     onClick={() => {
-                                         setSelectedContest({ fee: st.fee, name: st.contestName });
-                                         const c = appContests.find(c => c.name === st.contestName) || appContests[0];
-                                         setActiveContestInstanceId(st.instanceId);
-                                         setActiveContestDetails(c);
-                                         setView('CONTEST_DETAILS');
-                                     }} 
-                                     className={`font-bold text-xs active:opacity-70 w-full py-2 rounded-full text-center border bg-app-accent text-white border-blue-600`}
-                                 >
-                                     Dashboard / Leaderboard ({st.teamId})
-                                 </button>
-                              </div>
-                           </div>
-                       )
+                       return renderTeamCardUI(st, i, 'MATCH', currentMatchStatus, totalPoints);
                    })
                 )}
              </>
@@ -3694,137 +3834,7 @@ export default function App() {
                         return acc + (pts * mult);
                      }, 0);
 
-                     return (
-                         <div key={i} className={`bg-app-card rounded-xl shadow-sm border border-app-border overflow-hidden ${currentMatchStatus === 'Completed' ? 'opacity-60' : ''}`}>
-                            <div className="px-3 py-2.5 bg-app-card-inner border-b border-app-border flex justify-between items-center text-xs font-bold text-app-text-muted">
-                               <div className="flex items-center gap-2 flex-1 min-w-0 pr-2">
-                                  <span className="truncate max-w-[40%] sm:max-w-none">{st.match?.series}</span>
-                                  {currentMatchStatus === 'Upcoming' && (
-                                     <div className="flex flex-shrink-0 gap-1.5">
-                                        <button 
-                                           onClick={(e) => {
-                                               e.stopPropagation();
-                                               setActiveMatch(st.match);
-                                               const cMatch = appContests.find(cc => cc.name === st.contestName);
-                                               if (cMatch) setActiveContestDetails(cMatch);
-                                               setActiveContestInstanceId(st.instanceId);
-                                               setSelectedContest({ fee: st.fee, name: st.contestName });
-                                               setTeam([]);
-                                               setCaptain(null);
-                                               setViceCaptain(null);
-                                               setView('CREATE_TEAM');
-                                           }}
-                                           className="flex items-center gap-1 bg-app-card border border-app-border px-1.5 py-0.5 rounded text-[9px] sm:text-[10px] text-app-text-muted shadow-sm active:bg-app-bg"
-                                        >
-                                           <PlusCircle size={10} className="text-green-600" /> NEW
-                                        </button>
-                                        <button 
-                                           onClick={(e) => {
-                                               e.stopPropagation();
-                                               setActiveMatch(st.match);
-                                               const cMatch = appContests.find(cc => cc.name === st.contestName);
-                                               if (cMatch) setActiveContestDetails(cMatch);
-                                               setActiveContestInstanceId(st.instanceId);
-                                               setSelectedContest({ fee: st.fee, name: st.contestName });
-                                               setTeam(st.players);
-                                               setCaptain(null);
-                                               setViceCaptain(null);
-                                               setView('SELECT_CAPTAIN');
-                                           }}
-                                           className="flex items-center gap-1 bg-app-card border border-app-border px-1.5 py-0.5 rounded text-[9px] sm:text-[10px] text-app-text-muted shadow-sm active:bg-app-bg"
-                                        >
-                                           <Copy size={10} className="text-blue-600" /> CLONE
-                                        </button>
-                                     </div>
-                                  )}
-                               </div>
-                               <div className="shrink-0 text-[10px] sm:text-xs">
-                                 {currentMatchStatus === 'Live' ? (
-                                    <span className="text-app-accent flex items-center gap-1"><div className="w-1.5 h-1.5 rounded-full bg-app-accent animate-pulse"></div> LIVE</span>
-                                 ) : currentMatchStatus === 'Completed' ? (
-                                    <span className="text-green-600">Completed</span>
-                                 ) : (
-                                     <button 
-                                      onClick={(e) => {
-                                          e.stopPropagation();
-                                          const realIndex = savedTeams.findIndex(orig => orig.id === st.id);
-                                          setEditingSavedTeamIndex(realIndex);
-                                          setEditReturnView('MY_MATCHES');
-                                          setActiveMatch(st.match);
-                                          const cMatch = appContests.find(cc => cc.name === st.contestName);
-                                          if (cMatch) setActiveContestDetails(cMatch);
-                                          setActiveContestInstanceId(st.instanceId);
-                                          setSelectedContest({ fee: st.fee, name: st.contestName });
-                                          setTeam(st.players || []);
-                                          setCaptain(st.captain || null);
-                                          setViceCaptain(st.viceCaptain || null);
-                                          setView('CREATE_TEAM');
-                                      }}
-                                      className="text-app-text-muted hover:text-blue-600 p-1 hover:bg-blue-50 rounded-full transition-colors flex flex-col items-center justify-center"
-                                      title="Edit Team"
-                                    >
-                                       <Edit2 size={16} />
-                                     </button>
-                                  )}
-                                </div>
-                             </div>
-                            <div className="p-4 flex flex-col gap-3 text-sm">
-                               <div className="flex justify-between items-center text-center">
-                                 <div className="flex flex-col items-center gap-1 w-20">
-                                   <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm overflow-hidden shadow-inner border border-app-border bg-app-bg ${st.match?.team1?.color?.startsWith('bg-') ? st.match.team1.color : ''}`} style={!st.match?.team1?.color?.startsWith('bg-') ? {backgroundColor: st.match?.team1?.color} : {}}>
-                                      {st.match?.team1?.flagUrl ? <img src={st.match?.team1?.flagUrl} className={`w-full h-full ${st.match?.team1?.flagFit === 'contain' ? 'object-contain' : 'object-cover'}`} /> : st.match?.team1?.shortFrame}
-                                   </div>
-                                   <span className="font-bold text-xs truncate w-full">{st.match?.team1?.shortFrame}</span>
-                                 </div>
-                                 <div className="flex flex-col items-center flex-1">
-                                    <span className="bg-red-50 text-app-accent px-2 py-1 rounded text-[10px] font-bold">{currentMatchStatus === 'Live' ? 'In Progress' : currentMatchStatus === 'Completed' ? 'Ended' : st.match?.time}</span>
-                                    {(currentMatchStatus === 'Live' || currentMatchStatus === 'Completed') && (
-                                       <span className="text-sm font-black text-green-500 mt-1">{totalPoints} pts</span>
-                                    )}
-                                    {currentMatchStatus === 'Completed' && st.prizeDistributed && st.amountWon !== undefined && (
-                                       <span className="text-xs font-black text-[#e5c158] mt-0.5 tracking-tight uppercase">Won ₹{Number(st.amountWon || 0).toFixed(2)}</span>
-                                    )}
-                                 </div>
-                                 <div className="flex flex-col items-center gap-1 w-20">
-                                   <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm overflow-hidden shadow-inner border border-app-border bg-app-bg ${st.match?.team2?.color?.startsWith('bg-') ? st.match.team2.color : ''}`} style={!st.match?.team2?.color?.startsWith('bg-') ? {backgroundColor: st.match?.team2?.color} : {}}>
-                                      {st.match?.team2?.flagUrl ? <img src={st.match?.team2?.flagUrl} className={`w-full h-full ${st.match?.team2?.flagFit === 'contain' ? 'object-contain' : 'object-cover'}`} /> : st.match?.team2?.shortFrame}
-                                   </div>
-                                   <span className="font-bold text-xs truncate w-full">{st.match?.team2?.shortFrame}</span>
-                                 </div>
-                               </div>
-                               <div className="bg-app-bg rounded p-2 flex justify-between items-center border border-app-border">
-                                 <span className="text-xs font-bold text-app-text-muted">{st.contestName}</span>
-                                 <span className="text-xs font-bold text-app-text-muted">Entry: ₹{st.fee}</span>
-                               </div>
-                            </div>
-                            <div className="px-4 py-3 bg-app-card-inner border-t border-app-border flex justify-between items-center gap-3">
-                               <button 
-                                   onClick={() => {
-                                       const latestMatch = appMatches.find(m => m.id === st.match?.id) || st.match;
-                                       if (currentMatchStatus !== 'Upcoming') {
-                                           setActiveMatch(latestMatch);
-                                           setSelectedContest({ fee: st.fee, name: st.contestName });
-                                           const c = appContests.find(c => c.name === st.contestName) || appContests[0];
-                                           setActiveContestInstanceId(st.instanceId);
-                                           setActiveContestDetails(c);
-                                           setView('CONTEST_DETAILS');
-                                       } else {
-                                           setActiveMatch(latestMatch);
-                                           setTeam(st.players);
-                                           setCaptain(st.captain);
-                                           setViceCaptain(st.viceCaptain);
-                                           setPreviewTeamInfo(null);
-                                           setPreviewSource('MY_MATCHES');
-                                           setView('TEAM_PREVIEW');
-                                       }
-                                   }} 
-                                   className={`font-bold text-xs active:opacity-70 w-full py-2 rounded-full text-center border ${currentMatchStatus !== 'Upcoming' ? 'bg-app-accent text-white border-blue-600' : 'text-blue-600 bg-blue-50 border-blue-200 shadow-sm'}`}
-                               >
-                                   {currentMatchStatus !== 'Upcoming' ? `Dashboard / Leaderboard (${st.teamId})` : `View Team (${st.teamId})`}
-                               </button>
-                            </div>
-                         </div>
-                     )
+                     return renderTeamCardUI(st, i, 'MY_MATCHES', currentMatchStatus, totalPoints);
                  })
              )}
           </div>
@@ -3944,7 +3954,13 @@ export default function App() {
                     <p className="text-xs font-bold text-app-text-muted uppercase mb-3">Select Payment Method</p>
                     <div className="space-y-3">
                        <button 
-                         onClick={() => setPaymentMethod('Google Pay')}
+                         onClick={() => {
+                            if (parseFloat(paymentAmount) < 100 || isNaN(parseFloat(paymentAmount))) {
+                                alert("Minimum deposit amount is ₹100");
+                                return;
+                            }
+                            setPaymentMethod('Google Pay');
+                         }}
                          className="w-full bg-app-card-inner border border-app-border hover:border-blue-500 rounded-xl shadow-sm flex items-center active:bg-app-bg text-left overflow-hidden h-14"
                        >
                          <div className="w-[70px] h-full bg-white flex items-center justify-center shrink-0 border-r border-app-border py-2">
@@ -3955,7 +3971,13 @@ export default function App() {
                          </div>
                        </button>
                        <button 
-                         onClick={() => setPaymentMethod('PhonePe')}
+                         onClick={() => {
+                            if (parseFloat(paymentAmount) < 100 || isNaN(parseFloat(paymentAmount))) {
+                                alert("Minimum deposit amount is ₹100");
+                                return;
+                            }
+                            setPaymentMethod('PhonePe');
+                         }}
                          className="w-full bg-app-card-inner border border-app-border hover:border-purple-500 rounded-xl shadow-sm flex items-center active:bg-app-bg text-left overflow-hidden h-14"
                        >
                          <div className="w-[70px] h-full bg-white flex items-center justify-center shrink-0 border-r border-app-border py-2">
@@ -3966,7 +3988,13 @@ export default function App() {
                          </div>
                        </button>
                        <button 
-                         onClick={() => setPaymentMethod('Paytm')}
+                         onClick={() => {
+                            if (parseFloat(paymentAmount) < 100 || isNaN(parseFloat(paymentAmount))) {
+                                alert("Minimum deposit amount is ₹100");
+                                return;
+                            }
+                            setPaymentMethod('Paytm');
+                         }}
                          className="w-full bg-app-card-inner border border-app-border hover:border-blue-400 rounded-xl shadow-sm flex items-center active:bg-app-bg text-left overflow-hidden h-14"
                        >
                          <div className="w-[70px] h-full bg-white flex items-center justify-center shrink-0 border-r border-app-border py-2 px-2">
@@ -3977,7 +4005,13 @@ export default function App() {
                          </div>
                        </button>
                        <button 
-                         onClick={() => setPaymentMethod('UPI')}
+                         onClick={() => {
+                            if (parseFloat(paymentAmount) < 100 || isNaN(parseFloat(paymentAmount))) {
+                                alert("Minimum deposit amount is ₹100");
+                                return;
+                            }
+                            setPaymentMethod('UPI');
+                         }}
                          className="w-full bg-app-card-inner border border-app-border hover:border-orange-500 rounded-xl shadow-sm flex items-center active:bg-app-bg text-left overflow-hidden h-14"
                        >
                          <div className="w-[70px] h-full bg-white flex items-center justify-center shrink-0 border-r border-app-border py-2">
@@ -3987,6 +4021,11 @@ export default function App() {
                            UPI
                          </div>
                        </button>
+                    </div>
+                    
+                    <div className="mt-6 bg-[#e5c158]/10 border border-[#e5c158]/30 rounded-xl p-4 flex gap-3 text-app-text-muted text-xs">
+                        <Info className="text-[#e5c158] shrink-0" size={16} />
+                        <p>Maximum deposit time is <strong className="text-[#e5c158]">30 minutes</strong>. If your deposit is not credited within this time, please contact our Help Center.</p>
                     </div>
                   </>
                 ) : (
@@ -7077,13 +7116,34 @@ export default function App() {
               <input type="text" value={helpSettingsInput.whatsapp} onChange={e => setHelpSettingsInput({...helpSettingsInput, whatsapp: e.target.value})} className="bg-black/50 border border-slate-800 rounded p-2 focus:border-[#e5c158] outline-none" placeholder="https://wa.me/..." />
            </div>
            <div className="flex flex-col gap-1">
-              <label className="font-bold text-xs">Help Image (e.g. Barcode)</label>
+              <label className="font-bold text-xs">Help Image (e.g. Barcode/QR)</label>
               <input type="file" accept="image/*" onChange={e => {
                   const file = e.target.files?.[0];
                   if (file) {
                       const reader = new FileReader();
-                      reader.onloadend = () => {
-                          setHelpSettingsInput({...helpSettingsInput, barcode: reader.result as string});
+                      reader.onload = (ev) => {
+                          const img = new Image();
+                          img.onload = () => {
+                              const canvas = document.createElement('canvas');
+                              let width = img.width;
+                              let height = img.height;
+                              const MAX_SIZE = 600;
+                              
+                              if (width > height && width > MAX_SIZE) {
+                                  height *= MAX_SIZE / width;
+                                  width = MAX_SIZE;
+                              } else if (height > MAX_SIZE) {
+                                  width *= MAX_SIZE / height;
+                                  height = MAX_SIZE;
+                              }
+                              
+                              canvas.width = width;
+                              canvas.height = height;
+                              const ctx = canvas.getContext('2d');
+                              ctx?.drawImage(img, 0, 0, width, height);
+                              setHelpSettingsInput({...helpSettingsInput, barcode: canvas.toDataURL('image/jpeg', 0.8)});
+                          };
+                          img.src = ev.target?.result as string;
                       };
                       reader.readAsDataURL(file);
                   }
@@ -8625,7 +8685,7 @@ export default function App() {
                       <div className="mt-8 flex flex-col items-center">
                           <span className="text-[10px] text-app-text-muted font-bold uppercase tracking-widest mb-3">Scan to connect</span>
                           <div className="bg-white p-2 rounded-xl shadow-lg border border-app-border">
-                             <img src={helpSettings.barcode} alt="Barcode" className="w-[180px] h-[180px] object-contain rounded-lg" onError={e => e.currentTarget.style.display = 'none'} />
+                             <img src={helpSettings.barcode} alt="Barcode" className="w-[180px] h-[180px] object-contain rounded-lg" />
                           </div>
                       </div>
                   ) : null}
