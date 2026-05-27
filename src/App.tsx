@@ -1322,27 +1322,9 @@ export default function App() {
     };
   }, [isAdmin, view, firestoreQuotaExceeded]);
 
-  // Fetch opponents' teams ONLY when viewing Contest Details or Match to avoid excessive quota usage
-  useEffect(() => {
-    if ((view === 'CONTEST_DETAILS' || view === 'MATCH') && activeMatch) {
-       getDocs(query(collection(db, 'userTeams'), where('match.id', '==', activeMatch.id))).then(snap => {
-           const matchTeams = snap.docs.map(d => d.data() as any);
-           setSavedTeams(prev => {
-                const newTeams = [...prev];
-                const idMap = new Map(newTeams.map((t, i) => [t.id, i]));
-                matchTeams.forEach(ut => {
-                    if (idMap.has(ut.id)) {
-                        newTeams[idMap.get(ut.id)!] = ut;
-                    } else {
-                        newTeams.push(ut);
-                        idMap.set(ut.id, newTeams.length - 1);
-                    }
-                });
-                return newTeams;
-           });
-       }).catch(e => console.error("Failed to load match teams", e));
-    }
-  }, [view, activeMatch?.id]);
+  // (Opponents' teams live fetching has been disabled to save Firestore quota during testing as requested)
+  // Opponents generated through the bot system will still be fetched via the chunk synchronizer.
+
 
   // Hook to save local wallet edits to DB (e.g. from playing contests)
   useEffect(() => {
