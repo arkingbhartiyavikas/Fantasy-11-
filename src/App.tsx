@@ -554,19 +554,12 @@ const ContestDetailsView = ({
      const sorted = teamsWithPoints.sort((a, b) => (b.points || 0) - (a.points || 0));
      
      // Calculate Dense Ranking: 1, 1, 2, 2, 3...
-     let currentRank = 0;
-     let lastPoints = -1;
-     const isUpcoming = activeMatch?.status === 'Upcoming';
-     const rankedTeams = sorted.map((team) => {
+     const rankedTeams = sorted.map((team, index) => {
         if (isUpcoming) {
            return { ...team, points: '-', rank: '-' };
         }
-        const p = team.points || 0;
-        if (p !== lastPoints) {
-           currentRank++;
-           lastPoints = p;
-        }
-        return { ...team, rank: currentRank };
+        const rank = index + 1;
+        return { ...team, rank: rank };
      });
 
      // Move current user's teams to the top for display
@@ -1834,12 +1827,21 @@ export default function App() {
 
         const contestNames = Array.from(new Set(matchTeams.map(t => t.contestName)));
         
+        const batchChunks = [];
+        let currentBatch = writeBatch(db);
+        let batchCount = 0;
+        let platformProfit = 0;
+
+        const commitBatchIfNeeded = () => {
+             if (batchCount >= 450) {
+                 batchChunks.push(currentBatch.commit());
+                 currentBatch = writeBatch(db);
+                 batchCount = 0;
+             }
+        };
+
         let localBalanceUpdate = 0;
         let localWinCount = 0;
-        let platformProfit = 0;
-        
-        const batch = writeBatch(db);
-        let batchCount = 0;
         
         contestNames.forEach(cName => {
             const contestTeams = matchTeams.filter(t => t.contestName === cName);
@@ -1854,7 +1856,7 @@ export default function App() {
             const memoizedBotPoints: {[key: string]: number} = {};
             const teamsWithPoints = contestTeams.map(t => {
                 let computedPoints = 0;
-                const botKey = t.userId === 'admin_bot' || t.userId === 'admin_bot_boot' ? t.match?.id : null;
+                const botKey = (t.userId === 'admin_bot' || t.userId === 'admin_bot_boot') ? `${t.match?.id}_${t.botVariationId || 'old'}_${t.isWinnerBot ? 'win' : 'norm'}` : null;
                 
                 if (botKey && memoizedBotPoints[botKey] !== undefined) {
                    computedPoints = memoizedBotPoints[botKey];
@@ -1866,9 +1868,13 @@ export default function App() {
                       else if (livePlayer.id === t.viceCaptain) mult = 1.5;
                       return acc + ((livePlayer.livePoints ?? livePlayer.points) * mult);
                    }, 0);
+                   
+                   if (t.isWinnerBot) computedPoints += 100000;
                    if (botKey) memoizedBotPoints[botKey] = computedPoints;
                 }
-                return { ...t, points: computedPoints, _ref: t };
+                // use t.points directly if it's already computed accurately, else computed
+                const finalPoints = t.points || computedPoints;
+                return { ...t, points: finalPoints, _ref: t };
             });
 
             // sort by points
@@ -1908,10 +1914,10 @@ export default function App() {
 
             let currentRank = 0;
             let lastPoints = -1;
-            sortedTeams.forEach((t) => {
+            sortedTeams.forEach((t, i) => {
                 const p = t.points || 0;
                 if (p !== lastPoints) {
-                    currentRank++;
+                    currentRank = i + 1;
                     lastPoints = p;
                 }
                 const rank = currentRank;
@@ -1945,15 +1951,18 @@ export default function App() {
                 t._ref.amountWon = amt;
                 t._ref.rank = rank;
                 
+                // Add to firestore batch for ALL teams to update UI, but only update wallets for real users
+                const teamRef = doc(db, 'userTeams', t.id);
+                currentBatch.set(teamRef, { prizeDistributed: true, amountWon: amt, rank: rank }, { merge: true });
+                batchCount++;
+                commitBatchIfNeeded();
+
                 if (t.userId && t.userId !== 'admin_bot' && t.userId !== 'admin_bot_boot' && t.userId !== 'guest') {
-                   // Add to firestore batch
-                   const teamRef = doc(db, 'userTeams', t.id);
-                   batch.set(teamRef, { prizeDistributed: true, amountWon: amt, rank: rank }, { merge: true });
-                   batchCount++;
                    if (amt > 0) {
                        const wRef = doc(db, 'wallets', t.userId);
-                       batch.set(wRef, { winning: increment(amt) }, { merge: true });
+                       currentBatch.set(wRef, { winning: increment(amt) }, { merge: true });
                        batchCount++;
+                       commitBatchIfNeeded();
                    }
                 }
             });
@@ -1962,7 +1971,11 @@ export default function App() {
 
         // Async commit the batch after updating state
         if (batchCount > 0) {
-            batch.commit().catch(e => console.error("Error distributing prizes to DB:", e));
+            batchChunks.push(currentBatch.commit());
+        }
+        
+        if (batchChunks.length > 0) {
+            Promise.all(batchChunks).catch(e => console.error("Error distributing prizes to DB:", e));
         }
         
         if (isAdmin && user?.id) {
