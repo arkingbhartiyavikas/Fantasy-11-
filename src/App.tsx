@@ -508,8 +508,11 @@ const ContestDetailsView = ({
   isAdmin?: boolean;
   onMakeBotsWin?: () => void;
   instanceId?: number | null;
+  onSetLivePayouts?: (payouts: {rank: string, amount: string|number}[]) => void;
 }) => {
   const [activeTab, setActiveTab] = useState<'WINNINGS' | 'LEADERBOARD'>('WINNINGS');
+  const [showLivePayouts, setShowLivePayouts] = useState<boolean>(false);
+  const [liveCustomPayouts, setLiveCustomPayouts] = useState<{rankFrom: string, rankTo: string, amount: string}[]>([]);
   
   const contestTeams = useMemo(() => {
      let filtered = savedTeams.filter(t => t.match?.id === activeMatch?.id && t.contestName === contest.name);
@@ -644,10 +647,20 @@ const ContestDetailsView = ({
         </div>
         {(isAdmin && activeMatch?.status !== 'Upcoming') ? (
             <button 
-               onClick={onMakeBotsWin}
+               onClick={() => {
+                  setLiveCustomPayouts(payouts.map(p => {
+                     const rankRanges = p.rank.toString().replace('#', '').trim().split('-');
+                     return {
+                        rankFrom: rankRanges[0]?.trim() || '',
+                        rankTo: rankRanges[1]?.trim() || rankRanges[0]?.trim() || '',
+                        amount: p.amount.toString().replace(/[^0-9.]/g, '')
+                     }
+                  }));
+                  setShowLivePayouts(true);
+               }}
                className="w-full mt-4 py-2 rounded font-bold text-sm text-white transition-transform bg-[#f0b90b] shadow-[0_0_10px_rgba(240,185,11,0.5)] hover:bg-[#dca809] active:scale-[0.98]"
             >
-              Set Bots as Winners
+              Set Custom Payouts
             </button>
         ) : (
             <button 
@@ -718,8 +731,13 @@ const ContestDetailsView = ({
                         return (
                         <div 
                            key={i} 
-                           onClick={() => onParticipantClick && onParticipantClick(t)}
-                           className={`flex justify-between px-4 py-3.5 border-b border-gray-200 dark:border-app-border items-center cursor-pointer hover:bg-gray-50 dark:hover:bg-app-card-hover/50 transition-colors z-10 ${
+                           onClick={() => {
+                              if (!isCurrentUser && activeMatch?.status === 'Upcoming') return;
+                              if (onParticipantClick) onParticipantClick(t);
+                           }}
+                           className={`flex justify-between px-4 py-3.5 border-b border-gray-200 dark:border-app-border items-center z-10 transition-colors ${
+                              (!isCurrentUser && activeMatch?.status === 'Upcoming') ? 'cursor-default' : 'cursor-pointer hover:bg-gray-50 dark:hover:bg-app-card-hover/50'
+                           } ${
                               isCurrentUser 
                                 ? 'bg-gradient-to-r from-yellow-100/90 via-yellow-50/80 to-transparent dark:from-[#e5c158]/20 dark:to-[#e5c158]/5' 
                                 : 'bg-transparent'
@@ -756,6 +774,80 @@ const ContestDetailsView = ({
            </div>
         )}
       </div>
+
+      {showLivePayouts && (
+         <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
+            <div className="bg-white dark:bg-[#1a1c24] w-full max-w-md rounded-2xl shadow-xl overflow-hidden flex flex-col max-h-[85vh]">
+               <div className="p-4 border-b border-gray-200 dark:border-slate-800 flex justify-between items-center bg-gray-50 dark:bg-black/40">
+                  <h3 className="font-bold text-gray-900 dark:text-white">Set Custom Payouts</h3>
+                  <button onClick={() => setShowLivePayouts(false)} className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-white p-1">
+                     <X size={20} />
+                  </button>
+               </div>
+               
+               <div className="p-4 overflow-y-auto flex-1 space-y-3">
+                  <div className="flex gap-2 items-center text-xs text-gray-500 dark:text-slate-400 font-bold mb-2">
+                     <div className="flex-1">Rank From</div>
+                     <div className="flex-1">Rank To</div>
+                     <div className="flex-[2]">Prize (e.g. 75000)</div>
+                     <div className="w-8"></div>
+                  </div>
+                  
+                  {liveCustomPayouts.map((cp, idx) => (
+                     <div key={idx} className="flex gap-2 items-center">
+                        <div className="flex-1">
+                           <input type="number" placeholder="1" value={cp.rankFrom} onChange={(e) => {
+                              const newP = [...liveCustomPayouts];
+                              newP[idx].rankFrom = e.target.value;
+                              setLiveCustomPayouts(newP);
+                           }} className="w-full bg-white dark:bg-black/60 border border-gray-300 dark:border-slate-700 rounded-lg px-2 py-2 text-sm font-semibold text-gray-900 dark:text-slate-200 outline-none focus:border-red-500 transition-colors" />
+                        </div>
+                        <div className="flex-1">
+                           <input type="number" placeholder="1" value={cp.rankTo} onChange={(e) => {
+                              const newP = [...liveCustomPayouts];
+                              newP[idx].rankTo = e.target.value;
+                              setLiveCustomPayouts(newP);
+                           }} className="w-full bg-white dark:bg-black/60 border border-gray-300 dark:border-slate-700 rounded-lg px-2 py-2 text-sm font-semibold text-gray-900 dark:text-slate-200 outline-none focus:border-red-500 transition-colors" />
+                        </div>
+                        <div className="flex-[2]">
+                           <input type="number" placeholder="Amount" value={cp.amount} onChange={(e) => {
+                              const newP = [...liveCustomPayouts];
+                              newP[idx].amount = e.target.value;
+                              setLiveCustomPayouts(newP);
+                           }} className="w-full bg-white dark:bg-black/60 border border-gray-300 dark:border-slate-700 rounded-lg px-2 py-2 text-sm font-semibold text-gray-900 dark:text-slate-200 outline-none focus:border-red-500 transition-colors" />
+                        </div>
+                        <button onClick={() => {
+                           setLiveCustomPayouts(liveCustomPayouts.filter((_, i) => i !== idx));
+                        }} className="w-8 h-8 flex items-center justify-center text-red-500 bg-red-50 dark:bg-red-500/10 rounded-lg hover:bg-red-100 dark:hover:bg-red-500/20 transition-colors">
+                           <Trash2 size={16} />
+                        </button>
+                     </div>
+                  ))}
+                  
+                  <button onClick={() => {
+                     setLiveCustomPayouts([...liveCustomPayouts, {rankFrom: '', rankTo: '', amount: ''}]);
+                  }} className="text-xs font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-500/10 px-3 py-2 rounded-lg flex items-center justify-center gap-1 w-full mt-2 hover:bg-blue-100 dark:hover:bg-blue-500/20 transition-colors">
+                     <PlusCircle size={14} /> Add Rank Tier
+                  </button>
+               </div>
+               
+               <div className="p-4 border-t border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-black/40">
+                  <button onClick={() => {
+                     if (onSetLivePayouts) {
+                        const formatted = liveCustomPayouts.filter(c => c.rankFrom && c.amount).map(c => {
+                           let rank = c.rankFrom === c.rankTo || !c.rankTo ? `# ${c.rankFrom}` : `# ${c.rankFrom} - ${c.rankTo}`;
+                           return { rank, amount: `₹${c.amount}` };
+                        });
+                        onSetLivePayouts(formatted);
+                        setShowLivePayouts(false);
+                     }
+                  }} className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded-xl transition-colors">
+                     Save Payouts
+                  </button>
+               </div>
+            </div>
+         </div>
+      )}
     </div>
   );
 };
@@ -3686,16 +3778,16 @@ export default function App() {
       {/* Grass Background & Pitch Lines */}
       <div className="absolute inset-x-0 bottom-0 top-[90px] z-0 overflow-hidden bg-[#229933]" style={{ backgroundImage: 'repeating-linear-gradient(90deg, rgba(0,0,0,0.02) 0px, rgba(0,0,0,0.02) 40px, transparent 40px, transparent 80px)' }}>
           {/* Oval pitch line */}
-          <div className="absolute top-[3%] bottom-[3%] left-[5%] right-[5%] border-2 border-[#16a34a] rounded-[50%] pointer-events-none"></div>
+          <div className="absolute top-[3%] bottom-[3%] left-[5%] right-[5%] border-[1.5px] border-white/40 rounded-[50%] pointer-events-none shadow-[inset_0_0_20px_rgba(255,255,255,0.05)]"></div>
           {/* Inner circle / pitch area */}
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[60px] h-[80px] border-[1.5px] border-[#16a34a]/60 pointer-events-none flex flex-col justify-between">
-             <div className="w-[20px] h-[12px] mx-auto border-b-[1.5px] border-l-[1.5px] border-r-[1.5px] border-[#16a34a]/60 rounded-b-sm"></div>
-             <div className="w-[20px] h-[12px] mx-auto border-t-[1.5px] border-l-[1.5px] border-r-[1.5px] border-[#16a34a]/60 rounded-t-sm"></div>
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[60px] h-[80px] border-[1px] border-white/30 pointer-events-none flex flex-col justify-between">
+             <div className="w-[20px] h-[12px] mx-auto border-b-[1px] border-l-[1px] border-r-[1px] border-white/30 rounded-b-sm"></div>
+             <div className="w-[20px] h-[12px] mx-auto border-t-[1px] border-l-[1px] border-r-[1px] border-white/30 rounded-t-sm"></div>
           </div>
           {/* FANTASY 11 WATERMARK */}
           <div className="absolute top-[75%] left-1/2 -translate-x-1/2 flex items-center gap-1 text-white/20 font-black text-xl tracking-widest pointer-events-none w-max uppercase">
              <Shield size={24} className="opacity-80" />
-             Fantasy 11
+             FANTASY 11
           </div>
       </div>
 
@@ -8134,20 +8226,14 @@ export default function App() {
             appPlayers={appPlayers}
             currentUser={user}
             isAdmin={isAdmin}
-            onMakeBotsWin={() => {
-                if (window.confirm("Are you sure you want to force all bots to win this contest? This will recalculate rankings immediately.")) {
-                    setSavedTeams(prev => {
-                        const newTeams = prev.map(t => 
-                            (t.userId === 'admin_bot' || t.userId === 'admin_bot_boot') && t.match?.id === activeMatch?.id && (t.contestId ? t.contestId === activeContestDetails.id : t.contestName === activeContestDetails.name)
-                            ? { ...t, isWinnerBot: true } 
-                            : t
-                        );
-                        const adminTeams = newTeams.filter(t => t.userId === 'admin_bot' || t.userId === 'admin_bot_boot');
-                        // setDoc(doc(db, 'gameData', 'main_state'), JSON.parse(JSON.stringify({ adminTeams })), { merge: true }).catch(console.error);
-                        return newTeams;
-                    });
-                    alert("Bots in this contest are now set as winners!");
-                }
+            onSetLivePayouts={(newPayouts) => {
+                setAppContests(prev => prev.map(c => 
+                   (c.id === activeContestDetails.id || c.name === activeContestDetails.name) 
+                      ? { ...c, payouts: newPayouts } 
+                      : c
+                ));
+                setActiveContestDetails(prev => prev ? { ...prev, payouts: newPayouts } : prev);
+                alert("Live Payouts have been securely updated.");
             }}
             winningPercentage={winningPercentage}
             onBack={() => { setActiveContestDetails(null); setView('MATCH'); }}
@@ -8158,7 +8244,11 @@ export default function App() {
                 setView('CREATE_TEAM');
             }}
             onParticipantClick={(t) => {
-                setTeam(t.players);
+                const fullPlayers = (t.players || []).map((p: any) => {
+                    const fullP = appPlayers.find(ap => ap.id === p.id);
+                    return fullP ? { ...fullP, ...p } : p;
+                });
+                setTeam(fullPlayers);
                 setCaptain(t.captain);
                 setViceCaptain(t.viceCaptain);
                 setPreviewSource('CONTEST_DETAILS');
