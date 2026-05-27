@@ -3686,16 +3686,16 @@ export default function App() {
       {/* Grass Background & Pitch Lines */}
       <div className="absolute inset-x-0 bottom-0 top-[90px] z-0 overflow-hidden bg-[#229933]" style={{ backgroundImage: 'repeating-linear-gradient(90deg, rgba(0,0,0,0.02) 0px, rgba(0,0,0,0.02) 40px, transparent 40px, transparent 80px)' }}>
           {/* Oval pitch line */}
-          <div className="absolute top-[3%] bottom-[3%] left-[5%] right-[5%] border-[1.5px] border-white/40 rounded-[50%] pointer-events-none shadow-[inset_0_0_20px_rgba(255,255,255,0.05)]"></div>
+          <div className="absolute top-[3%] bottom-[3%] left-[5%] right-[5%] border-2 border-[#16a34a] rounded-[50%] pointer-events-none"></div>
           {/* Inner circle / pitch area */}
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[60px] h-[80px] border-[1px] border-white/30 pointer-events-none flex flex-col justify-between">
-             <div className="w-[20px] h-[12px] mx-auto border-b-[1px] border-l-[1px] border-r-[1px] border-white/30 rounded-b-sm"></div>
-             <div className="w-[20px] h-[12px] mx-auto border-t-[1px] border-l-[1px] border-r-[1px] border-white/30 rounded-t-sm"></div>
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[60px] h-[80px] border-[1.5px] border-[#16a34a]/60 pointer-events-none flex flex-col justify-between">
+             <div className="w-[20px] h-[12px] mx-auto border-b-[1.5px] border-l-[1.5px] border-r-[1.5px] border-[#16a34a]/60 rounded-b-sm"></div>
+             <div className="w-[20px] h-[12px] mx-auto border-t-[1.5px] border-l-[1.5px] border-r-[1.5px] border-[#16a34a]/60 rounded-t-sm"></div>
           </div>
-          {/* DABA FANTASY WATERMARK */}
-          <div className="absolute top-[75%] left-1/2 -translate-x-1/2 flex items-center gap-1 text-white/20 font-black text-xl tracking-widest pointer-events-none w-max">
+          {/* FANTASY 11 WATERMARK */}
+          <div className="absolute top-[75%] left-1/2 -translate-x-1/2 flex items-center gap-1 text-white/20 font-black text-xl tracking-widest pointer-events-none w-max uppercase">
              <Shield size={24} className="opacity-80" />
-             DABA FANTASY
+             Fantasy 11
           </div>
       </div>
 
