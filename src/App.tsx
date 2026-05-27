@@ -1225,8 +1225,9 @@ export default function App() {
         if (isSubscribed) setBankAccounts(snap.docs.map(d => d.data() as BankAccount));
     }, (e) => handleFsError(e, 'listen_banks'));
 
-    // All users should listen to the entire userTeams collection so they can see opponents in contests.
-    const teamsQuery = collection(db, 'userTeams');
+    // To save Firestore quota, only listen to the current user's teams in real-time.
+    // Opponent teams will be fetched on-demand when entering a contest/leaderboard.
+    const teamsQuery = query(collection(db, 'userTeams'), where('userId', '==', user.id || 'guest'));
 
     const unsubUserTeams = onSnapshot(teamsQuery, (snap) => {
         if (!isSubscribed) return;
@@ -1320,6 +1321,28 @@ export default function App() {
         isSubscribed = false;
     };
   }, [isAdmin, view, firestoreQuotaExceeded]);
+
+  // Fetch opponents' teams ONLY when viewing Contest Details or Match to avoid excessive quota usage
+  useEffect(() => {
+    if ((view === 'CONTEST_DETAILS' || view === 'MATCH') && activeMatch) {
+       getDocs(query(collection(db, 'userTeams'), where('match.id', '==', activeMatch.id))).then(snap => {
+           const matchTeams = snap.docs.map(d => d.data() as any);
+           setSavedTeams(prev => {
+                const newTeams = [...prev];
+                const idMap = new Map(newTeams.map((t, i) => [t.id, i]));
+                matchTeams.forEach(ut => {
+                    if (idMap.has(ut.id)) {
+                        newTeams[idMap.get(ut.id)!] = ut;
+                    } else {
+                        newTeams.push(ut);
+                        idMap.set(ut.id, newTeams.length - 1);
+                    }
+                });
+                return newTeams;
+           });
+       }).catch(e => console.error("Failed to load match teams", e));
+    }
+  }, [view, activeMatch?.id]);
 
   // Hook to save local wallet edits to DB (e.g. from playing contests)
   useEffect(() => {
