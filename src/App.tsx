@@ -1322,8 +1322,31 @@ export default function App() {
     };
   }, [isAdmin, view, firestoreQuotaExceeded]);
 
-  // (Opponents' teams live fetching has been disabled to save Firestore quota during testing as requested)
-  // Opponents generated through the bot system will still be fetched via the chunk synchronizer.
+  // Listen to opponents' teams in real-time ONLY for the active match to save quota
+  // while still allowing users to see each other join contests instantly.
+  useEffect(() => {
+    let unsub = () => {};
+    if (!firestoreQuotaExceeded && (view === 'CONTEST_DETAILS' || view === 'MATCH') && activeMatch) {
+       const q = query(collection(db, 'userTeams'), where('match.id', '==', activeMatch.id));
+       unsub = onSnapshot(q, (snap) => {
+           const matchTeams = snap.docs.map(d => d.data() as any);
+           setSavedTeams(prev => {
+                const newTeams = [...prev];
+                const idMap = new Map(newTeams.map((t, i) => [t.id, i]));
+                matchTeams.forEach(ut => {
+                    if (idMap.has(ut.id)) {
+                        newTeams[idMap.get(ut.id)!] = ut;
+                    } else {
+                        newTeams.push(ut);
+                        idMap.set(ut.id, newTeams.length - 1);
+                    }
+                });
+                return newTeams;
+           });
+       }, (e) => console.error("Failed to listen to match teams", e));
+    }
+    return () => unsub();
+  }, [view, activeMatch?.id, firestoreQuotaExceeded]);
 
 
   // Hook to save local wallet edits to DB (e.g. from playing contests)
