@@ -554,12 +554,19 @@ const ContestDetailsView = ({
      const sorted = teamsWithPoints.sort((a, b) => (b.points || 0) - (a.points || 0));
      
      // Calculate Dense Ranking: 1, 1, 2, 2, 3...
+     const isUpcoming = activeMatch?.status === 'Upcoming';
+     let currentRank = 0;
+     let lastPoints = -1;
      const rankedTeams = sorted.map((team, index) => {
         if (isUpcoming) {
            return { ...team, points: '-', rank: '-' };
         }
-        const rank = index + 1;
-        return { ...team, rank: rank };
+        const p = team.points || 0;
+        if (p !== lastPoints) {
+           currentRank = index + 1;
+           lastPoints = p;
+        }
+        return { ...team, rank: currentRank };
      });
 
      // Move current user's teams to the top for display
