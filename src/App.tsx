@@ -492,7 +492,8 @@ const ContestDetailsView = ({
   currentUser,
   isAdmin,
   onMakeBotsWin,
-  instanceId
+  instanceId,
+  onSetLivePayouts
 }: {
   activeMatch: Match;
   contest: Contest;
@@ -508,7 +509,7 @@ const ContestDetailsView = ({
   isAdmin?: boolean;
   onMakeBotsWin?: () => void;
   instanceId?: number | null;
-  onSetLivePayouts?: (payouts: {rank: string, amount: string|number}[]) => void;
+  onSetLivePayouts?: (payouts: {rank: string, amount: string|number}[], rankedTeams: any[]) => void;
 }) => {
   const [activeTab, setActiveTab] = useState<'WINNINGS' | 'LEADERBOARD'>('WINNINGS');
   const [showLivePayouts, setShowLivePayouts] = useState<boolean>(false);
@@ -838,7 +839,7 @@ const ContestDetailsView = ({
                            let rank = c.rankFrom === c.rankTo || !c.rankTo ? `# ${c.rankFrom}` : `# ${c.rankFrom} - ${c.rankTo}`;
                            return { rank, amount: `₹${c.amount}` };
                         });
-                        onSetLivePayouts(formatted);
+                        onSetLivePayouts(formatted, sortedTeams);
                         setShowLivePayouts(false);
                      }
                   }} className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded-xl transition-colors">
@@ -8226,14 +8227,94 @@ export default function App() {
             appPlayers={appPlayers}
             currentUser={user}
             isAdmin={isAdmin}
-            onSetLivePayouts={(newPayouts) => {
-                setAppContests(prev => prev.map(c => 
-                   (c.id === activeContestDetails.id || c.name === activeContestDetails.name) 
-                      ? { ...c, payouts: newPayouts } 
-                      : c
-                ));
+            onSetLivePayouts={async (newPayouts, rankedTeams) => {
+                setAppContests(prev => {
+                   const updated = prev.map(c => 
+                      (c.id === activeContestDetails.id || c.name === activeContestDetails.name) 
+                         ? { ...c, payouts: newPayouts } 
+                         : c
+                   );
+                   localStorage.setItem('dreamApp_contests', JSON.stringify(updated));
+                   // Since syncCategoryToCloud is likely defined above, we can use it
+                   syncCategoryToCloud('contests', updated, 20);
+                   return updated;
+                });
                 setActiveContestDetails(prev => prev ? { ...prev, payouts: newPayouts } : prev);
-                alert("Live Payouts have been securely updated.");
+                
+                let localBalanceUpdate = 0;
+                const batch = writeBatch(db);
+                let count = 0;
+                const updatedTeamsMap = new Map();
+
+                rankedTeams.forEach((t) => {
+                    const rankStr = String(t.rank);
+                    let rankInt: number;
+                    if(rankStr.includes('T')) {
+                        rankInt = parseInt(rankStr.replace('T', ''));
+                    } else {
+                        rankInt = parseInt(rankStr);
+                    }
+                    
+                    if (isNaN(rankInt)) return;
+
+                    let amt = 0;
+                    const payoutStr = newPayouts.find(p => {
+                        const r = p.rank.toString().replace('#', '').trim();
+                        if(r.includes('-')) {
+                            const [start, end] = r.split('-').map(Number);
+                            return rankInt >= start && rankInt <= end;
+                        }
+                        return parseInt(r) === rankInt;
+                    });
+                    
+                    if (payoutStr) {
+                       amt = typeof payoutStr.amount === 'number' ? payoutStr.amount : parseFloat(payoutStr.amount.toString().replace(/[^0-9.]/g, ''));
+                    }
+
+                    // Always overwrite amountWon for live update correctness!
+                    updatedTeamsMap.set(t.id, {amt, rank: rankStr});
+                    
+                    if (amt > 0) {
+                        if (t.userId === user?.id) {
+                           localBalanceUpdate += amt;
+                        }
+                        
+                        const teamRef = doc(db, 'userTeams', t.id);
+                        batch.set(teamRef, { amountWon: amt, rank: rankStr }, { merge: true });
+                        count++;
+                        
+                        if (t.userId && t.userId !== 'admin_bot' && t.userId !== 'admin_bot_boot' && t.userId !== 'guest') {
+                           const wRef = doc(db, 'wallets', t.userId);
+                           batch.set(wRef, { winning: increment(amt) }, { merge: true });
+                           count++;
+                        }
+                    } else if (t.amountWon > 0) {
+                        // Resets those who no longer win after payout changed
+                        const teamRef = doc(db, 'userTeams', t.id);
+                        batch.set(teamRef, { amountWon: 0, rank: rankStr }, { merge: true });
+                        count++;
+                    }
+                });
+
+                if (count > 0) {
+                    batch.commit().catch(e => console.error("Error updating payouts in DB:", e));
+                }
+
+                if (updatedTeamsMap.size > 0) {
+                    setSavedTeams(prev => prev.map(t => {
+                        if (updatedTeamsMap.has(t.id)) {
+                             const data = updatedTeamsMap.get(t.id);
+                             return { ...t, amountWon: data.amt, rank: data.rank };
+                        }
+                        return t;
+                    }));
+                }
+
+                if (localBalanceUpdate > 0 && user?.id) {
+                   setWallet((prev: any) => ({ ...prev, winning: (prev.winning || 0) + localBalanceUpdate }));
+                }
+
+                alert("Live Payouts applied! Rankings updated and amounts distributed to user wallets.");
             }}
             winningPercentage={winningPercentage}
             onBack={() => { setActiveContestDetails(null); setView('MATCH'); }}
