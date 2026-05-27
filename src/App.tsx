@@ -2032,7 +2032,7 @@ export default function App() {
   const [adminPlatformMargin, setAdminPlatformMargin] = useState<string>('20');
   const [adminWinnersPercent, setAdminWinnersPercent] = useState<string>('48');
   const [adminFirstPrizePercent, setAdminFirstPrizePercent] = useState<string>('15');
-  const [adminContestAutoPayouts, setAdminContestAutoPayouts] = useState<boolean>(true);
+  const [adminContestAutoPayouts, setAdminContestAutoPayouts] = useState<boolean>(false);
   const [adminCustomPayouts, setAdminCustomPayouts] = useState<{rankFrom: string, rankTo: string, amount: string}[]>([{rankFrom: '1', rankTo: '1', amount: ''}]);
   const [adminAutoFillRemaining, setAdminAutoFillRemaining] = useState<boolean>(true);
   
@@ -5670,33 +5670,15 @@ export default function App() {
                      <div className="bg-black/40 border border-[#e5c158]/20 p-4 rounded-xl mt-4">
                         <div className="flex justify-between items-center mb-3 border-b border-[#e5c158]/20 pb-2">
                            <h4 className="text-[10px] font-black text-[#e5c158] uppercase tracking-widest">Prize Distribution Settings</h4>
-                           {adminContestType === 'Mega' && (
-                              <button onClick={() => setAdminContestAutoPayouts(!adminContestAutoPayouts)} className="text-xs text-blue-400 hover:text-blue-300 font-bold px-2 py-1 bg-blue-500/10 rounded">
-                                 {adminContestAutoPayouts ? 'Switch to Custom Payouts' : 'Switch to Auto Payouts'}
-                              </button>
-                           )}
                         </div>
-                        {adminContestAutoPayouts ? (
-                           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                             <div>
-                               <label className="text-[10px] font-bold text-[#e5c158]/70 uppercase tracking-widest block mb-1">Platform Margin (%)</label>
-                               <input type="number" placeholder="e.g. 20" value={adminPlatformMargin} onChange={(e) => setAdminPlatformMargin(e.target.value)} className="w-full bg-black/60 border border-slate-700 rounded-lg px-3 py-2 text-sm font-semibold text-slate-200 outline-none focus:border-yellow-500 transition-all" />
-                               <p className="text-[9px] text-slate-500 mt-1">Percentage of total entry fees the platform keeps.</p>
-                             </div>
-                             <div>
-                               <label className="text-[10px] font-bold text-[#e5c158]/70 uppercase tracking-widest block mb-1">Winning Spots (%)</label>
-                               <input type="number" placeholder="e.g. 48" value={adminWinnersPercent} onChange={(e) => setAdminWinnersPercent(e.target.value)} className="w-full bg-black/60 border border-slate-700 rounded-lg px-3 py-2 text-sm font-semibold text-slate-200 outline-none focus:border-yellow-500 transition-all" />
-                               <p className="text-[9px] text-slate-500 mt-1">Percentage of spots that get a payout.</p>
-                             </div>
-                             <div>
-                               <label className="text-[10px] font-bold text-[#e5c158]/70 uppercase tracking-widest block mb-1">1st Prize Gets (%)</label>
-                               <input type="number" placeholder="e.g. 15" value={adminFirstPrizePercent} onChange={(e) => setAdminFirstPrizePercent(e.target.value)} className="w-full bg-black/60 border border-slate-700 rounded-lg px-3 py-2 text-sm font-semibold text-slate-200 outline-none focus:border-yellow-500 transition-all" />
-                               <p className="text-[9px] text-slate-500 mt-1">Percentage of the prize pool allocated to Rank 1.</p>
-                             </div>
+                        <div className="space-y-3">
+                           <div className="flex gap-2 items-center text-xs text-slate-400 font-bold mb-2">
+                              <div className="flex-1">Rank From</div>
+                              <div className="flex-1">Rank To</div>
+                              <div className="flex-[2]">Prize (e.g. ₹75,000)</div>
+                              <div className="w-8"></div>
                            </div>
-                        ) : (
-                           <div className="space-y-3">
-                              {adminCustomPayouts.map((cp, idx) => (
+                           {adminCustomPayouts.map((cp, idx) => (
                                  <div key={idx} className="flex gap-2 items-center">
                                     <div className="flex-1">
                                        <label className="text-[10px] text-slate-400 block mb-1">Rank From</label>
@@ -5741,7 +5723,6 @@ export default function App() {
                                  </label>
                               </div>
                            </div>
-                        )}
                      </div>
                      <button 
                         onClick={() => {
