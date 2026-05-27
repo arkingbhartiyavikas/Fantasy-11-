@@ -3350,14 +3350,14 @@ export default function App() {
                 const fillPercent = Math.min(100, (totalTeamsCount / c.spots) * 100);
                 
                 return (
-                <div key={c.id} onClick={() => { setActiveContestDetails(c); setView('CONTEST_DETAILS'); }} className="bg-app-card rounded-xl shadow-sm border border-app-border overflow-hidden mb-3 cursor-pointer active:scale-[0.99] transition-transform relative">
-                  <div className="p-3 border-b border-app-border">
+                <div key={c.id} onClick={() => { setActiveContestDetails(c); setView('CONTEST_DETAILS'); }} className="bg-app-card rounded-xl shadow-sm border border-app-border overflow-hidden mb-2 cursor-pointer active:scale-[0.99] transition-transform relative">
+                  <div className="p-2 bg-app-card-inner">
                     <div className="flex justify-between items-center mb-1">
-                       <p className="text-[10px] text-app-text-muted font-semibold uppercase tracking-wider">Prize Pool</p>
+                       <p className="text-[9px] text-app-text-muted font-semibold uppercase tracking-wider">Prize Pool</p>
                        {renderBotControls(c)}
                     </div>
-                    <div className="flex justify-between items-center mb-2.5">
-                      <p className="text-2xl font-black text-app-text">{c.prizeText}</p>
+                    <div className="flex justify-between items-center mb-2">
+                      <p className="text-xl font-black text-app-text">{c.prizeText}</p>
                       <button 
                         onClick={(e) => {
                           e.stopPropagation();
@@ -3368,24 +3368,24 @@ export default function App() {
                           setSelectedContest({fee: c.entryFee, name: c.name, id: c.id, spots: c.spots});
                           setView('CREATE_TEAM');
                         }}
-                        className={`${activeMatch?.status === 'Upcoming' ? 'bg-green-600 active:scale-95 hover:bg-green-700' : 'bg-slate-700'} transition-all text-white font-bold py-1 px-5 rounded text-base shadow-sm`}
+                        className={`${activeMatch?.status === 'Upcoming' ? 'bg-green-600 active:scale-95 hover:bg-green-700' : 'bg-slate-700'} transition-all text-white font-bold py-1 px-4 rounded text-sm shadow-sm border-b-[1px] border-green-800`}
                       >
                         ₹{c.entryFee}
                       </button>
                     </div>
-                    <div className="bg-app-bg h-1.5 rounded-full mb-1.5 overflow-hidden">
+                    <div className="bg-app-bg h-1 rounded-full mb-1.5 overflow-hidden">
                       <div className="bg-app-accent h-full" style={{width:`${fillPercent}%`}}></div>
                     </div>
-                    <div className="flex justify-between text-[9px] text-app-text-muted font-semibold">
+                    <div className="flex justify-between text-[9px] text-app-text-muted font-semibold pb-1">
                       <span className="text-red-400">{Number(spotsLeft || 0).toLocaleString('en-IN')} spots left</span>
                       <span>{Number(c.spots || 0).toLocaleString('en-IN')} spots</span>
                     </div>
                   </div>
                   
-                  <div className="p-2 bg-slate-50/5 dark:bg-app-card-inner flex shrink-0 items-center justify-start gap-4 text-[10px] font-semibold text-app-text-muted">
-                    <span className="flex items-center gap-1.5"><div className="w-4 h-4 rounded-full border border-yellow-500 text-[#e5c158] flex items-center justify-center text-[8px] font-bold bg-[#e5c158]/10">1st</div> {c.firstPrize || '₹10 Lakh'}</span>
-                    <span className="flex items-center gap-1.5"><Trophy size={11} className="text-app-text-muted"/> {c.winPercentage || 48}%</span>
-                    <span className="flex items-center gap-1.5"><div className="w-4 h-4 border border-slate-500 rounded flex items-center justify-center text-[8px] font-bold text-app-text-muted">M</div> {c.maxTeams || 20}</span>
+                  <div className="p-1.5 px-2 bg-slate-50/5 dark:bg-app-bg border-t border-app-border flex shrink-0 items-center justify-start gap-3 text-[9px] font-semibold text-app-text-muted">
+                    <span className="flex items-center gap-1"><div className="w-3.5 h-3.5 rounded-full border border-yellow-500 text-[#e5c158] flex items-center justify-center text-[7px] font-bold bg-[#e5c158]/10">1st</div> {c.firstPrize || '₹10 Lakh'}</span>
+                    <span className="flex items-center gap-1"><Trophy size={9} className="text-app-text-muted"/> {c.winPercentage || 48}%</span>
+                    <span className="flex items-center gap-1"><div className="w-3.5 h-3.5 border border-slate-500 rounded flex items-center justify-center text-[7px] font-bold text-app-text-muted">M</div> {c.maxTeams || 20}</span>
                   </div>
                 </div>
               )})}
@@ -3398,14 +3398,14 @@ export default function App() {
                 const fillPercent = (teamsInCurrentInstance / cspots) * 100;
                 
                 return (
-                <div key={c.id} onClick={() => { setActiveContestInstanceId(Math.floor(totalTeamsCount / cspots)); setActiveContestDetails(c); setView('CONTEST_DETAILS'); }} className="bg-app-card rounded-xl shadow-sm border border-app-border overflow-hidden mb-3 cursor-pointer active:scale-[0.99] transition-transform relative">
-                  <div className="p-3 border-b border-app-border">
+                <div key={c.id} onClick={() => { setActiveContestInstanceId(Math.floor(totalTeamsCount / cspots)); setActiveContestDetails(c); setView('CONTEST_DETAILS'); }} className="bg-app-card rounded-xl shadow-sm border border-app-border overflow-hidden mb-2 cursor-pointer active:scale-[0.99] transition-transform relative">
+                  <div className="p-2 bg-app-card-inner">
                     <div className="flex justify-between items-center mb-1">
-                       <p className="text-[10px] text-app-text-muted font-semibold uppercase tracking-wider">Prize Pool</p>
+                       <p className="text-[9px] text-app-text-muted font-semibold uppercase tracking-wider">Prize Pool</p>
                        {renderBotControls(c)}
                     </div>
-                    <div className="flex justify-between items-center mb-2.5">
-                        <p className="text-2xl font-black text-app-text">{c.prizeText}</p>
+                    <div className="flex justify-between items-center mb-2">
+                        <p className="text-xl font-black text-app-text">{c.prizeText}</p>
                         <button 
                         onClick={(e) => {
                             e.stopPropagation();
@@ -3417,23 +3417,23 @@ export default function App() {
                             setSelectedContest({fee: c.entryFee, name: c.name, id: c.id, spots: c.spots});
                             setView('CREATE_TEAM');
                           }}
-                          className={`${activeMatch?.status === 'Upcoming' ? 'bg-green-600 active:scale-95 hover:bg-green-700' : 'bg-slate-700'} transition-all text-white font-bold py-1 px-5 rounded text-base shadow-sm border-b-2 border-green-800`}
+                          className={`${activeMatch?.status === 'Upcoming' ? 'bg-green-600 active:scale-95 hover:bg-green-700' : 'bg-slate-700'} transition-all text-white font-bold py-1 px-4 rounded text-sm shadow-sm border-b-[1px] border-green-800`}
                         >
                           ₹{c.entryFee}
                         </button>
                     </div>
-                    <div className="bg-app-bg h-1.5 rounded-full mb-1.5 overflow-hidden">
+                    <div className="bg-app-bg h-1 rounded-full mb-1.5 overflow-hidden">
                       <div className="bg-app-accent h-full" style={{width: `${fillPercent}%`}}></div>
                     </div>
-                    <div className="flex justify-between text-[9px] text-app-text-muted font-semibold">
+                    <div className="flex justify-between text-[9px] text-app-text-muted font-semibold pb-1">
                       <span className="text-red-400">{spotsLeft} spots left</span>
                       <span>{cspots} spots</span>
                     </div>
                   </div>
-                  <div className="p-2 bg-slate-50/5 dark:bg-app-card-inner flex shrink-0 items-center justify-start gap-4 text-[10px] font-semibold text-app-text-muted">
-                    <span className="flex items-center gap-1.5"><div className="w-4 h-4 rounded-full border border-yellow-500 text-[#e5c158] flex items-center justify-center text-[8px] font-bold bg-[#e5c158]/10">1st</div> {c.firstPrize || c.prizeText}</span>
-                    <span className="flex items-center gap-1.5"><Trophy size={11} className="text-app-text-muted"/> {c.winPercentage || 50}%</span>
-                    <span className="flex items-center gap-1.5"><div className="w-4 h-4 border border-slate-500 rounded flex items-center justify-center text-[8px] font-bold text-app-text-muted">M</div> {c.maxTeams || 1}</span>
+                  <div className="p-1.5 px-2 bg-slate-50/5 dark:bg-app-bg border-t border-app-border flex shrink-0 items-center justify-start gap-3 text-[9px] font-semibold text-app-text-muted">
+                    <span className="flex items-center gap-1"><div className="w-3.5 h-3.5 rounded-full border border-yellow-500 text-[#e5c158] flex items-center justify-center text-[7px] font-bold bg-[#e5c158]/10">1st</div> {c.firstPrize || c.prizeText}</span>
+                    <span className="flex items-center gap-1"><Trophy size={9} className="text-app-text-muted"/> {c.winPercentage || 50}%</span>
+                    <span className="flex items-center gap-1"><div className="w-3.5 h-3.5 border border-slate-500 rounded flex items-center justify-center text-[7px] font-bold text-app-text-muted">M</div> {c.maxTeams || 1}</span>
                   </div>
                 </div>
               )})}
@@ -3469,14 +3469,14 @@ export default function App() {
                         }
                         
                         return (
-                         <div key={i} onClick={() => { setActiveContestInstanceId(dc.instanceId); setActiveContestDetails(c); setView('CONTEST_DETAILS'); }} className="bg-app-card rounded-xl shadow-sm border border-app-border overflow-hidden mb-3 cursor-pointer active:scale-[0.99] transition-transform relative">
-                           <div className="p-3 border-b border-app-border">
+                         <div key={i} onClick={() => { setActiveContestInstanceId(dc.instanceId); setActiveContestDetails(c); setView('CONTEST_DETAILS'); }} className="bg-app-card rounded-xl shadow-sm border border-app-border overflow-hidden mb-2 cursor-pointer active:scale-[0.99] transition-transform relative">
+                           <div className="p-2 bg-app-card-inner">
                              <div className="flex justify-between items-center mb-1">
-                                <p className="text-[10px] text-app-text-muted font-semibold uppercase tracking-wider">Prize Pool</p>
+                                <p className="text-[9px] text-app-text-muted font-semibold uppercase tracking-wider">Prize Pool</p>
                                 {renderBotControls(c)}
                              </div>
-                             <div className="flex justify-between items-center mb-2.5">
-                                 <p className="text-2xl font-black text-app-text">{c.prizeText}</p>
+                             <div className="flex justify-between items-center mb-2">
+                                 <p className="text-xl font-black text-app-text">{c.prizeText}</p>
                                  <button 
                                  onClick={(e) => {
                                      e.stopPropagation();
@@ -3488,23 +3488,23 @@ export default function App() {
                                      setSelectedContest({fee: c.entryFee, name: c.name, id: c.id, spots: c.spots});
                                      setView('CREATE_TEAM');
                                    }}
-                                   className={`${activeMatch?.status === 'Upcoming' ? 'bg-green-600 active:scale-95 hover:bg-green-700' : 'bg-slate-700'} transition-all text-white font-bold py-1 px-5 rounded text-base shadow-sm border-b-2 border-green-800`}
+                                   className={`${activeMatch?.status === 'Upcoming' ? 'bg-green-600 active:scale-95 hover:bg-green-700' : 'bg-slate-700'} transition-all text-white font-bold py-1 px-4 rounded text-sm shadow-sm border-b-[1px] border-green-800`}
                                  >
                                    ₹{c.entryFee}
                                  </button>
                              </div>
-                             <div className="bg-app-bg h-1.5 rounded-full mb-1.5 overflow-hidden">
+                             <div className="bg-app-bg h-1 rounded-full mb-1.5 overflow-hidden">
                                <div className="bg-app-accent h-full" style={{width: `${fillPercent}%`}}></div>
                              </div>
-                             <div className="flex justify-between text-[9px] text-app-text-muted font-semibold">
+                             <div className="flex justify-between text-[9px] text-app-text-muted font-semibold pb-1">
                                <span className="text-red-400">{spotsLeft} spots left</span>
                                <span>{c.type === 'Mega' ? c.spots : cspots} spots</span>
                              </div>
                            </div>
-                           <div className="p-2 bg-slate-50/5 dark:bg-app-card-inner flex shrink-0 items-center justify-start gap-4 text-[10px] font-semibold text-app-text-muted">
-                             <span className="flex items-center gap-1.5"><div className="w-4 h-4 rounded-full border border-yellow-500 text-[#e5c158] flex items-center justify-center text-[8px] font-bold bg-[#e5c158]/10">1st</div> {c.firstPrize || c.prizeText}</span>
-                             <span className="flex items-center gap-1.5"><Trophy size={11} className="text-app-text-muted"/> {c.winPercentage || (c.type === 'Mega' ? 48 : 50)}%</span>
-                             <span className="flex items-center gap-1.5"><div className="w-4 h-4 border border-slate-500 rounded flex items-center justify-center text-[8px] font-bold text-app-text-muted">M</div> {c.maxTeams || (c.type === 'Mega' ? 20 : 1)}</span>
+                           <div className="p-1.5 px-2 bg-slate-50/5 dark:bg-app-bg border-t border-app-border flex shrink-0 items-center justify-start gap-3 text-[9px] font-semibold text-app-text-muted">
+                             <span className="flex items-center gap-1"><div className="w-3.5 h-3.5 rounded-full border border-yellow-500 text-[#e5c158] flex items-center justify-center text-[7px] font-bold bg-[#e5c158]/10">1st</div> {c.firstPrize || c.prizeText}</span>
+                             <span className="flex items-center gap-1"><Trophy size={9} className="text-app-text-muted"/> {c.winPercentage || (c.type === 'Mega' ? 48 : 50)}%</span>
+                             <span className="flex items-center gap-1"><div className="w-3.5 h-3.5 border border-slate-500 rounded flex items-center justify-center text-[7px] font-bold text-app-text-muted">M</div> {c.maxTeams || (c.type === 'Mega' ? 20 : 1)}</span>
                            </div>
                          </div>
                         )
