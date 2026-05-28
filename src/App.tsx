@@ -626,6 +626,7 @@ const ContestDetailsView = ({
         </div>
       </header>
 
+      {(isAdmin || activeMatch?.status === 'Upcoming') && (
       <div className="bg-app-card p-4 shadow-sm z-10 w-full relative">
         <div className="flex justify-between items-start mb-2">
            <div>
@@ -673,6 +674,7 @@ const ContestDetailsView = ({
             </button>
         )}
       </div>
+      )}
 
       <div className="flex bg-[#ffe2e2] text-[#c94b4b] mt-2 shadow-sm border-b border-[#ffe2e2]/50">
          <button onClick={() => setActiveTab('WINNINGS')} className={`flex-1 py-3 text-sm font-bold text-center border-b-[3px] transition-colors ${activeTab === 'WINNINGS' ? 'border-[#c94b4b] text-[#c94b4b]' : 'border-transparent text-[#c94b4b]/60'}`}>Winning Breakup</button>
@@ -718,9 +720,9 @@ const ContestDetailsView = ({
                </div>
                <div className="flex justify-between items-center px-4 py-2 text-xs font-bold text-[#b8a8a8] bg-[#ffeaea] dark:bg-app-card-inner border-b border-[#ffe2e2] dark:border-app-border">
                   <span className="flex-1 text-[13px] font-medium text-[#a09090] dark:text-app-text-muted">All Teams({sortedTeams.length})</span>
-                  <div className="flex gap-4 w-32 justify-end">
-                     <span className="w-12 text-center text-[13px] font-medium text-[#a09090] dark:text-app-text-muted">Points</span>
-                     <span className="w-12 text-right text-[13px] font-medium text-[#a09090] dark:text-app-text-muted">#Rank</span>
+                  <div className="flex gap-4 w-32 justify-end shrink-0">
+                     <span className="w-14 text-center text-[13px] font-medium text-[#a09090] dark:text-app-text-muted">Points</span>
+                     <span className="w-10 text-right text-[13px] font-medium text-[#a09090] dark:text-app-text-muted">#Rank</span>
                   </div>
                </div>
                
@@ -736,7 +738,7 @@ const ContestDetailsView = ({
                               if (!isCurrentUser && activeMatch?.status === 'Upcoming') return;
                               if (onParticipantClick) onParticipantClick(t);
                            }}
-                           className={`flex justify-between px-4 py-3.5 border-b border-gray-200 dark:border-app-border items-center z-10 transition-colors ${
+                           className={`flex justify-between px-3 py-2.5 border-b border-gray-200 dark:border-app-border items-center z-10 transition-colors ${
                               (!isCurrentUser && activeMatch?.status === 'Upcoming') ? 'cursor-default' : 'cursor-pointer hover:bg-gray-50 dark:hover:bg-app-card-hover/50'
                            } ${
                               isCurrentUser 
@@ -744,18 +746,18 @@ const ContestDetailsView = ({
                                 : 'bg-transparent'
                            }`}
                         >
-                           <div className="flex items-center gap-4 flex-1">
-                              <div className="w-10 h-10 rounded-full bg-slate-400 dark:bg-slate-700 flex items-center justify-center overflow-hidden shrink-0 shadow-[0_2px_5px_rgba(0,0,0,0.1)]">
-                                 <User size={26} className="text-white dark:text-slate-400 translate-y-1.5" />
+                           <div className="flex items-center gap-3 flex-1 overflow-hidden">
+                              <div className="w-8 h-8 rounded-sm bg-[#faeee8] border border-[#ee5723]/30 dark:bg-slate-700 font-bold text-[10px] text-app-text flex items-center justify-center shrink-0 uppercase">
+                                 {t.teamId || 'T1'}
                               </div>
-                              <div className="flex flex-col">
-                                 <span className="font-medium text-black dark:text-app-text text-[15px] whitespace-nowrap overflow-hidden text-ellipsis max-w-[150px]">{t.userName ? `${t.userName}(${t.teamId})` : t.userId ? `${t.userId}(${t.teamId})` : 'Guest Player'}</span>
-                                 {t.amountWon > 0 && <span className="text-[10px] text-green-600 dark:text-green-500 font-bold tracking-tight">WON ₹{Number(t.amountWon).toFixed(2).replace(/\.00$/, '')}</span>}
+                              <div className="flex flex-col overflow-hidden w-full">
+                                 <span className="font-semibold text-black dark:text-app-text text-[13px] whitespace-nowrap overflow-hidden text-ellipsis max-w-[130px]">{t.userName || t.userId || 'Guest Player'}</span>
+                                 {t.amountWon > 0 && <span className="text-[9px] text-green-600 dark:text-green-500 font-bold tracking-tight mt-0.5">WON ₹{Number(t.amountWon).toFixed(2).replace(/\.00$/, '')}</span>}
                               </div>
                            </div>
-                           <div className="flex gap-4 w-32 justify-end items-center">
-                              <span className="w-12 text-center text-sm text-[#7a7a7a] font-normal">{t.points}</span>
-                              <span className="w-12 text-right font-medium text-black dark:text-app-text text-[15px]">{t.rank}</span>
+                           <div className="flex gap-4 w-32 justify-end items-center shrink-0">
+                              <span className="w-14 text-center text-[13px] text-[#7a7a7a] font-semibold">{Number(t.points) % 1 !== 0 ? Number(t.points).toFixed(1) : t.points}</span>
+                              <span className="w-10 text-right font-bold text-black dark:text-app-text text-[13px]">#{t.rank} <span className="opacity-40 font-normal">-</span></span>
                            </div>
                         </div>
                         );
