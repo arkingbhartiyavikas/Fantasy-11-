@@ -2829,35 +2829,46 @@ export default function App() {
                             <Edit2 size={16} />
                         </button>
                     )}
-                    <button onClick={() => {
-                        setActiveMatch(st.match);
-                        const cMatch = appContests.find((cc: any) => cc.name === st.contestName);
-                        if (cMatch) setActiveContestDetails(cMatch);
-                        setActiveContestInstanceId(st.instanceId);
-                        setSelectedContest({ fee: st.fee, name: st.contestName });
-                        setTeam(st.players);
-                        setCaptain(null);
-                        setViceCaptain(null);
-                        setView('SELECT_CAPTAIN');
-                    }} className="p-2 text-white hover:bg-white/20 transition-colors border-l border-white/20">
-                        <Copy size={16} />
-                    </button>
+                    {currentMatchStatus === 'Upcoming' && (
+                        <button onClick={() => {
+                            setActiveMatch(st.match);
+                            const cMatch = appContests.find((cc: any) => cc.name === st.contestName);
+                            if (cMatch) setActiveContestDetails(cMatch);
+                            setActiveContestInstanceId(st.instanceId);
+                            setSelectedContest({ fee: st.fee, name: st.contestName });
+                            setTeam(st.players);
+                            setCaptain(null);
+                            setViceCaptain(null);
+                            setView('SELECT_CAPTAIN');
+                        }} className="p-2 text-white hover:bg-white/20 transition-colors border-l border-white/20">
+                            <Copy size={16} />
+                        </button>
+                    )}
                  </div>
                  
                  <div className="absolute bottom-2 left-3 right-3 flex justify-between items-end z-10">
                     <div className="flex gap-2">
-                        <div className="flex flex-col items-center">
-                            <span className="text-[10px] font-bold text-white mb-0.5">{st.match?.team1?.shortFrame}</span>
-                            <div className="bg-[#1b5e20] text-white font-bold w-9 h-9 rounded shadow border border-white/20 flex items-center justify-center text-sm">
-                                {t1Count}
+                        {currentMatchStatus === 'Upcoming' ? (
+                          <>
+                            <div className="flex flex-col items-center">
+                                <span className="text-[10px] font-bold text-white mb-0.5">{st.match?.team1?.shortFrame}</span>
+                                <div className="bg-[#1b5e20] text-white font-bold w-9 h-9 rounded shadow border border-white/20 flex items-center justify-center text-sm">
+                                    {t1Count}
+                                </div>
                             </div>
-                        </div>
-                        <div className="flex flex-col items-center">
-                            <span className="text-[10px] font-bold text-white mb-0.5">{st.match?.team2?.shortFrame}</span>
-                            <div className="bg-[#1b5e20] text-white font-bold w-9 h-9 rounded shadow border border-white/20 flex items-center justify-center text-sm">
-                                {t2Count}
+                            <div className="flex flex-col items-center">
+                                <span className="text-[10px] font-bold text-white mb-0.5">{st.match?.team2?.shortFrame}</span>
+                                <div className="bg-[#1b5e20] text-white font-bold w-9 h-9 rounded shadow border border-white/20 flex items-center justify-center text-sm">
+                                    {t2Count}
+                                </div>
                             </div>
-                        </div>
+                          </>
+                        ) : (
+                            <div className="flex flex-col justify-center items-start pl-2 mb-1">
+                                <span className="text-white text-xs font-semibold mb-0 drop-shadow-md opacity-90">Points</span>
+                                <span className="text-white text-2xl font-bold drop-shadow-md">{Number(totalPoints) % 1 !== 0 ? Number(totalPoints).toFixed(1) : totalPoints}</span>
+                            </div>
+                        )}
                     </div>
                     
                     <div className="flex gap-4">
@@ -2882,16 +2893,10 @@ export default function App() {
                     </div>
                  </div>
                  
-                 {(currentMatchStatus === 'Live' || currentMatchStatus === 'Completed') && (
-                     <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-black/60 px-3 py-1 rounded-full border border-white/20 text-center backdrop-blur-sm z-20 shadow-lg">
-                         <span className="text-[10px] text-white/80 uppercase font-bold tracking-wider mb-0.5 block">Points</span>
-                         <span className="text-white font-black leading-none">{totalPoints}</span>
-                     </div>
-                 )}
-             </div>
-             
-             <div className="bg-[#ffe4e6] dark:bg-[#4c1d2e] px-4 py-2 flex justify-between items-center text-[10px] font-bold text-slate-700 dark:text-red-100 tracking-wide">
-                 <span>WK <span className="text-black dark:text-white font-black">{wkCount}</span></span>
+              </div>
+              
+              <div className="bg-[#ffe4e6] dark:bg-[#4c1d2e] px-4 py-2 flex justify-between items-center text-[10px] font-bold text-slate-700 dark:text-red-100 tracking-wide">
+                  <span>WK <span className="text-black dark:text-white font-black">{wkCount}</span></span>
                  <span>BAT <span className="text-black dark:text-white font-black">{batCount}</span></span>
                  <span>AR <span className="text-black dark:text-white font-black">{arCount}</span></span>
                  <span>BOWL <span className="text-black dark:text-white font-black">{bowlCount}</span></span>
