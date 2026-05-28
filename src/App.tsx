@@ -3492,43 +3492,101 @@ export default function App() {
                             fillPercent = (teamsInThisInstance / cspots) * 100;
                         }
                         
+                        const isLiveOrCompleted = activeMatch?.status === 'Live' || activeMatch?.status === 'Completed';
+                        let myRenderTeams: any[] = [];
+                        
+                        if (isLiveOrCompleted) {
+                            const instanceTeams = savedTeams.filter(t => t.match?.id === activeMatch?.id && (t.contestId ? t.contestId === c.id : t.contestName === c.name) && (c.type === 'Mega' ? true : t.instanceId === dc.instanceId));
+                            const memoizedBotPoints: {[key: string]: number} = {};
+                            const teamsWPoints = instanceTeams.map(t => {
+                                let pts = 0;
+                                const botKey = (t.userId === 'admin_bot' || t.userId === 'admin_bot_boot') ? `${t.match?.id}_${t.botVariationId || 'old'}_${t.isWinnerBot ? 'win' : 'norm'}` : null;
+                                if (botKey && memoizedBotPoints[botKey] !== undefined) {
+                                    pts = memoizedBotPoints[botKey];
+                                } else {
+                                    pts = (t.players || []).reduce((acc: number, player: Player) => {
+                                        const livePlayer = appPlayers.find(p => p.id === player.id) || player;
+                                        let mult = 1;
+                                        if (livePlayer.id === t.captain) mult = 2;
+                                        else if (livePlayer.id === t.viceCaptain) mult = 1.5;
+                                        return acc + ((livePlayer.livePoints ?? livePlayer.points) * mult);
+                                    }, 0);
+                                    if (t.isWinnerBot) pts += 100000;
+                                    if (botKey) memoizedBotPoints[botKey] = pts;
+                                }
+                                return { ...t, pts };
+                            });
+                            teamsWPoints.sort((a, b) => b.pts - a.pts);
+                            let currentRank = 1;
+                            teamsWPoints.forEach((t, i) => {
+                                if (i > 0 && teamsWPoints[i-1].pts > t.pts) currentRank = i + 1;
+                                t.calcRank = currentRank;
+                            });
+                            myRenderTeams = teamsWPoints.filter(t => t.userId === (user?.id || 'guest'));
+                        }
+                        
                         return (
                          <div key={i} onClick={() => { setActiveContestInstanceId(dc.instanceId); setActiveContestDetails(c); setView('CONTEST_DETAILS'); }} className="bg-app-card rounded-xl shadow-sm border border-app-border overflow-hidden mb-2 cursor-pointer active:scale-[0.99] transition-transform relative">
                            <div className="p-2 bg-app-card-inner">
-                             <div className="flex justify-between items-center mb-1">
-                                <p className="text-[9px] text-app-text-muted font-semibold uppercase tracking-wider">Prize Pool</p>
-                                {renderBotControls(c)}
+                             <div className="flex justify-between items-center mb-1 border-b border-app-border pb-1">
+                                <p className="text-[11px] text-app-text-muted font-bold tracking-wider flex items-center gap-1.5"><div className="w-4 h-4 rounded-full bg-red-100 flex items-center justify-center shrink-0"><Trophy size={9} className="text-red-500" /></div> {c.prizeText}</p>
+                                <span className="flex items-center gap-1 text-[11px] font-bold text-app-text-muted"><Trophy size={11} className="text-[#e5c158]"/> {c.winPercentage || (c.type === 'Mega' ? 48 : 50)}% <div className="ml-1 w-4 h-4 border border-slate-300 rounded flex items-center justify-center text-[9px] font-black text-slate-500">M</div></span>
                              </div>
-                             <div className="flex justify-between items-center mb-2">
-                                 <p className="text-xl font-black text-app-text">{c.prizeText}</p>
-                                 <button 
-                                 onClick={(e) => {
-                                     e.stopPropagation();
-                                     if(activeMatch?.status !== 'Upcoming') {
-                                        alert("Match is already live or completed!"); return;
-                                     }
-                                     setActiveContestDetails(c);
-                                     setActiveContestInstanceId(dc.instanceId);
-                                     setSelectedContest({fee: c.entryFee, name: c.name, id: c.id, spots: c.spots});
-                                     setView('CREATE_TEAM');
-                                   }}
-                                   className={`${activeMatch?.status === 'Upcoming' ? 'bg-green-600 active:scale-95 hover:bg-green-700' : 'bg-slate-700'} transition-all text-white font-bold py-1 px-4 rounded text-sm shadow-sm border-b-[1px] border-green-800`}
-                                 >
-                                   ₹{c.entryFee}
-                                 </button>
+                             
+                             <div className="flex justify-between items-center pt-1 mb-2">
+                                <div className="flex flex-col">
+                                   <span className="text-[10px] text-app-text-muted font-semibold">Prize Pool</span>
+                                   <span className="text-xs font-black text-app-text">₹{c.firstPrize || c.prizeText}</span>
+                                </div>
+                                <div className="flex flex-col items-center">
+                                   <span className="text-[10px] text-app-text-muted font-semibold">Spots</span>
+                                   <span className="text-xs font-black text-app-text">{c.type === 'Mega' ? c.spots : cspots}</span>
+                                </div>
+                                <div className="flex flex-col items-end">
+                                   <span className="text-[10px] text-app-text-muted font-semibold">Entry Fee</span>
+                                   <span className="text-xs font-black text-app-text">₹{c.entryFee}</span>
+                                </div>
                              </div>
-                             <div className="bg-app-bg h-1 rounded-full mb-1.5 overflow-hidden">
-                               <div className="bg-app-accent h-full" style={{width: `${fillPercent}%`}}></div>
-                             </div>
-                             <div className="flex justify-between text-[9px] text-app-text-muted font-semibold pb-1">
-                               <span className="text-red-400">{spotsLeft} spots left</span>
-                               <span>{c.type === 'Mega' ? c.spots : cspots} spots</span>
-                             </div>
-                           </div>
-                           <div className="p-1.5 px-2 bg-slate-50/5 dark:bg-app-bg border-t border-app-border flex shrink-0 items-center justify-start gap-3 text-[9px] font-semibold text-app-text-muted">
-                             <span className="flex items-center gap-1"><div className="w-3.5 h-3.5 rounded-full border border-yellow-500 text-[#e5c158] flex items-center justify-center text-[7px] font-bold bg-[#e5c158]/10">1st</div> {c.firstPrize || c.prizeText}</span>
-                             <span className="flex items-center gap-1"><Trophy size={9} className="text-app-text-muted"/> {c.winPercentage || (c.type === 'Mega' ? 48 : 50)}%</span>
-                             <span className="flex items-center gap-1"><div className="w-3.5 h-3.5 border border-slate-500 rounded flex items-center justify-center text-[7px] font-bold text-app-text-muted">M</div> {c.maxTeams || (c.type === 'Mega' ? 20 : 1)}</span>
+                             
+                             {!isLiveOrCompleted ? (
+                                <>
+                                  <div className="bg-app-bg h-1 rounded-full mb-1.5 overflow-hidden">
+                                    <div className="bg-app-accent h-full" style={{width: `${fillPercent}%`}}></div>
+                                  </div>
+                                  <div className="flex justify-between text-[9px] text-app-text-muted font-semibold pb-1">
+                                    <span className="text-red-400">{spotsLeft} spots left</span>
+                                    <span>{c.type === 'Mega' ? c.spots : cspots} spots</span>
+                                  </div>
+                                </>
+                             ) : (
+                                <div className="mt-2 -mx-2 mb-0">
+                                   <div className="flex justify-between items-center bg-[#f1eeea] dark:bg-[#2c2f38] px-3 py-1.5 text-[10px] font-bold text-slate-500 dark:text-slate-400">
+                                      <span className="w-16">Teams</span>
+                                      <span className="flex-1 text-center">Points</span>
+                                      <span className="w-16 text-right">Rank</span>
+                                   </div>
+                                   {myRenderTeams.map((t, idx) => {
+                                      const teamLabel = t.teamId || `T${idx+1}`;
+                                      const userName = t.userName || user?.name || 'User';
+                                      
+                                      return (
+                                        <div key={t.id} className="flex justify-between items-center px-3 py-2 border-b border-app-border last:border-b-0 bg-white dark:bg-app-card">
+                                           <div className="w-16 flex items-center gap-2">
+                                              <div className="w-6 h-6 border bg-[#faeee8] dark:bg-[#342420] border-[#ee5723]/30 flex items-center justify-center font-bold text-[9px] text-app-text rounded">{teamLabel}</div>
+                                           </div>
+                                           <div className="flex-1 flex flex-col items-center">
+                                              <span className="font-bold text-app-text text-[11px] mb-0.5">{userName}</span>
+                                              <div className="flex flex-col items-center">
+                                                 <span className="text-[9px] text-app-text-muted">Points</span>
+                                                 <span className="font-bold text-[11px] text-app-text">{Number(t.pts) % 1 !== 0 ? Number(t.pts).toFixed(1) : t.pts}</span>
+                                              </div>
+                                           </div>
+                                           <div className="w-16 text-right font-bold text-[12px] text-app-text">#{t.calcRank} <span className="opacity-40">-</span></div>
+                                        </div>
+                                      )
+                                   })}
+                                </div>
+                             )}
                            </div>
                          </div>
                         )
