@@ -2012,7 +2012,7 @@ export default function App() {
 
             // Generate payouts
             let payouts = contest.payouts && contest.payouts.length > 0 ? [...contest.payouts] : [];
-            if (contest.type === 'Mega' && contest.spots > 0) {
+            if (contest.type === 'Mega' && contest.spots > 0 && !contest.hasCustomPayouts) {
                  const scaleRatio = Math.min(1, Math.max(0, contestTeams.length / contest.spots));
                  payouts = payouts.map(p => ({
                      ...p,
@@ -8036,7 +8036,7 @@ export default function App() {
                 setAppContests(prev => {
                    const updated = prev.map(c => 
                       (c.id === activeContestDetails.id || c.name === activeContestDetails.name) 
-                         ? { ...c, payouts: newPayouts } 
+                         ? { ...c, payouts: newPayouts, hasCustomPayouts: true } 
                          : c
                    );
                    localStorage.setItem('dreamApp_contests', JSON.stringify(updated));
@@ -8044,7 +8044,7 @@ export default function App() {
                    syncCategoryToCloud('contests', updated, 20);
                    return updated;
                 });
-                setActiveContestDetails(prev => prev ? { ...prev, payouts: newPayouts } : prev);
+                setActiveContestDetails(prev => prev ? { ...prev, payouts: newPayouts, hasCustomPayouts: true } : prev);
                 
                 alert("Live Payouts applied! It will be distributed when the match is explicitly marked as Completed in Match Status.");
             }}
