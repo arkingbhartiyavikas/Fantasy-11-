@@ -2424,6 +2424,19 @@ export default function App() {
   const [currentTime, setCurrentTime] = useState<Date>(new Date());
 
   useEffect(() => {
+     if ((view === 'CREATE_TEAM' || view === 'SELECT_CAPTAIN') && activeMatch) {
+         const currentMatchUpdated = appMatches.find(m => m.id === activeMatch.id);
+         const isTimeUp = (activeMatch.matchDateISO && new Date(activeMatch.matchDateISO).getTime() <= currentTime.getTime()) || (currentMatchUpdated?.status !== 'Upcoming');
+         if (isTimeUp) {
+             if (!isAdminBotEditMode) {
+                 alert("Time completed! You can no longer edit your team.");
+                 setView('MATCH'); // go back to match screen
+             }
+         }
+     }
+  }, [currentTime, view, activeMatch, isAdminBotEditMode, appMatches]);
+
+  useEffect(() => {
     const timer = setInterval(() => {
         const now = new Date();
         setCurrentTime(now);
@@ -3534,7 +3547,8 @@ export default function App() {
                      </div>
                 ) : (
                    savedTeams.filter(t => t.match?.id === activeMatch?.id && t.userId === (user?.id || 'guest')).map((st, i) => {
-                       const currentMatchStatus = activeMatch?.status || 'Completed';
+                       const updatedMatch = appMatches.find(m => m.id === activeMatch?.id);
+                       const currentMatchStatus = updatedMatch?.status || activeMatch?.status || 'Completed';
                        const totalPoints = (st.players || []).reduce((acc: number, player: Player) => {
                           const livePlayer = appPlayers.find(p => p.id === player.id) || player;
                           let mult = 1;
@@ -3563,9 +3577,7 @@ export default function App() {
           <div className="flex items-center justify-between mb-4">
             <button onClick={() => { setView('MATCH'); setIsAdminBotEditMode(null); }} className="p-1 -ml-1 active:bg-app-card/10 rounded-full"><ArrowLeft size={24} /></button>
             <div className="font-bold text-sm flex gap-2">
-              <span>{activeMatch.time}</span>
-              <span className="opacity-50">|</span>
-              <span className="text-[#f0b90b]">CREATE TEAM 1</span>
+              <span className="text-[#f0b90b]">{getFormattedTimer(activeMatch)}</span>
             </div>
             <button className="p-1 active:bg-app-card/10 rounded-full"><Info size={20} /></button>
           </div>
