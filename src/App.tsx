@@ -516,12 +516,12 @@ const ContestDetailsView = ({
   const [liveCustomPayouts, setLiveCustomPayouts] = useState<{rankFrom: string, rankTo: string, amount: string}[]>([]);
   
   const contestTeams = useMemo(() => {
-     let filtered = savedTeams.filter(t => t.match?.id === activeMatch?.id && t.contestName === contest.name);
+     let filtered = savedTeams.filter(t => t.match?.id === activeMatch?.id && (t.contestId ? t.contestId === contest.id : t.contestName === contest.name));
      if (instanceId != null) {
         filtered = filtered.filter(t => typeof t.instanceId === 'number' ? t.instanceId === instanceId : true);
      }
      return filtered;
-  }, [savedTeams, activeMatch?.id, contest.name, instanceId]);
+  }, [savedTeams, activeMatch?.id, contest.id, contest.name, instanceId]);
   
   // Real-time calculation based on joined teams
   const currentCollected = contestTeams.length * contest.entryFee;
@@ -3347,10 +3347,13 @@ export default function App() {
               {megaContests.map(c => {
                 const totalTeamsCount = savedTeams.filter(t => t.match?.id === activeMatch?.id && (t.contestId ? t.contestId === c.id : t.contestName === c.name)).length;
                 const spotsLeft = Math.max(0, c.spots - totalTeamsCount);
+                
+                if (!isAdmin && spotsLeft <= 0) return null;
+                
                 const fillPercent = Math.min(100, (totalTeamsCount / c.spots) * 100);
                 
                 return (
-                <div key={c.id} onClick={() => { setActiveContestDetails(c); setView('CONTEST_DETAILS'); }} className="bg-app-card rounded-xl shadow-sm border border-app-border overflow-hidden mb-2 cursor-pointer active:scale-[0.99] transition-transform relative">
+                <div key={c.id} onClick={() => { setActiveContestInstanceId(null); setActiveContestDetails(c); setView('CONTEST_DETAILS'); }} className="bg-app-card rounded-xl shadow-sm border border-app-border overflow-hidden mb-2 cursor-pointer active:scale-[0.99] transition-transform relative">
                   <div className="p-2 bg-app-card-inner">
                     <div className="flex justify-between items-center mb-1">
                        <p className="text-[9px] text-app-text-muted font-semibold uppercase tracking-wider">Prize Pool</p>
@@ -3364,6 +3367,7 @@ export default function App() {
                           if(activeMatch?.status !== 'Upcoming') {
                              alert("Match is already live or completed!"); return;
                           }
+                          setActiveContestInstanceId(null);
                           setActiveContestDetails(c);
                           setSelectedContest({fee: c.entryFee, name: c.name, id: c.id, spots: c.spots});
                           setView('CREATE_TEAM');
@@ -3396,6 +3400,8 @@ export default function App() {
                 const teamsInCurrentInstance = totalTeamsCount % cspots;
                 const spotsLeft = cspots - teamsInCurrentInstance;
                 const fillPercent = (teamsInCurrentInstance / cspots) * 100;
+                
+                if (!isAdmin && spotsLeft <= 0) return null;
                 
                 return (
                 <div key={c.id} onClick={() => { setActiveContestInstanceId(Math.floor(totalTeamsCount / cspots)); setActiveContestDetails(c); setView('CONTEST_DETAILS'); }} className="bg-app-card rounded-xl shadow-sm border border-app-border overflow-hidden mb-2 cursor-pointer active:scale-[0.99] transition-transform relative">
