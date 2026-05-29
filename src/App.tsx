@@ -7751,7 +7751,11 @@ export default function App() {
                               {matchPlayers.map((player) => (
                                 <div 
                                   key={player.id} 
-                                  onClick={() => setAppPlayers(appPlayers.map(p => p.id === player.id ? { ...p, isPlaying: !p.isPlaying } : p))}
+                                  onClick={() => {
+                                      const updatedPlayers = appPlayers.map(p => p.id === player.id ? { ...p, isPlaying: !p.isPlaying } : p);
+                                      setAppPlayers(updatedPlayers);
+                                      syncCategoryToCloud('players', updatedPlayers, 100);
+                                  }}
                                   className={`bg-black/60 rounded-xl border cursor-pointer hover:border-[#e5c158]/50 transition-colors overflow-hidden flex justify-between items-center p-4 ${player.isPlaying ? 'border-green-500/40 shadow-[0_0_10px_rgba(34,197,94,0.1)]' : 'border-slate-700'}`}
                                 >
                                   <div className="flex flex-col gap-1">
