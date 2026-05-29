@@ -6447,7 +6447,7 @@ export default function App() {
       className={`flex items-center justify-between w-full mt-4 bg-[#13151c] border ${showPlayerScoring ? 'border-[#e5c158]/30 rounded-t-xl border-b-0 mb-0 bg-gradient-to-b from-[#e5c158]/5 to-transparent' : 'border-slate-800 rounded-xl mb-3 hover:border-[#e5c158]/30'} p-4 shadow-lg transition-all relative group overflow-hidden`}
     >
                 <div className="absolute inset-0 bg-gradient-to-r from-yellow-500/0 via-yellow-500/5 to-yellow-500/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000"></div>
-                <h3 className="font-bold text-slate-200 tracking-wide flex items-center justify-between z-10">Live Player Scoring & Adjustments</h3>
+                <h3 className="font-bold text-slate-200 tracking-wide flex items-center justify-between z-10">Live Scoring</h3>
                 <div className={`p-1.5 rounded-lg border transition-all z-10 ${showPlayerScoring ? 'text-black border-[#e5c158] bg-[#e5c158] shadow-[0_0_10px_rgba(229,193,88,0.5)]' : 'text-slate-500 border-slate-700 bg-black/40 group-hover:text-[#e5c158] group-hover:border-[#e5c158]/30'}`}>
        {showPlayerScoring ? <ChevronUp size={16} strokeWidth={3} /> : <ChevronDown size={16} />}
     </div>
@@ -6455,7 +6455,7 @@ export default function App() {
              
              {showPlayerScoring && (
                <div className="bg-[#13151c] rounded-b-2xl shadow-lg border border-[#e5c158]/50 border-t-0 p-5 mb-6 backdrop-blur-sm relative before:absolute before:inset-0 before:bg-gradient-to-b before:from-yellow-500/5 before:to-transparent before:pointer-events-none">
-                  <h2 className="text-xl font-bold text-slate-200 tracking-wide uppercase text-center mb-6 relative z-10">PLAYER SCORING & ADJUSTMENTS</h2>
+                  <h2 className="text-xl font-bold text-slate-200 tracking-wide uppercase text-center mb-6 relative z-10">LIVE SCORING</h2>
                   
                   {(() => {
                       if (!adminScoringLiveMatchId) {
@@ -6493,71 +6493,71 @@ export default function App() {
                       if (!activeMatch) return null;
 
                       const liveTeams = [activeMatch?.team1?.shortFrame, activeMatch?.team2?.shortFrame];
-                      const filteredPlayers = appPlayers.filter(p => liveTeams.includes(p.team) && ((p.name || '').toLowerCase().includes((playerScoringSearch || '').toLowerCase()) || (p.team || '').toLowerCase().includes((playerScoringSearch || '').toLowerCase())));
+                      const filteredPlayers = appPlayers.filter(p => liveTeams.includes(p.team) && p.isPlaying === true && ((p.name || '').toLowerCase().includes((playerScoringSearch || '').toLowerCase()) || (p.team || '').toLowerCase().includes((playerScoringSearch || '').toLowerCase())));
 
                       return (
                           <>
                               <div className="mb-6 relative z-10">
                                 <div className="flex items-center gap-3 mb-4">
-                                  <button onClick={() => setAdminScoringLiveMatchId(null)} className="p-1.5 bg-black/40 border border-slate-700 rounded-lg hover:border-[#e5c158]/50"><ArrowLeft size={16} className="text-slate-400" /></button>
-                                  <h3 className="font-bold text-slate-200">{activeMatch?.team1?.name} vs {activeMatch?.team2?.name}</h3>
+                                  <button onClick={() => setAdminScoringLiveMatchId(null)} className="p-1bg-black/40 border border-slate-700 rounded hover:border-[#e5c158]/50"><ArrowLeft size={14} className="text-slate-400" /></button>
+                                  <h3 className="text-sm font-bold text-slate-200">{activeMatch?.team1?.name} vs {activeMatch?.team2?.name}</h3>
                                 </div>
-                                <div className="flex items-center gap-2 bg-black/40 border border-slate-700/50 rounded-lg p-2.5">
-                                  <Search size={16} className="text-slate-500" />
+                                <div className="flex items-center gap-2 bg-black/40 border border-slate-700/50 rounded p-1.5">
+                                  <Search size={14} className="text-slate-500" />
                                   <input 
                                      type="text" 
                                      value={playerScoringSearch}
                                      onChange={e => setPlayerScoringSearch(e.target.value)}
-                                     className="w-full bg-transparent text-sm text-slate-200 outline-none placeholder:text-slate-600 focus:border-none focus:ring-0" 
-                                     placeholder="Search Player by Name or Team" 
+                                     className="w-full bg-transparent text-[11px] text-slate-200 outline-none placeholder:text-slate-600 focus:border-none focus:ring-0" 
+                                     placeholder="Search Playing 22..." 
                                   />
                                 </div>
                               </div>
                               
-                              <div className="overflow-hidden rounded-xl border border-slate-800/50 bg-black/20 relative z-10 overflow-x-auto">
-                                <table className="w-full text-left text-xs min-w-[1000px]">
+                              <div className="overflow-hidden rounded-lg border border-slate-800/50 bg-black/20 relative z-10 overflow-x-auto">
+                                <table className="w-full text-left text-[10px] min-w-[700px]">
                                   <thead className="bg-[#090b10] border-b border-slate-800/50 text-slate-400">
                                     <tr>
-                                      <th className="p-3 font-normal whitespace-nowrap">Player Name</th>
-                                      <th className="p-3 font-normal">Team</th>
-                                      <th className="p-3 font-normal text-center">Points<br/>(Default)</th>
-                                      <th className="p-3 font-normal text-center">Adjustment<br/>Value</th>
-                                      <th className="p-3 font-normal text-center">Manual<br/>Override</th>
-                                      <th className="p-3 font-normal text-center">Quick Points Adds</th>
-                                      <th className="p-3 font-normal text-center">Action</th>
+                                      <th className="px-2 py-2 font-normal whitespace-nowrap">Player Name</th>
+                                      <th className="px-1 py-2 font-normal">Team</th>
+                                      <th className="px-1 py-2 font-normal text-center">Pts</th>
+                                      <th className="px-1 py-2 font-normal text-center">Adj</th>
+                                      <th className="px-1 py-2 font-normal text-center">Manual</th>
+                                      <th className="px-1 py-2 font-normal text-center">Quick Adds</th>
+                                      <th className="px-2 py-2 font-normal text-center">Action</th>
                                     </tr>
                                   </thead>
                                   <tbody className="divide-y divide-slate-800/50 bg-black/20">
                                     {filteredPlayers.slice(0, 50).map((p) => {
                            const st = playerAdjustments[p.id] || { adjustment: 0, manual: p.points, reason: '' };
                            return (
-                             <tr key={p.id}>
-                               <td className="p-3 font-bold text-slate-200 cursor-pointer hover:text-[#e5c158] transition-colors" onClick={() => setAdminEditPlayerBreakup(p)}>{p.name}</td>
-                               <td className="p-3 text-slate-400 font-mono">{String(p.team || '').substring(0,3).toUpperCase()}</td>
-                               <td className="p-3 text-center text-slate-300">{p.points}</td>
-                               <td className="p-3">
-                                  <div className="flex items-center justify-center gap-2 bg-[#090b10] border border-slate-700 rounded p-1 w-24 mx-auto">
-                                    <button onClick={() => setPlayerAdjustments(prev => ({...prev, [p.id]: {...st, adjustment: st.adjustment - 1, manual: p.points + st.adjustment - 1}}))} className="text-slate-400 hover:text-white font-mono text-base font-bold">-</button>
-                                    <span className={`font-mono font-bold w-6 text-center ${st.adjustment > 0 ? 'text-green-500' : st.adjustment < 0 ? 'text-red-500' : 'text-slate-400'}`}>{st.adjustment > 0 ? '+' : ''}{st.adjustment}</span>
-                                    <button onClick={() => setPlayerAdjustments(prev => ({...prev, [p.id]: {...st, adjustment: st.adjustment + 1, manual: p.points + st.adjustment + 1}}))} className="text-slate-400 hover:text-white font-mono text-base font-bold">+</button>
+                             <tr key={p.id} className="hover:bg-black/40">
+                               <td className="px-2 py-1.5 font-bold text-slate-200 cursor-pointer hover:text-[#e5c158] transition-colors whitespace-nowrap" onClick={() => setAdminEditPlayerBreakup(p)}>{p.name}</td>
+                               <td className="px-1 py-1.5 text-slate-400 font-mono text-[9px]">{String(p.team || '').substring(0,3).toUpperCase()}</td>
+                               <td className="px-1 py-1.5 text-center text-slate-300 font-bold">{p.points}</td>
+                               <td className="px-1 py-1.5 text-center">
+                                  <div className="flex items-center justify-center gap-1 bg-[#090b10] border border-slate-700 rounded p-0.5 w-[60px] mx-auto">
+                                    <button onClick={() => setPlayerAdjustments(prev => ({...prev, [p.id]: {...st, adjustment: st.adjustment - 1, manual: p.points + st.adjustment - 1}}))} className="text-slate-400 hover:text-white font-mono font-bold px-1\">-</button>
+                                    <span className={`font-mono font-bold w-4 text-[9px] text-center ${st.adjustment > 0 ? 'text-green-500' : st.adjustment < 0 ? 'text-red-500' : 'text-slate-400'}`}>{st.adjustment > 0 ? '+' : ''}{st.adjustment}</span>
+                                    <button onClick={() => setPlayerAdjustments(prev => ({...prev, [p.id]: {...st, adjustment: st.adjustment + 1, manual: p.points + st.adjustment + 1}}))} className="text-slate-400 hover:text-white font-mono font-bold px-1\">+</button>
                                   </div>
                                </td>
-                               <td className="p-3">
-                                  <div className="w-16 mx-auto">
+                               <td className="px-1 py-1.5 text-center">
+                                  <div className="w-[46px] mx-auto">
                                     <input type="number" 
                                       value={st.manual}
                                       onChange={e => setPlayerAdjustments(prev => ({...prev, [p.id]: {...st, manual: parseInt(e.target.value)||0, adjustment: (parseInt(e.target.value)||0) - p.points}}))}
-                                      className="w-full bg-[#090b10] border border-slate-800 text-center rounded p-1.5 text-xs text-slate-200 outline-none focus:border-[#e5c158]/50" />
+                                      className="w-full bg-[#090b10] border border-slate-800 text-center rounded p-0.5 text-[9px] font-bold text-slate-200 outline-none focus:border-[#e5c158]/50" />
                                   </div>
                                </td>
-                               <td className="p-3">
-                                 <div className="flex flex-wrap gap-1.5 justify-center max-w-[280px] mx-auto">
-                                    <button onClick={() => setPlayerAdjustments(prev => ({...prev, [p.id]: {...st, adjustment: st.adjustment + 25, manual: p.points + st.adjustment + 25}}))} className="bg-green-600/20 hover:bg-green-600/40 text-green-500 text-[10px] px-2 py-1 rounded border border-green-600/30 whitespace-nowrap font-bold text-center flex items-center justify-center">+25 WICKET</button>
-                                    <button onClick={() => setPlayerAdjustments(prev => ({...prev, [p.id]: {...st, adjustment: st.adjustment + 12, manual: p.points + st.adjustment + 12}}))} className="bg-green-600/20 hover:bg-green-600/40 text-green-500 text-[10px] px-2 py-1 rounded border border-green-600/30 whitespace-nowrap font-bold text-center flex items-center justify-center">+12 CATCH</button>
-                                    <button onClick={() => setPlayerAdjustments(prev => ({...prev, [p.id]: {...st, adjustment: st.adjustment + 6, manual: p.points + st.adjustment + 6}}))} className="bg-green-600/20 hover:bg-green-600/40 text-green-500 text-[10px] px-2 py-1 rounded border border-green-600/30 whitespace-nowrap font-bold text-center flex items-center justify-center">+6 SIX</button>
-                                    <button onClick={() => setPlayerAdjustments(prev => ({...prev, [p.id]: {...st, adjustment: st.adjustment + 4, manual: p.points + st.adjustment + 4}}))} className="bg-green-600/20 hover:bg-green-600/40 text-green-500 text-[10px] px-2 py-1 rounded border border-green-600/30 whitespace-nowrap font-bold text-center flex items-center justify-center">+4 FOUR</button>
-                                    <button onClick={() => setPlayerAdjustments(prev => ({...prev, [p.id]: {...st, adjustment: st.adjustment + 2, manual: p.points + st.adjustment + 2}}))} className="bg-green-600/20 hover:bg-green-600/40 text-green-500 text-[10px] px-2 py-1 rounded border border-green-600/30 whitespace-nowrap font-bold text-center flex items-center justify-center">+2 (2 RUNS)</button>
-                                    <button onClick={() => setPlayerAdjustments(prev => ({...prev, [p.id]: {...st, adjustment: st.adjustment + 1, manual: p.points + st.adjustment + 1}}))} className="bg-green-600/20 hover:bg-green-600/40 text-green-500 text-[10px] px-2 py-1 rounded border border-green-600/30 whitespace-nowrap font-bold text-center flex items-center justify-center">+1 RUN</button>
+                               <td className="px-1 py-1.5">
+                                 <div className="flex flex-wrap gap-1 justify-center max-w-[260px] mx-auto">
+                                    <button onClick={() => setPlayerAdjustments(prev => ({...prev, [p.id]: {...st, adjustment: st.adjustment + 25, manual: p.points + st.adjustment + 25}}))} className="bg-green-600/20 hover:bg-green-600/40 text-green-500 text-[8px] px-1 py-0.5 rounded border border-green-600/30 whitespace-nowrap font-bold text-center flex items-center justify-center">+25 WKT</button>
+                                    <button onClick={() => setPlayerAdjustments(prev => ({...prev, [p.id]: {...st, adjustment: st.adjustment + 12, manual: p.points + st.adjustment + 12}}))} className="bg-green-600/20 hover:bg-green-600/40 text-green-500 text-[8px] px-1 py-0.5 rounded border border-green-600/30 whitespace-nowrap font-bold text-center flex items-center justify-center">+12 CAT</button>
+                                    <button onClick={() => setPlayerAdjustments(prev => ({...prev, [p.id]: {...st, adjustment: st.adjustment + 6, manual: p.points + st.adjustment + 6}}))} className="bg-green-600/20 hover:bg-green-600/40 text-green-500 text-[8px] px-1 py-0.5 rounded border border-green-600/30 whitespace-nowrap font-bold text-center flex items-center justify-center">+6 SIX</button>
+                                    <button onClick={() => setPlayerAdjustments(prev => ({...prev, [p.id]: {...st, adjustment: st.adjustment + 4, manual: p.points + st.adjustment + 4}}))} className="bg-green-600/20 hover:bg-green-600/40 text-green-500 text-[8px] px-1 py-0.5 rounded border border-green-600/30 whitespace-nowrap font-bold text-center flex items-center justify-center">+4 4s</button>
+                                    <button onClick={() => setPlayerAdjustments(prev => ({...prev, [p.id]: {...st, adjustment: st.adjustment + 2, manual: p.points + st.adjustment + 2}}))} className="bg-green-600/20 hover:bg-green-600/40 text-green-500 text-[8px] px-1 py-0.5 rounded border border-green-600/30 whitespace-nowrap font-bold text-center flex items-center justify-center">+2 (2R)</button>
+                                    <button onClick={() => setPlayerAdjustments(prev => ({...prev, [p.id]: {...st, adjustment: st.adjustment + 1, manual: p.points + st.adjustment + 1}}))} className="bg-green-600/20 hover:bg-green-600/40 text-green-500 text-[8px] px-1 py-0.5 rounded border border-green-600/30 whitespace-nowrap font-bold text-center flex items-center justify-center">+1 1R</button>
                                     
                                     <button onClick={() => {
                                         const customStr = prompt('Enter custom points to add/subtract:');
@@ -6565,10 +6565,10 @@ export default function App() {
                                             const pts = parseInt(customStr);
                                             setPlayerAdjustments(prev => ({...prev, [p.id]: {...st, adjustment: st.adjustment + pts, manual: p.points + st.adjustment + pts}}));
                                         }
-                                    }} className="bg-[#e5c158]/20 hover:bg-[#e5c158]/40 text-[#e5c158] text-[10px] px-2 py-1 rounded border border-[#e5c158]/30 flex items-center justify-center font-bold font-mono min-w-[30px]"><Plus size={12} /></button>
+                                    }} className="bg-[#e5c158]/20 hover:bg-[#e5c158]/40 text-[#e5c158] text-[8px] px-1 py-0.5 rounded border border-[#e5c158]/30 flex items-center justify-center font-bold font-mono min-w-[20px]"><Plus size={10} /></button>
                                  </div>
                                </td>
-                               <td className="p-3 text-center">
+                               <td className="px-2 py-1.5 text-center">
                                  <button 
                                      onClick={async () => {
                                         const finalPts = st.manual;
@@ -6591,8 +6591,8 @@ export default function App() {
                                             setUpdateSuccessIds(prev => ({...prev, [p.id]: false}));
                                         }, 2000);
                                      }}
-                                     className={`${updateSuccessIds[p.id] ? 'bg-blue-600/30 hover:bg-blue-600/50 text-blue-400 border-blue-500/50' : 'bg-green-600/20 hover:bg-green-600/40 text-green-500 border-green-600/30'} font-bold px-4 py-2 rounded border transition-all text-xs uppercase tracking-wider`}>
-                                    {updateSuccessIds[p.id] ? 'Successful' : 'Update'}
+                                     className={`${updateSuccessIds[p.id] ? 'bg-blue-600/30 hover:bg-blue-600/50 text-blue-400 border-blue-500/50' : 'bg-green-600/20 hover:bg-green-600/40 text-green-500 border-green-600/30'} font-bold px-2 py-1 rounded border transition-all text-[9px] uppercase tracking-wider`}>
+                                    {updateSuccessIds[p.id] ? 'Done' : 'Save'}
                                  </button>
                                </td>
                              </tr>
