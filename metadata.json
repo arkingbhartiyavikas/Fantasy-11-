@@ -1,5 +1,5 @@
 {
-  "name": "ARKING",
+  "name": "Fantasy 11",
   "description": "An AI-powered photo editing application that allows users to restore and clean up blurry or low-quality photos. Features include user authentication, a freemium model with edit limits, and an integrated UPI payment gateway for purchasing premium subscription plans.",
   "requestFramePermissions": [],
   "majorCapabilities": []
