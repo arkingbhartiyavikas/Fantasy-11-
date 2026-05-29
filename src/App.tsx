@@ -747,9 +747,7 @@ const ContestDetailsView = ({
                            }`}
                         >
                            <div className="flex items-center gap-3 flex-1 overflow-hidden">
-                              <div className="w-8 h-8 rounded-sm bg-[#faeee8] border border-[#ee5723]/30 dark:bg-slate-700 font-bold text-[10px] text-app-text flex items-center justify-center shrink-0 uppercase">
-                                 {t.teamId || 'T1'}
-                              </div>
+                              <div className="w-8 h-8 rounded-sm bg-[#faeee8] border border-[#ee5723]/30 dark:bg-slate-700 font-bold text-[10px] text-app-text flex items-center justify-center shrink-0 uppercase overflow-hidden">{(isCurrentUser && user?.photoURL) || t.userPhotoURL ? (<img src={(isCurrentUser && user?.photoURL) || t.userPhotoURL} alt="Avatar" className="w-full h-full object-cover" />) : (t.teamId || "T1")}</div>
                               <div className="flex flex-col overflow-hidden w-full">
                                  <span className="font-semibold text-black dark:text-app-text text-[13px] whitespace-nowrap overflow-hidden text-ellipsis max-w-[130px]">{t.userName || t.userId || 'Guest Player'}</span>
                                  {t.amountWon > 0 && <span className="text-[9px] text-green-600 dark:text-green-500 font-bold tracking-tight mt-0.5">WON ₹{Number(t.amountWon).toFixed(2).replace(/\.00$/, '')}</span>}
@@ -863,7 +861,7 @@ const POINT_EVENTS = [
 
 export default function App() {
   const [authInitialized, setAuthInitialized] = useState(false);
-  const [user, setUser] = useState<{email: string, id: string, name: string, numericId?: string} | null>(() => {
+  const [user, setUser] = useState<{email: string, id: string, name: string, numericId?: string, photoURL?: string} | null>(() => {
     const saved = localStorage.getItem('dreamApp_user');
     try { return saved ? JSON.parse(saved) : null; } catch(e) { return null; }
   });
@@ -1130,12 +1128,7 @@ export default function App() {
                  localStorage.setItem(`dreamApp_numericId_${existingDocId}`, numericId);
                  localStorage.setItem('dreamApp_hasSignedUp', 'true');
                  
-                 const newUser = {
-                   email: fbUser.email || data.email || '',
-                   name: data.name || fbUser.displayName || 'Fantasy Player',
-                   id: existingDocId,
-                   numericId: numericId
-                 };
+                 const newUser = { email: fbUser.email || data.email || "", name: data.name || fbUser.displayName || "Fantasy Player", id: existingDocId, numericId: numericId, photoURL: data.photoURL };
                  
                  localStorage.setItem('dreamApp_user', JSON.stringify(newUser));
                  setUser(newUser);
@@ -2693,6 +2686,7 @@ export default function App() {
       userId: user?.id || 'guest',
       userNumericId: user?.numericId,
       userName: user?.name || String(user?.email || '').split('@')[0] || 'Guest Player',
+      userPhotoURL: user?.photoURL,
       prizeDistributed: false,
       instanceId: instanceId,
       createdAt: Date.now()
@@ -4429,6 +4423,50 @@ export default function App() {
     const userKycObj = kycRequests.find(k => k.userId === (user?.id || 'guest'));
     const kycStatus = userKycObj ? userKycObj.status : 'Pending';
 
+    const handleProfileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        if(!file || !user) return;
+
+        const reader = new FileReader();
+        reader.onload = async (e) => {
+            const img = new globalThis.Image();
+            img.onload = async () => {
+                const canvas = document.createElement('canvas');
+                const MAX_SIZE = 200;
+                let width = img.width;
+                let height = img.height;
+                if (width > height) {
+                    if (width > MAX_SIZE) {
+                        height *= MAX_SIZE / width;
+                        width = MAX_SIZE;
+                    }
+                } else {
+                    if (height > MAX_SIZE) {
+                        width *= MAX_SIZE / height;
+                        height = MAX_SIZE;
+                    }
+                }
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext('2d');
+                ctx?.drawImage(img, 0, 0, width, height);
+                const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+                
+                try {
+                   await updateDoc(doc(db, 'users', user.id), { photoURL: dataUrl });
+                   const updatedUser = { ...user, photoURL: dataUrl };
+                   setUser(updatedUser);
+                   localStorage.setItem('dreamApp_user', JSON.stringify(updatedUser));
+                } catch(error) {
+                   console.error(error);
+                   alert('Failed to update profile picture.');
+                }
+            };
+            img.src = e.target?.result as string;
+        };
+        reader.readAsDataURL(file);
+    };
+
     return (
      <div className="flex flex-col h-full bg-app-bg">
         <header className="p-4 flex items-center justify-between pb-2 bg-app-bg">
@@ -4443,8 +4481,16 @@ export default function App() {
         <div className="p-4 flex-1 overflow-y-auto pb-20">
            <div className="bg-app-accent rounded-xl shadow-sm p-5 flex flex-col mb-4 text-white">
               <div className="flex items-center gap-4">
-                <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center text-3xl font-bold text-app-text shadow-inner">
-                   {(user?.name || user?.email || 'U').charAt(0).toUpperCase()}
+                <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center text-3xl font-bold text-app-text shadow-inner relative group">
+                   {user?.photoURL ? (
+                       <img src={user.photoURL} alt="Profile" className="w-full h-full object-cover rounded-full" />
+                   ) : (
+                       <span>{(user?.name || user?.email || 'U').charAt(0).toUpperCase()}</span>
+                   )}
+                   <label className="absolute bottom-0 right-0 bg-[#e5c158] text-black w-6 h-6 rounded-full flex items-center justify-center cursor-pointer shadow border-2 border-app-accent hover:scale-110 transition-transform">
+                      <Edit2 size={12} strokeWidth={3} />
+                      <input type="file" accept="image/*" className="hidden" onChange={handleProfileUpload} />
+                   </label>
                 </div>
                 <div className="flex flex-col text-app-text">
                    <h2 className="text-xl font-bold uppercase">{user?.name || 'User'}</h2>
