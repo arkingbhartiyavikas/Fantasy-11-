@@ -3926,7 +3926,7 @@ export default function App() {
                      <div className="bg-black/20 text-white text-[9px] px-2.5 py-0.5 rounded-full mb-1 tracking-wider font-semibold border-none shadow-sm">
                         {role === 'WK' ? 'WICKET KEEPER' : role === 'BAT' ? 'BATSMAN' : role === 'AR' ? 'ALL ROUNDERS' : 'BOWLERS'}
                      </div>
-                     <div className="flex justify-center gap-1.5 sm:gap-4 w-full px-1">
+                     <div className="flex justify-center gap-0.5 sm:gap-2 w-full px-0">
                          {playersInRole.map(p => {
                              if (!p) return null;
                              const latestP = appPlayers.find(ap => ap.id === p.id) || p;
@@ -3935,28 +3935,36 @@ export default function App() {
                              const pName = p.name || 'Player';
                              const pPoints = Number((latestP.livePoints ?? latestP.points) || 0);
                              return (
-                             <div key={p.id} className="flex flex-col items-center cursor-pointer relative group">
-                                 <div className="relative mb-1 flex flex-col items-center">
-                                     {/* Styled Avatar Circle matching Create Team */}
+                             <div key={p.id} className="flex flex-col items-center cursor-pointer relative group scale-95 sm:scale-100">
+                                 <div className="relative mb-[3px] flex flex-col items-center">
+                                     {/* 3D Player Torso */}
                                      {(() => {
                                         const isTeam1 = p.team === activeMatch?.team1?.shortFrame;
                                         const tColorRaw = isTeam1 ? (activeMatch?.team1?.color || 'bg-blue-600') : (activeMatch?.team2?.color || 'bg-rose-600');
-                                        const tTextCls = tColorRaw?.startsWith('bg-') ? tColorRaw.replace('bg-', 'text-') : tColorRaw?.startsWith('border-') ? tColorRaw.replace('border-', 'text-') : (tColorRaw?.startsWith('text-') ? tColorRaw : '');
-                                        const tBorderCls = tColorRaw?.startsWith('bg-') ? tColorRaw.replace('bg-', 'border-') : tColorRaw?.startsWith('text-') ? tColorRaw.replace('text-', 'border-') : (tColorRaw?.startsWith('border-') ? tColorRaw : '');
                                         const custStyle = (!tColorRaw?.startsWith('bg-') && !tColorRaw?.startsWith('text-') && !tColorRaw?.startsWith('border-')) ? { color: tColorRaw, borderColor: tColorRaw } : {};
                                         return (
-                                           <div className="relative shrink-0 w-[42px] h-[46px] flex flex-col items-center justify-start drop-shadow-sm">
-                                             <div 
-                                               className={`w-[40px] h-[40px] rounded-full flex items-end justify-center relative overflow-hidden shadow-[0_0_6px_rgba(0,0,0,0.5)] border-[2px] z-10 bg-slate-800 ${tBorderCls || 'border-app-border-hover'}`}
-                                               style={custStyle.borderColor ? { borderColor: custStyle.borderColor } : {}}
-                                             >
-                                               <div className="w-full h-full flex flex-col items-center justify-end bg-gradient-to-b from-transparent to-black/40">
-                                                   <User size={30} className="text-slate-400 translate-y-1 relative z-0 drop-shadow-sm" />
-                                               </div>
+                                           <div className="relative shrink-0 w-[34px] h-[38px] flex flex-col items-center justify-start drop-shadow-md">
+                                             <div className="relative w-[34px] h-[34px] flex items-end justify-center z-10 pt-[6px]">
+                                                {/* Head */}
+                                                <div className="absolute top-[2px] left-[50%] ml-[-7px] w-[14px] h-[15px] rounded-[7px_7px_5px_5px] bg-gradient-to-b from-[#fcd3b6] to-[#d69f7a] shadow-[inset_-2px_-2px_4px_rgba(0,0,0,0.3)] z-0"></div>
+                                                
+                                                {/* Torso/Jersey */}
+                                                <div 
+                                                  className={`w-[28px] h-[20px] relative z-10 overflow-hidden shadow-[inset_0_3px_6px_rgba(255,255,255,0.4),0_2px_4px_rgba(0,0,0,0.5)] rounded-[6px_6px_2px_2px] ${tColorRaw?.startsWith('bg-') ? tColorRaw : ''}`}
+                                                  style={custStyle.color ? { backgroundColor: custStyle.color, borderTop: `0.5px solid rgba(255,255,255,0.3)` } : { borderTop: `0.5px solid rgba(255,255,255,0.3)` }}
+                                                >
+                                                   <div className="absolute inset-0 bg-gradient-to-b from-white/30 via-transparent to-black/60"></div>
+                                                   {/* Shoulders detail */}
+                                                   <div className="absolute top-0 left-0 w-[6px] h-full bg-black/20 rounded-tr-full"></div>
+                                                   <div className="absolute top-0 right-0 w-[6px] h-full bg-black/20 rounded-tl-full"></div>
+                                                   
+                                                   {/* V-Neck */}
+                                                   <div className="absolute top-[0px] left-[50%] ml-[-4.5px] w-[9px] h-[7px] bg-[#d69f7a] rounded-b-sm shadow-[inset_1px_1px_3px_rgba(0,0,0,0.5)] border-b border-black/20"></div>
+                                                </div>
                                              </div>
                                              
                                              <div 
-                                               className="absolute -bottom-[2px] z-20 px-[4px] py-[1px] rounded-[3px] text-[7px] tracking-widest font-black uppercase shadow-[0_2px_4px_rgba(0,0,0,0.5)] border border-white/20 bg-[#0f172a] text-white"
+                                               className="absolute -bottom-[2px] z-20 px-[3px] py-[0px] rounded-[3px] text-[7px] tracking-widest font-black uppercase shadow-[0_2px_4px_rgba(0,0,0,0.6)] border border-white/20 bg-[#0f172a] text-white"
                                              >
                                                {p.team}
                                              </div>
@@ -3965,13 +3973,13 @@ export default function App() {
                                      })()}
 
                                    {(isC || isVC) && (
-                                     <div className={`absolute -top-1 -left-1 w-[16px] h-[16px] border border-white text-white rounded-full flex items-center justify-center text-[8px] font-bold shadow-[0_0_6px_rgba(0,0,0,0.8)] z-30 ${isC ? 'bg-[#d32f2f]' : 'bg-slate-700 text-white'}`}>
+                                     <div className={`absolute -top-[3px] -left-[3px] w-[14px] h-[14px] border border-white text-white rounded-full flex items-center justify-center text-[7.5px] font-bold shadow-[0_0_6px_rgba(0,0,0,0.8)] z-30 ${isC ? 'bg-[#d32f2f]' : 'bg-slate-700 text-white'}`}>
                                        {isC ? 'C' : 'VC'}
                                      </div>
                                    )}
                                  </div>
-                                 <div className="bg-black/90 backdrop-blur-md border border-white/20 text-white text-[9px] font-medium px-1.5 py-0.5 rounded shadow-xl whitespace-nowrap min-w-[55px] max-w-[65px] text-center truncate relative z-10">{pName}</div>
-                                 <span className="text-white text-[9px] mt-0.5 font-bold drop-shadow-md">
+                                 <div className="bg-black/90 backdrop-blur-md border border-white/20 text-white text-[8px] font-medium px-1 py-0.5 rounded shadow-xl whitespace-nowrap overflow-hidden text-ellipsis w-full max-w-[45px] text-center relative z-10">{pName}</div>
+                                 <span className="text-white text-[8px] mt-0.5 font-bold drop-shadow-md bg-black/30 px-1 rounded">
                                    {isLiveOrCompleted ? `${(pPoints * (isC ? 2 : isVC ? 1.5 : 1)).toFixed(1)} Pt` : `${p.credits || 0} Cr`}
                                  </span>
                              </div>
