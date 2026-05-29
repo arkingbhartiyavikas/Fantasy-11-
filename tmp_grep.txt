@@ -1,0 +1,126 @@
+576:     // Move current user's teams to the top for display
+864:  const [user, setUser] = useState<{email: string, id: string, name: string, numericId?: string, photoURL?: string} | null>(() => {
+869:  const isAdmin = user?.email === 'arkingbhartiyavikas@gmail.com';
+991:    if (user?.id) {
+992:      if (claimedLevelsLoaded !== user.id) {
+993:        const saved = localStorage.getItem(`dreamApp_claimedLevels_${user.id}`);
+1000:        setClaimedLevelsLoaded(user.id);
+1002:        localStorage.setItem(`dreamApp_claimedLevels_${user.id}`, JSON.stringify(claimedLevels));
+1010:  }, [claimedLevels, user?.id, claimedLevelsLoaded]);
+1035:             // 1. Try to find user by Firebase ID
+1041:             // 1.5 Try to find legacy migrated user by numericId
+1057:             // 2. Try to find user by Email
+1070:                 // New user from Google OAuth or One-Click Login!
+1119:                    console.error("Firestore user creation failed", err);
+1123:                 // Existing user
+1168:    if (!user?.id) {
+1175:    // Listen to user's wallet
+1176:    const unsubWallet = onSnapshot(doc(db, 'wallets', user.id), (docS) => {
+1179:             if (isSubscribed) setWalletLoadedUser(user.id);
+1183:             setDoc(doc(db, 'wallets', user.id), init);
+1186:                 setWalletLoadedUser(user.id);
+1189:    }, (e) => handleFsError(e, 'listen_wallet', user.id));
+1194:      : query(collection(db, 'deposits'), where('userId', '==', user.id));
+1202:      : query(collection(db, 'withdrawals'), where('userId', '==', user.id));
+1210:      : query(collection(db, 'kyc'), where('userId', '==', user.id));
+1218:      : query(collection(db, 'bankAccounts'), where('userId', '==', user.id));
+1223:    // To save Firestore quota, only listen to the current user's teams in real-time.
+1225:    const teamsQuery = query(collection(db, 'userTeams'), where('userId', '==', user.id || 'guest'));
+1254:  }, [user?.id, isAdmin, firestoreQuotaExceeded]);
+1282:                 // Hide numeric ID wallets if we have a real UID user for them
+1349:     if (user?.id && wallet.deposit !== undefined) {
+1355:  }, [wallet, user?.id]);
+1362:             if (user?.id) {
+1364:                setDoc(doc(db, 'wallets', user.id), next, { merge: true }).catch(err => {
+1365:                    handleFsError(err, 'sync_wallet_local', user.id);
+1374:                    id: user.id,
+1430:    const userBanks = bankAccounts.filter(b => b.userId === user?.id);
+1431:    const userKycObj = kycRequests.find(k => k.userId === (user?.id || 'guest'));
+1501:                  userId: user?.id,
+1642:                userId: user?.id,
+1643:                userNumericId: user?.numericId,
+1654:              batch.set(doc(db, 'wallets', user?.id || ''), { winning: newWalletState.winning }, { merge: true });
+1662:                       body: JSON.stringify({ collection: 'wallets', id: user?.id, data: newWalletState })
+1748:    if (user) {
+1749:      localStorage.setItem('dreamApp_user', JSON.stringify(user));
+1753:  }, [user, authInitialized]);
+2060:                       if (t.userId === user?.id) {
+2104:        if (isAdmin && user?.id) {
+2111:        if (localBalanceUpdate > 0 && user?.id) {
+2284:  // Real-time listener for the user being edited in the admin modal
+2288:    // Subscribe to the wallet of the user being edited to ensure real-time balance updates
+2612:    // If editing existing user team
+2643:    const userTeamsInSameContest = sameContestTeams.filter(t => t.userId === (user?.id || 'guest'));
+2651:    if (fee > 0 && user?.id && user?.id !== 'admin_bot' && user?.id !== 'admin_bot_boot') {
+2686:      userId: user?.id || 'guest',
+2687:      userNumericId: user?.numericId,
+2688:      userName: user?.name || String(user?.email || '').split('@')[0] || 'Guest Player',
+2689:      userPhotoURL: user?.photoURL,
+2697:       const userTeams = prev.filter(t => t.userId === (user?.id || 'guest'));
+2700:       // If user has 10 or more teams, delete the oldest one(s) of this user
+2702:          // Sort user teams by creation time (ascending)
+2711:          if (user?.id) {
+2720:    if (user?.id) {
+2942:              <span className="font-bold text-sm text-app-text truncate max-w-[80px]">Hey {user ? String(user.name || user.email || '').split(' ')[0].split('@')[0].toUpperCase() : 'ARKING'}</span>
+3023:    // Calculate user stats for this match if it's on the home screen
+3024:    const userTeamsForMatch = savedTeams.filter(t => t.match?.id === match.id && t.userId === (user?.id || 'guest'));
+3291:    const userTeamsInMatch = savedTeams.filter(t => t.match?.id === activeMatch?.id && t.userId === (user?.id || 'guest'));
+3294:    // Calculate unique contests joined by user
+3521:                            myRenderTeams = teamsWPoints.filter(t => t.userId === (user?.id || 'guest'));
+3566:                                      const userName = t.userName || user?.name || 'User';
+3596:                {savedTeams.filter(t => t.match?.id === activeMatch?.id && t.userId === (user?.id || 'guest')).length === 0 ? (
+3603:                   savedTeams.filter(t => t.match?.id === activeMatch?.id && t.userId === (user?.id || 'guest')).map((st, i) => {
+4051:     // Filter matches the user joined
+4054:     const myUserId = user?.id || 'guest';
+4151:                  const ud = depositRequests.filter(r => r.userId === user?.id).map(r => ({ ...r, t: 'd', num: parseInt(r.id.split('_')[1] || '0') }));
+4152:                  const uw = withdrawRequests.filter(r => r.userId === user?.id).map(r => ({ ...r, t: 'w', num: parseInt(r.id.split('_')[1] || '0') }));
+4352:                                 userId: user?.id,
+4353:                                 userNumericId: user?.numericId,
+4354:                                 userName: user?.name,
+4397:    const userTeams = savedTeams.filter(t => t.userId === (user?.id || 'guest'));
+4423:    const userKycObj = kycRequests.find(k => k.userId === (user?.id || 'guest'));
+4428:        if(!file || !user) return;
+4456:                   await updateDoc(doc(db, 'users', user.id), { photoURL: dataUrl });
+4457:                   const updatedUser = { ...user, photoURL: dataUrl };
+4485:                   {user?.photoURL ? (
+4486:                       <img src={user.photoURL} alt="Profile" className="w-full h-full object-cover rounded-full" />
+4488:                       <span>{(user?.name || user?.email || 'U').charAt(0).toUpperCase()}</span>
+4496:                   <h2 className="text-xl font-bold uppercase">{user?.name || 'User'}</h2>
+4497:                   <p className="text-sm opacity-90 mb-2 font-mono">ID: {user?.numericId || 'Loading...'}</p>
+4662:    const userKycObj = kycRequests.find(k => k.userId === (user?.id || 'guest'));
+4685:        userId: user?.id || 'guest',
+4686:        userNumericId: user?.numericId,
+4687:        userName: user?.name || String(user?.email || '').split('@')[0] || 'Guest Player',
+4868:          if (userCredential?.user) {
+4869:            supaUserId = userCredential.user.uid;
+4932:             // Fallback: If they were a legacy Firebase user, their account might not exist in Supabase Auth yet.
+4933:             // We already checked Firestore for their user ID. Let's see if the password matches `oneClickPassword`.
+4955:          // Firebase's onAuthStateChanged catches this and sets user
+4999:                    // the user is already authenticated behind the scenes by `createUserWithEmailAndPassword`
+5096:                     } else if (error.code === 'auth/popup-closed-by-user' || error.code === 'auth/popup-blocked') {
+5196:  if (!authInitialized || (user && walletLoadedUser !== user.id)) {
+5205:  if (!user || oneClickCreds) return renderLogin();
+5806:                 <p className="text-xs text-slate-400 mb-4">Set the promotional banners that appear at the top of the user home screen. Upload 16:9 images for best results.</p>
+6718:                           <p className="text-sm text-slate-400">Email: <span className="text-slate-200">{selectedKycRequest.userEmail || 'user@example.com'}</span></p>
+7156:                  <p className="text-xs text-slate-400 mb-5 pl-1 relative z-10">View and approve user withdrawal requests.</p>
+7255:                                              alert(`Withdrawal rejected. Amount strictly refunded to user wallet.`);
+7258:                                              alert("Withdrawal rejected. No user ID associated for refund.");
+7291:                  <p className="text-xs text-slate-400 mb-5 pl-1 relative z-10">View user deposit requests, verify their screenshot/UTR, and add the amount to their wallet.</p>
+7380:                                         alert(`Accepted! ₹${req.amount} added to user wallet.`);
+7424:                        <p className="text-xs text-slate-400 mb-5 pl-1 relative z-10">Select a match to view and edit user teams.</p>
+7469:                              if (matchTeams.length === 0) return <p className="text-sm font-bold text-slate-500 text-center py-6 bg-black/40 border border-slate-700 rounded-xl">No user teams for this match.</p>;
+7574:                           <p className="text-xs text-slate-400 mb-5 pl-1">Award real-time points. Leaderboards and user dashboards will update instantly.</p>
+8135:            currentUser={user}
+8235:                        <div className="text-xs text-app-text-muted font-medium mt-1">Restrict user access to the app</div>
+8396:                          if (window.confirm("Are you sure you want to wipe this user's wallet to 0?")) {
+8515:                        // Automatically open modal by setting the user
+8519:                        alert("Error finding user.");
+8596:                       if (user?.id) {
+8599:                           await setDoc(doc(db, 'wallets', user.id), { deposit: newDeposit }, { merge: true });
+8603:                               userId: user.id,
+8604:                               userNumericId: user.numericId,
+8605:                               userName: user.name,
+8623:                       if (user?.id && window.confirm("Reset your wallet completely to ₹0? This cannot be undone.")) {
+8625:                           await setDoc(doc(db, 'wallets', user.id), { deposit: 0, winning: 0, bonus: 0 });
+8662:                  <p className="text-app-text-muted">We provide a reliable platform where match point updates are consistent and universally applied across all user teams at exactly the same time.</p>
+8765:                            <span className="font-mono text-lg font-bold tracking-widest text-[#e5c158]">{user?.id?.substring(0, 6).toUpperCase() || 'GUEST1'}</span>

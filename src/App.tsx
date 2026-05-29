@@ -618,7 +618,7 @@ const ContestDetailsView = ({
           <button onClick={onBack} className="p-1 -ml-1 active:bg-app-card/10 rounded-full transition-colors"><ArrowLeft size={24} /></button>
           <div className="font-bold text-sm">Contest Details</div>
           <button onClick={onAddCash} className="flex items-center gap-1 bg-app-card/20 px-2 py-0.5 rounded text-xs">
-            <Wallet size={12} /> ₹{balance}
+            <Wallet size={12} /> ₹{typeof balance === 'number' ? Number(balance).toLocaleString('en-IN', {maximumFractionDigits: 2}) : balance}
           </button>
         </div>
         <div className="text-center font-bold text-sm mb-1">

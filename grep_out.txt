@@ -1,0 +1,300 @@
+90:  userId?: string;
+98:  userId?: string;
+99:  userNumericId?: string;
+133:  userId?: string;
+134:  userNumericId?: string;
+135:  userName?: string;
+144:export const syncWalletToBackend = async (dbInstance: any, userId: string, data: any) => {
+146:  await setDoc(doc(dbInstance, 'wallets', userId), data, { merge: true });
+152:      body: JSON.stringify({ collection: 'wallets', id: userId, data })
+537:        const botKey = (t.userId === 'admin_bot' || t.userId === 'admin_bot_boot') ? `${t.match?.id}_${t.botVariationId || 'old'}_${t.isWinnerBot ? 'win' : 'norm'}` : null;
+576:     // Move current user's teams to the top for display
+577:     const currentUserTeams = rankedTeams.filter(t => currentUser && t.userId === currentUser.id);
+578:     const otherTeams = rankedTeams.filter(t => !(currentUser && t.userId === currentUser.id));
+733:                        const isCurrentUser = currentUser && t.userId === currentUser.id;
+750:                              <div className="w-8 h-8 rounded-sm bg-[#faeee8] border border-[#ee5723]/30 dark:bg-slate-700 font-bold text-[10px] text-app-text flex items-center justify-center shrink-0 uppercase overflow-hidden">{(isCurrentUser && currentUser?.photoURL) || t.userPhotoURL ? (<img src={(isCurrentUser && currentUser?.photoURL) || t.userPhotoURL} alt="Avatar" className="w-full h-full object-cover" />) : (t.teamId || "T1")}</div>
+752:                                 <span className="font-semibold text-black dark:text-app-text text-[13px] whitespace-nowrap overflow-hidden text-ellipsis max-w-[130px]">{t.userName || t.userId || 'Guest Player'}</span>
+864:  const [user, setUser] = useState<{email: string, id: string, name: string, numericId?: string, photoURL?: string} | null>(() => {
+869:  const isAdmin = user?.email === 'arkingbhartiyavikas@gmail.com';
+966:  const [oneClickCreds, setOneClickCreds] = useState<{ userId: string, pass: string } | null>(null);
+991:    if (user?.id) {
+992:      if (claimedLevelsLoaded !== user.id) {
+993:        const saved = localStorage.getItem(`dreamApp_claimedLevels_${user.id}`);
+1000:        setClaimedLevelsLoaded(user.id);
+1002:        localStorage.setItem(`dreamApp_claimedLevels_${user.id}`, JSON.stringify(claimedLevels));
+1010:  }, [claimedLevels, user?.id, claimedLevelsLoaded]);
+1035:             // 1. Try to find user by Firebase ID
+1036:             let userDocRef = doc(db, 'users', uid);
+1037:             let userDoc = await getDoc(userDocRef);
+1039:             let isExisting = userDoc.exists();
+1041:             // 1.5 Try to find legacy migrated user by numericId
+1048:                 let legacyDocRef = doc(db, 'users', legacyMobile);
+1052:                     userDoc = legacyDoc;
+1057:             // 2. Try to find user by Email
+1059:                 const usersRef = collection(db, 'users');
+1060:                 const qEmail = query(usersRef, where('email', '==', fbUser.email));
+1064:                     userDoc = snapEmail.docs[0];
+1065:                     existingDocId = userDoc.id;
+1070:                 // New user from Google OAuth or One-Click Login!
+1093:                     await setDoc(doc(db, 'users', uid), {
+1119:                    console.error("Firestore user creation failed", err);
+1123:                 // Existing user
+1124:                 const data = userDoc.data();
+1168:    if (!user?.id) {
+1175:    // Listen to user's wallet
+1176:    const unsubWallet = onSnapshot(doc(db, 'wallets', user.id), (docS) => {
+1179:             if (isSubscribed) setWalletLoadedUser(user.id);
+1183:             setDoc(doc(db, 'wallets', user.id), init);
+1186:                 setWalletLoadedUser(user.id);
+1189:    }, (e) => handleFsError(e, 'listen_wallet', user.id));
+1194:      : query(collection(db, 'deposits'), where('userId', '==', user.id));
+1202:      : query(collection(db, 'withdrawals'), where('userId', '==', user.id));
+1210:      : query(collection(db, 'kyc'), where('userId', '==', user.id));
+1218:      : query(collection(db, 'bankAccounts'), where('userId', '==', user.id));
+1223:    // To save Firestore quota, only listen to the current user's teams in real-time.
+1225:    const teamsQuery = query(collection(db, 'userTeams'), where('userId', '==', user.id || 'guest'));
+1243:    }, (e) => handleFsError(e, 'listen_teams', 'userTeams'));
+1254:  }, [user?.id, isAdmin, firestoreQuotaExceeded]);
+1265:             // Create a set of all unique UIDs from both users and wallets
+1282:                 // Hide numeric ID wallets if we have a real UID user for them
+1289:                 // For real UID users, if they have a numeric ID, try to pull data from that numeric wallet if the UID wallet is empty
+1304:               getDocs(collection(db, 'users'))
+1321:  // while still allowing users to see each other join contests instantly.
+1325:       const q = query(collection(db, 'userTeams'), where('match.id', '==', activeMatch.id));
+1349:     if (user?.id && wallet.deposit !== undefined) {
+1355:  }, [wallet, user?.id]);
+1362:             if (user?.id) {
+1364:                setDoc(doc(db, 'wallets', user.id), next, { merge: true }).catch(err => {
+1365:                    handleFsError(err, 'sync_wallet_local', user.id);
+1374:                    id: user.id,
+1430:    const userBanks = bankAccounts.filter(b => b.userId === user?.id);
+1431:    const userKycObj = kycRequests.find(k => k.userId === (user?.id || 'guest'));
+1433:    if (!userKycObj || userKycObj.status !== 'Approved') {
+1501:                  userId: user?.id,
+1582:          {userBanks.length === 0 ? (
+1594:              {userBanks.map(bank => (
+1642:                userId: user?.id,
+1643:                userNumericId: user?.numericId,
+1654:              batch.set(doc(db, 'wallets', user?.id || ''), { winning: newWalletState.winning }, { merge: true });
+1662:                       body: JSON.stringify({ collection: 'wallets', id: user?.id, data: newWalletState })
+1711:                      teamId: t.userId === 'admin_bot_boot' ? `BOT-${Date.now().toString().slice(-4)}${i}` : `T${Math.floor(Math.random() * 8999) + 1000}`,
+1712:                      userName: t.userId === 'admin_bot_boot' ? `BOOT ${Date.now().toString().slice(-3)}${i}` : BOT_NAMES[Math.floor(Math.random() * BOT_NAMES.length)] + Math.floor(Math.random() * 9999).toString(),
+1718:               if (t.userId === 'admin_bot' && t.userName?.startsWith('BOOT')) {
+1719:                   t.userName = BOT_NAMES[Math.floor(Math.random() * BOT_NAMES.length)] + Math.floor(Math.random() * 9999).toString();
+1748:    if (user) {
+1749:      localStorage.setItem('dreamApp_user', JSON.stringify(user));
+1753:  }, [user, authInitialized]);
+1763:         if (t.userId === 'admin_bot' || t.userId === 'admin_bot_boot') {
+1764:             const key = `${t.match?.id}_${t.contestName}_${t.userId}`;
+1768:                 delete botsToCount[key].userName;
+1835:                const userTeams = prev.filter(t => t.userId !== 'admin_bot' && t.userId !== 'admin_bot_boot');
+1836:                const newTeams = [...userTeams, ...adminTeamsData];
+1870:              const userTeams = prev.filter(t => t.userId !== 'admin_bot' && t.userId !== 'admin_bot_boot');
+1871:              const newTeams = [...userTeams, ...adminTeamsData];
+1982:                const botKey = (t.userId === 'admin_bot' || t.userId === 'admin_bot_boot') ? `${t.match?.id}_${t.botVariationId || 'old'}_${t.isWinnerBot ? 'win' : 'norm'}` : null;
+2060:                       if (t.userId === user?.id) {
+2065:                       } else if (t.userId === 'admin_bot' || t.userId === 'admin_bot_boot') {
+2077:                // Add to firestore batch for ALL teams to update UI, but only update wallets for real users
+2078:                const teamRef = doc(db, 'userTeams', t.id);
+2083:                if (t.userId && t.userId !== 'admin_bot' && t.userId !== 'admin_bot_boot' && t.userId !== 'guest') {
+2085:                       const wRef = doc(db, 'wallets', t.userId);
+2104:        if (isAdmin && user?.id) {
+2111:        if (localBalanceUpdate > 0 && user?.id) {
+2284:  // Real-time listener for the user being edited in the admin modal
+2288:    // Subscribe to the wallet of the user being edited to ensure real-time balance updates
+2597:            if (t.match?.id === activeMatch?.id && t.userId === 'admin_bot') {
+2612:    // If editing existing user team
+2624:      if (editedTeamMeta.userId && editedTeamMeta.userId !== 'guest') {
+2625:         const userTeamPath = `userTeams/${editedTeamMeta.id}`;
+2626:         setDoc(doc(db, 'userTeams', editedTeamMeta.id), editedTeamMeta, { merge: true }).catch(e => handleFsError(e, 'update_user_team', userTeamPath));
+2643:    const userTeamsInSameContest = sameContestTeams.filter(t => t.userId === (user?.id || 'guest'));
+2644:    if (contestDef && contestDef.maxTeams && userTeamsInSameContest.length >= contestDef.maxTeams) {
+2651:    if (fee > 0 && user?.id && user?.id !== 'admin_bot' && user?.id !== 'admin_bot_boot') {
+2686:      userId: user?.id || 'guest',
+2687:      userNumericId: user?.numericId,
+2688:      userName: user?.name || String(user?.email || '').split('@')[0] || 'Guest Player',
+2689:      userPhotoURL: user?.photoURL,
+2697:       const userTeams = prev.filter(t => t.userId === (user?.id || 'guest'));
+2700:       // If user has 10 or more teams, delete the oldest one(s) of this user
+2701:       if (userTeams.length >= 10) {
+2702:          // Sort user teams by creation time (ascending)
+2703:          const sortedUserTeams = [...userTeams].sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+2705:          const teamsToDelete = sortedUserTeams.slice(0, userTeams.length - 9);
+2711:          if (user?.id) {
+2713:                deleteDoc(doc(db, 'userTeams', id)).catch(e => console.error("Could not delete old team", e));
+2720:    if (user?.id) {
+2721:       const userTeamPath = `userTeams/${newId}`;
+2722:       setDoc(doc(db, 'userTeams', newId), newTeamMeta).catch(e => handleFsError(e, 'save_user_team', userTeamPath));
+2942:              <span className="font-bold text-sm text-app-text truncate max-w-[80px]">Hey {user ? String(user.name || user.email || '').split(' ')[0].split('@')[0].toUpperCase() : 'ARKING'}</span>
+3023:    // Calculate user stats for this match if it's on the home screen
+3024:    const userTeamsForMatch = savedTeams.filter(t => t.match?.id === match.id && t.userId === (user?.id || 'guest'));
+3025:    const distinctContestsCount = new Set(userTeamsForMatch.filter(t => (t.contestId || t.contestName)).map(t => t.contestId || t.contestName)).size;
+3026:    const distinctTeamsCount = new Set(userTeamsForMatch.map(t => t.teamId)).size;
+3188:           userId: type === 'BOOT' ? 'admin_bot_boot' : 'admin_bot',
+3189:           userName: type === 'BOOT' ? `BOOT ${timestamp.toString().slice(-3)}${i}` : randomName,
+3200:        const bots = prev.filter(t => t.match?.id === activeMatch?.id && (t.contestId ? t.contestId === contest.id : t.contestName === contest.name) && t.userId === (type === 'BOOT' ? 'admin_bot_boot' : 'admin_bot'));
+3204:        const adminTeams = newTeams.filter(t => t.userId === 'admin_bot' || t.userId === 'admin_bot_boot');
+3212:     const botTeamsAuto = savedTeams.filter(t => t.match?.id === activeMatch?.id && (t.contestId ? t.contestId === contest.id : t.contestName === contest.name) && t.userId === 'admin_bot');
+3213:     const botTeamsBoot = savedTeams.filter(t => t.match?.id === activeMatch?.id && (t.contestId ? t.contestId === contest.id : t.contestName === contest.name) && t.userId === 'admin_bot_boot');
+3291:    const userTeamsInMatch = savedTeams.filter(t => t.match?.id === activeMatch?.id && t.userId === (user?.id || 'guest'));
+3292:    const myTeamsCount = userTeamsInMatch.length;
+3294:    // Calculate unique contests joined by user
+3296:    userTeamsInMatch.forEach(t => {
+3499:                                const botKey = (t.userId === 'admin_bot' || t.userId === 'admin_bot_boot') ? `${t.match?.id}_${t.botVariationId || 'old'}_${t.isWinnerBot ? 'win' : 'norm'}` : null;
+3521:                            myRenderTeams = teamsWPoints.filter(t => t.userId === (user?.id || 'guest'));
+3566:                                      const userName = t.userName || user?.name || 'User';
+3574:                                              <span className="font-bold text-app-text text-[11px] mb-0.5">{userName}</span>
+3596:                {savedTeams.filter(t => t.match?.id === activeMatch?.id && t.userId === (user?.id || 'guest')).length === 0 ? (
+3603:                   savedTeams.filter(t => t.match?.id === activeMatch?.id && t.userId === (user?.id || 'guest')).map((st, i) => {
+4051:     // Filter matches the user joined
+4054:     const myUserId = user?.id || 'guest';
+4056:         if (st.userId !== myUserId) return false;
+4151:                  const ud = depositRequests.filter(r => r.userId === user?.id).map(r => ({ ...r, t: 'd', num: parseInt(r.id.split('_')[1] || '0') }));
+4152:                  const uw = withdrawRequests.filter(r => r.userId === user?.id).map(r => ({ ...r, t: 'w', num: parseInt(r.id.split('_')[1] || '0') }));
+4352:                                 userId: user?.id,
+4353:                                 userNumericId: user?.numericId,
+4354:                                 userName: user?.name,
+4397:    const userTeams = savedTeams.filter(t => t.userId === (user?.id || 'guest'));
+4398:    const contestsJoined = userTeams.length;
+4401:    const userLevel = Math.floor(contestsJoined / 10);
+4405:    for (let l = 10; l <= userLevel; l += 10) {
+4423:    const userKycObj = kycRequests.find(k => k.userId === (user?.id || 'guest'));
+4424:    const kycStatus = userKycObj ? userKycObj.status : 'Pending';
+4428:        if(!file || !user) return;
+4456:                   await updateDoc(doc(db, 'users', user.id), { photoURL: dataUrl });
+4457:                   const updatedUser = { ...user, photoURL: dataUrl };
+4485:                   {user?.photoURL ? (
+4486:                       <img src={user.photoURL} alt="Profile" className="w-full h-full object-cover rounded-full" />
+4488:                       <span>{(user?.name || user?.email || 'U').charAt(0).toUpperCase()}</span>
+4496:                   <h2 className="text-xl font-bold uppercase">{user?.name || 'User'}</h2>
+4497:                   <p className="text-sm opacity-90 mb-2 font-mono">ID: {user?.numericId || 'Loading...'}</p>
+4500:                       <span className="bg-yellow-500 text-black text-[10px] px-2 py-0.5 rounded flex items-center font-bold w-fit">⚡ Level {userLevel}</span>
+4501:                       <span className="text-xs font-bold text-white/90">{contestsJoined % 10} / 10 to Lvl {userLevel + 1}</span>
+4662:    const userKycObj = kycRequests.find(k => k.userId === (user?.id || 'guest'));
+4663:    const isSubmitted = !!userKycObj;
+4685:        userId: user?.id || 'guest',
+4686:        userNumericId: user?.numericId,
+4687:        userName: user?.name || String(user?.email || '').split('@')[0] || 'Guest Player',
+4712:                <div className={`w-20 h-20 rounded-full flex items-center justify-center mb-4 ${userKycObj.status === 'Approved' ? 'bg-[#153B25] text-[#4ADE80]' : userKycObj.status === 'Rejected' ? 'bg-red-900/30 text-app-accent' : 'bg-orange-900/30 text-orange-500'}`}>
+4713:                  {userKycObj.status === 'Approved' ? <Check size={40}/> : userKycObj.status === 'Rejected' ? <X size={40}/> : <Clock size={40}/>}
+4716:                  KYC Status: {userKycObj.status}
+4719:                  {userKycObj.status === 'Approved' ? "Your KYC is approved! You can now withdraw funds." : 
+4720:                   userKycObj.status === 'Rejected' ? "Your KYC was rejected. Please contact support or try again later." : 
+4723:                {userKycObj.status === 'Rejected' && (
+4725:                    await setDoc(doc(db, 'kyc', userKycObj.id), { ...userKycObj, status: 'Archived' }); // Or delete: await deleteDoc(doc(db, 'kyc', userKycObj.id))
+4866:          const userCredential = await createUserWithEmailAndPassword(auth, pseudoEmail, authPassword);
+4868:          if (userCredential?.user) {
+4869:            supaUserId = userCredential.user.uid;
+4874:            await setDoc(doc(db, 'users', supaUserId), {
+4889:            await setDoc(doc(db, 'users', numericId), {
+4890:               userId: numericId,
+4914:            // Check users by 'mobile' field since we stored UserID there
+4915:            const usersRef = collection(db, 'users');
+4916:            const q = query(usersRef, where('mobile', '==', loginEmail));
+4932:             // Fallback: If they were a legacy Firebase user, their account might not exist in Supabase Auth yet.
+4933:             // We already checked Firestore for their user ID. Let's see if the password matches `oneClickPassword`.
+4934:             const usersRef2 = collection(db, 'users');
+4935:             const q2 = query(usersRef2, where('mobile', '==', authInput.trim()));
+4955:          // Firebase's onAuthStateChanged catches this and sets user
+4979:                    <span className="text-xl font-bold tracking-widest">{oneClickCreds.userId}</span>
+4980:                    <button onClick={() => { navigator.clipboard.writeText(oneClickCreds.userId); alert('User ID Copied!'); }} className="p-2 bg-app-bg rounded border border-app-border text-app-text hover:text-white transition-colors">
+4999:                    // the user is already authenticated behind the scenes by `createUserWithEmailAndPassword`
+5096:                     } else if (error.code === 'auth/popup-closed-by-user' || error.code === 'auth/popup-blocked') {
+5132:                        setOneClickCreds({ userId: numId, pass });
+5196:  if (!authInitialized || (user && walletLoadedUser !== user.id)) {
+5205:  if (!user || oneClickCreds) return renderLogin();
+5247:      const adminTeams = savedTeams.filter(t => t.userId === 'admin_bot' || t.userId === 'admin_bot_boot');
+5283:      const adminTeams = savedTeams.filter(t => t.userId === 'admin_bot' || t.userId === 'admin_bot_boot');
+5323:    const userActivityData = [
+5367:                          const [wdSnap, depSnap, kycSnap, bankSnap, usersSnap, walletsSnap] = await Promise.all([
+5372:                              fetchDocs('users'),
+5383:                          usersSnap.docs.forEach(d => { metaDocs[d.id] = d.data(); });
+5496:                  <AreaChart data={userActivityData} margin={{ top: 5, right: 0, left: -20, bottom: 0 }}>
+5711:                {adminUserList.length === 0 && <p className="text-xs text-slate-500 text-center py-4">No users found.</p>}
+5759:                 <p className="text-xs text-slate-400 mb-4">Set your UPI ID and QR Code image URL so users can make deposits. The app will auto-scan users payments.</p>
+5806:                 <p className="text-xs text-slate-400 mb-4">Set the promotional banners that appear at the top of the user home screen. Upload 16:9 images for best results.</p>
+6716:                           <p className="text-sm text-slate-400">Full Name: <span className="text-slate-200">{selectedKycRequest.userName}</span></p>
+6717:                           <p className="text-sm text-slate-400">User ID: <span className="text-slate-200 font-mono select-all">{selectedKycRequest.userNumericId || selectedKycRequest.userId}</span></p>
+6718:                           <p className="text-sm text-slate-400">Email: <span className="text-slate-200">{selectedKycRequest.userEmail || 'user@example.com'}</span></p>
+6719:                           <p className="text-sm text-slate-400">Phone: <span className="text-slate-200">{selectedKycRequest.userPhone || '+91-XXXXX-XXXXX'}</span></p>
+6764:                                      alert('KYC Approved for ' + selectedKycRequest.userName + '. Photo data cleared.');
+6769:                                      alert('KYC Rejected for ' + selectedKycRequest.userName + '. Photo data cleared.');
+6806:                                  <span className="font-bold text-slate-200">{req.userName}</span>
+6907:                                   <div key={idx} className="inline-block h-6 w-6 rounded-full ring-2 ring-black bg-slate-800 text-[8px] flex items-center justify-center font-bold text-white shrink-0" title={t.userName}>
+6908:                                      {String(t.userName || t.userId || 'U').substring(0, 2).toUpperCase()}
+7156:                  <p className="text-xs text-slate-400 mb-5 pl-1 relative z-10">View and approve user withdrawal requests.</p>
+7168:                                    <span className="font-bold text-slate-200 text-xs font-mono select-all">{req.userNumericId || req.userId || 'Unknown'}</span>
+7172:                                        if (req.userId) {
+7173:                                            let userRec = adminUserList.find(u => u.id === req.userId);
+7174:                                            const wDoc = await getDoc(doc(db, 'wallets', req.userId));
+7175:                                            if (userRec) {
+7177:                                                    ...userRec,
+7178:                                                    id: userRec.id,
+7182:                                                const uDoc = await getDoc(doc(db, 'users', req.userId));
+7185:                                                    id: req.userId,
+7223:                                           if (req.userId) {
+7224:                                              const wRef = doc(db, 'wallets', req.userId);
+7253:                                                  await syncWalletToBackend(db, req.userId, { winning: computedWinning });
+7255:                                              alert(`Withdrawal rejected. Amount strictly refunded to user wallet.`);
+7258:                                              alert("Withdrawal rejected. No user ID associated for refund.");
+7291:                  <p className="text-xs text-slate-400 mb-5 pl-1 relative z-10">View user deposit requests, verify their screenshot/UTR, and add the amount to their wallet.</p>
+7306:                                      if (req.userId) {
+7307:                                          let userRec = adminUserList.find(u => u.id === req.userId);
+7308:                                          const wDoc = await getDoc(doc(db, 'wallets', req.userId));
+7309:                                          if (userRec) {
+7311:                                                  ...userRec,
+7312:                                                  id: userRec.id,
+7316:                                              const uDoc = await getDoc(doc(db, 'users', req.userId));
+7318:                                                  ...(uDoc.exists() ? uDoc.data() : { name: req.userName || 'Unknown User' }),
+7319:                                                  id: req.userId,
+7338:                                {req.userName && <p className="text-xs text-slate-300 mb-2 flex justify-between"><span>User:</span> <span className="font-bold text-slate-200">{req.userName}</span></p>}
+7339:                                <p className="text-xs text-slate-300 mb-2 flex justify-between"><span>ID:</span> <span className="font-bold text-slate-200 font-mono select-all">{req.userNumericId || req.userId}</span></p>
+7361:                                            const wRef = req.userId ? doc(db, 'wallets', req.userId) : null;
+7377:                                         if (newDepositBalance > 0 && req.userId) {
+7378:                                            await syncWalletToBackend(db, req.userId, { deposit: newDepositBalance });
+7380:                                         alert(`Accepted! ₹${req.amount} added to user wallet.`);
+7424:                        <p className="text-xs text-slate-400 mb-5 pl-1 relative z-10">Select a match to view and edit user teams.</p>
+7465:                              const matchTeams = savedTeams.filter(t => t.match?.id === adminTeamEditMatchId && t.userId !== 'admin_bot' && t.userId !== 'admin_bot_boot');
+7467:                                .filter((st) => String(st.userId || '').toLowerCase().includes(teamSearchQuery.toLowerCase()) || String(st.teamId || '').toLowerCase().includes(teamSearchQuery.toLowerCase()));
+7469:                              if (matchTeams.length === 0) return <p className="text-sm font-bold text-slate-500 text-center py-6 bg-black/40 border border-slate-700 rounded-xl">No user teams for this match.</p>;
+7476:                                       <span className="text-[#e5c158] bg-[#e5c158]/10 border border-[#e5c158]/20 px-2 py-1 rounded text-[10px] tracking-widest">{st.userId}</span>
+7574:                           <p className="text-xs text-slate-400 mb-5 pl-1">Award real-time points. Leaderboards and user dashboards will update instantly.</p>
+8135:            currentUser={user}
+8170:                setPreviewTeamInfo({ name: `${t.userName || t.userId} (${t.teamId})`, points: t.points });
+8204:                                <span className="bg-yellow-500 text-black text-[10px] px-2 py-0.5 rounded flex items-center font-bold">⚡ Level {Math.floor((savedTeams.filter(t => t.userId === adminProfileModalUser.id).length) / 10)}</span>
+8205:                                <span className="text-xs font-bold text-white/90">{(savedTeams.filter(t => t.userId === adminProfileModalUser.id).length) % 10} / 10 to Lvl {Math.floor((savedTeams.filter(t => t.userId === adminProfileModalUser.id).length) / 10) + 1}</span>
+8208:                                <div className="bg-yellow-500 h-full rounded-full" style={{ width: `${((savedTeams.filter(t => t.userId === adminProfileModalUser.id).length) % 10) * 10}%` }}></div>
+8216:                        <span className="text-2xl font-bold">{savedTeams.filter(t => t.userId === adminProfileModalUser.id).length}</span>
+8220:                        <span className="text-2xl font-bold">{savedTeams.filter(t => t.userId === adminProfileModalUser.id).length > 0 ? Math.round((adminProfileModalUser.wins || 0) / savedTeams.filter(t => t.userId === adminProfileModalUser.id).length * 100) : 0}%</span>
+8235:                        <div className="text-xs text-app-text-muted font-medium mt-1">Restrict user access to the app</div>
+8285:                                            userId: adminProfileModalUser.id,
+8311:                                            userId: adminProfileModalUser.id,
+8337:                                            userId: adminProfileModalUser.id,
+8378:                                          userId: adminProfileModalUser.id,
+8396:                          if (window.confirm("Are you sure you want to wipe this user's wallet to 0?")) {
+8449:                        const userRec = adminUserList.find(u => 
+8455:                        let targetId = userRec ? userRec.id : searchId;
+8460:                                const userByNumericQuery = query(collection(db, 'users'), where('numericId', '==', targetId));
+8461:                                const userSnap = await getDocs(userByNumericQuery);
+8463:                                if (!userSnap.docs || userSnap.docs.length === 0) {
+8467:                                    const realUid = userSnap.docs[0].id;
+8468:                                    const userData = userSnap.docs[0].data();
+8472:                                        ...userData,
+8485:                        if (!userRec) {
+8488:                            const uDoc = await getDoc(doc(db, 'users', targetId));
+8508:                            const wDoc = await getDoc(doc(db, 'wallets', userRec.id));
+8510:                                ...userRec,
+8511:                                id: userRec.id,
+8515:                        // Automatically open modal by setting the user
+8519:                        alert("Error finding user.");
+8596:                       if (user?.id) {
+8599:                           await setDoc(doc(db, 'wallets', user.id), { deposit: newDeposit }, { merge: true });
+8603:                               userId: user.id,
+8604:                               userNumericId: user.numericId,
+8605:                               userName: user.name,
+8623:                       if (user?.id && window.confirm("Reset your wallet completely to ₹0? This cannot be undone.")) {
+8625:                           await setDoc(doc(db, 'wallets', user.id), { deposit: 0, winning: 0, bonus: 0 });
+8659:                  <p className="text-app-text-muted">Our commitment to Fair Play ensures all users have an equal opportunity to win based on their skills and sports knowledge.</p>
+8662:                  <p className="text-app-text-muted">We provide a reliable platform where match point updates are consistent and universally applied across all user teams at exactly the same time.</p>
+8765:                            <span className="font-mono text-lg font-bold tracking-widest text-[#e5c158]">{user?.id?.substring(0, 6).toUpperCase() || 'GUEST1'}</span>
+8826:                    <p className="text-app-text-muted">Join cash or practice contests to compete with other users.</p>
