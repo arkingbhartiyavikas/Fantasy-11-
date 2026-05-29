@@ -1839,18 +1839,33 @@ export default function App() {
           }
       };
 
+      if (stype === 'teamsList') {
+          const tList = await loadCategoryInChunks('teamsList');
+          if (tList && tList.length > 0) {
+              setAppTeamsList(tList);
+              localStorage.setItem('dreamApp_teamsList', JSON.stringify(tList));
+          }
+          return;
+      }
+
       if (stype === 'bots') {
           await reloadBots();
           return;
       }
 
       try {
-        const [matchesData, contestsData, playersData, adminTeamsData] = await Promise.all([
+        const [matchesData, contestsData, playersData, adminTeamsData, teamsListData] = await Promise.all([
             loadCategoryInChunks('matches'),
             loadCategoryInChunks('contests'),
             loadCategoryInChunks('players'),
-            loadCategoryInChunks('adminTeams')
+            loadCategoryInChunks('adminTeams'),
+            loadCategoryInChunks('teamsList')
         ]);
+
+        if (teamsListData && teamsListData.length > 0) {
+            setAppTeamsList(teamsListData);
+            localStorage.setItem('dreamApp_teamsList', JSON.stringify(teamsListData));
+        }
 
         if (matchesData && matchesData.length > 0) setAppMatches(matchesData);
         if (contestsData && contestsData.length > 0) setAppContests(contestsData);
@@ -3069,6 +3084,9 @@ export default function App() {
           {/* VS Center */}
           <div className="z-10 flex flex-col items-center absolute left-1/2 -translate-x-1/2 top-1/2 -translate-y-[60%]">
               <div className="text-3xl sm:text-4xl font-black italic text-red-600 drop-shadow-md" style={{WebkitTextStroke: '1px rgba(255,255,255,0.8)'}}>VS</div>
+              {isLineupsOut && (
+                  <div className="mt-1 bg-green-500/20 text-green-400 border border-green-500/30 text-[9px] uppercase tracking-wider font-bold px-2 py-0.5 rounded-sm whitespace-nowrap shadow-[0_0_8px_rgba(34,197,94,0.3)]">Lineups Out</div>
+              )}
           </div>
 
           {/* Right Team */}
@@ -3623,7 +3641,8 @@ export default function App() {
   const renderCreateTeam = () => {
     if (!activeMatch) return null;
     const liveTeams = [activeMatch?.team1?.shortFrame, activeMatch?.team2?.shortFrame];
-    const displayedPlayers = appPlayers.filter(p => p.role === activeRole && liveTeams.includes(p.team));
+    const isLineupsOut = activeMatch.lineupStatus === 'OUT';
+    const displayedPlayers = appPlayers.filter(p => p.role === activeRole && liveTeams.includes(p.team) && (!isLineupsOut || p.isPlaying === true));
 
     return (
       <div className="flex flex-col h-full bg-app-card relative">
@@ -5284,6 +5303,7 @@ export default function App() {
 
       await syncCategoryToCloud('matches', allMatches, 20);
       await syncCategoryToCloud('contests', allContests, 20);
+      await syncCategoryToCloud('teamsList', appTeamsList, 50);
       await setDoc(doc(db, 'gameData', 'banners'), { data: JSON.parse(JSON.stringify(appBanners)), timestamp: ts });
       await syncCategoryToCloud('players', appPlayers, 200);
       await syncCategoryToCloud('adminTeams', adminTeams, 200);
@@ -7848,7 +7868,10 @@ export default function App() {
                            if (newFlagUrl && croppedAreaPixels) {
                                try {
                                    const finalCroppedImageBase64 = await getCroppedImg(newFlagUrl, croppedAreaPixels);
-                                   setAppTeamsList(prev => prev.map(t => t.id === showAddFlagModal ? { ...t, flagUrl: finalCroppedImageBase64, flagFit: 'cover' } : t));
+                                   const newTeams = appTeamsList.map(t => t.id === showAddFlagModal ? { ...t, flagUrl: finalCroppedImageBase64, flagFit: 'cover' as "cover" } : t);
+                                   setAppTeamsList(newTeams);
+                                   localStorage.setItem('dreamApp_teamsList', JSON.stringify(newTeams));
+                                   syncCategoryToCloud('teamsList', newTeams, 50);
                                    setShowAddFlagModal(null);
                                    setNewFlagUrl('');
                                    setZoom(1);
@@ -7906,7 +7929,10 @@ export default function App() {
                                color: newTeamColor,
                                format: selectedFormat
                            };
-                           setAppTeamsList([...appTeamsList, t]);
+                           const updatedTeams = [...appTeamsList, t];
+                           setAppTeamsList(updatedTeams);
+                           localStorage.setItem('dreamApp_teamsList', JSON.stringify(updatedTeams));
+                           syncCategoryToCloud('teamsList', updatedTeams, 50);
                            setNewTeamName('');
                            setNewTeamShort('');
                            setShowAddTeamModal(false);
