@@ -7121,6 +7121,34 @@ export default function App() {
                                     <span className="text-[10px] font-black text-[#e5c158]/70 uppercase tracking-widest leading-none mb-1">User ID</span>
                                     <span className="font-bold text-slate-200 text-xs font-mono select-all">{req.userNumericId || req.userId || 'Unknown'}</span>
                                   </div>
+                                  <button
+                                    onClick={async () => {
+                                        if (req.userId) {
+                                            let userRec = adminUserList.find(u => u.id === req.userId);
+                                            const wDoc = await getDoc(doc(db, 'wallets', req.userId));
+                                            if (userRec) {
+                                                setAdminProfileModalUser({
+                                                    ...userRec,
+                                                    id: userRec.id,
+                                                    ...(wDoc.exists() ? wDoc.data() : { deposit: 0, winning: 0, bonus: 0, blocked: false })
+                                                });
+                                            } else {
+                                                const uDoc = await getDoc(doc(db, 'users', req.userId));
+                                                setAdminProfileModalUser({
+                                                    ...(uDoc.exists() ? uDoc.data() : { name: 'Unknown User' }),
+                                                    id: req.userId,
+                                                    ...(wDoc.exists() ? wDoc.data() : { deposit: 0, winning: 0, bonus: 0, blocked: false })
+                                                });
+                                            }
+                                        } else {
+                                            alert("User ID missing from this request.");
+                                        }
+                                    }}
+                                    className="w-10 h-10 bg-slate-800 rounded-lg border border-[#e5c158]/50 flex items-center justify-center text-[#e5c158] hover:bg-[#e5c158]/20 transition-all cursor-pointer mx-2"
+                                    title="View User Profile"
+                                  >
+                                    <User size={20} />
+                                  </button>
                                   <div className="flex flex-col text-right">
                                     <span className="text-[10px] font-black text-[#e5c158]/70 uppercase tracking-widest leading-none mb-1">Amount</span>
                                     <span className="font-black text-[#e5c158] drop-shadow-[0_0_8px_rgba(234,179,8,0.3)] text-xl">₹{req.amount}</span>
@@ -7227,6 +7255,34 @@ export default function App() {
                                   <span className="text-[10px] font-black text-[#e5c158]/70 uppercase tracking-widest leading-none mb-1">Method</span>
                                   <span className="font-bold text-slate-200 text-xs">{req.method}</span>
                                 </div>
+                                <button
+                                  onClick={async () => {
+                                      if (req.userId) {
+                                          let userRec = adminUserList.find(u => u.id === req.userId);
+                                          const wDoc = await getDoc(doc(db, 'wallets', req.userId));
+                                          if (userRec) {
+                                              setAdminProfileModalUser({
+                                                  ...userRec,
+                                                  id: userRec.id,
+                                                  ...(wDoc.exists() ? wDoc.data() : { deposit: 0, winning: 0, bonus: 0, blocked: false })
+                                              });
+                                          } else {
+                                              const uDoc = await getDoc(doc(db, 'users', req.userId));
+                                              setAdminProfileModalUser({
+                                                  ...(uDoc.exists() ? uDoc.data() : { name: req.userName || 'Unknown User' }),
+                                                  id: req.userId,
+                                                  ...(wDoc.exists() ? wDoc.data() : { deposit: 0, winning: 0, bonus: 0, blocked: false })
+                                              });
+                                          }
+                                      } else {
+                                          alert("User ID missing from this request.");
+                                      }
+                                  }}
+                                  className="w-10 h-10 bg-slate-800 rounded-lg border border-[#e5c158]/50 flex items-center justify-center text-[#e5c158] hover:bg-[#e5c158]/20 transition-all cursor-pointer"
+                                  title="View User Profile"
+                                >
+                                  <User size={20} />
+                                </button>
                                 <div className="flex flex-col text-right">
                                   <span className="text-[10px] font-black text-[#e5c158]/70 uppercase tracking-widest leading-none mb-1">Amount</span>
                                   <span className="font-black text-[#e5c158] drop-shadow-[0_0_8px_rgba(234,179,8,0.3)] text-xl">₹{req.amount}</span>
