@@ -747,7 +747,7 @@ const ContestDetailsView = ({
                            }`}
                         >
                            <div className="flex items-center gap-3 flex-1 overflow-hidden">
-                              <div className="w-8 h-8 rounded-sm bg-[#faeee8] border border-[#ee5723]/30 dark:bg-slate-700 font-bold text-[10px] text-app-text flex items-center justify-center shrink-0 uppercase overflow-hidden">{(isCurrentUser && user?.photoURL) || t.userPhotoURL ? (<img src={(isCurrentUser && user?.photoURL) || t.userPhotoURL} alt="Avatar" className="w-full h-full object-cover" />) : (t.teamId || "T1")}</div>
+                              <div className="w-8 h-8 rounded-sm bg-[#faeee8] border border-[#ee5723]/30 dark:bg-slate-700 font-bold text-[10px] text-app-text flex items-center justify-center shrink-0 uppercase overflow-hidden">{(isCurrentUser && currentUser?.photoURL) || t.userPhotoURL ? (<img src={(isCurrentUser && currentUser?.photoURL) || t.userPhotoURL} alt="Avatar" className="w-full h-full object-cover" />) : (t.teamId || "T1")}</div>
                               <div className="flex flex-col overflow-hidden w-full">
                                  <span className="font-semibold text-black dark:text-app-text text-[13px] whitespace-nowrap overflow-hidden text-ellipsis max-w-[130px]">{t.userName || t.userId || 'Guest Player'}</span>
                                  {t.amountWon > 0 && <span className="text-[9px] text-green-600 dark:text-green-500 font-bold tracking-tight mt-0.5">WON ₹{Number(t.amountWon).toFixed(2).replace(/\.00$/, '')}</span>}
