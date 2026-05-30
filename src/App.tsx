@@ -957,6 +957,7 @@ export default function App() {
   const [selectedContest, setSelectedContest] = useState<{fee: number; name: string, id?: string, spots?: number} | null>(null);
   const [activeContestDetails, setActiveContestDetails] = useState<Contest | null>(null);
   const [activeContestInstanceId, setActiveContestInstanceId] = useState<number | null>(null);
+  const [expandedContestTypes, setExpandedContestTypes] = useState<string[]>([]);
   
   const [authMode, setAuthMode] = useState<'LOGIN' | 'SIGNUP' | 'OTP'>(typeof window !== 'undefined' && localStorage.getItem('dreamApp_hasSignedUp') === 'true' ? 'LOGIN' : 'SIGNUP');
   const [authInput, setAuthInput] = useState('');
@@ -3426,55 +3427,111 @@ export default function App() {
                 </div>
               )})}
 
-              {h2hContests.map(c => {
-                const totalTeamsCount = savedTeams.filter(t => t.match?.id === activeMatch?.id && (t.contestId ? t.contestId === c.id : t.contestName === c.name)).length;
-                const cspots = c.spots > 0 ? c.spots : 2;
-                const teamsInCurrentInstance = totalTeamsCount % cspots;
-                const spotsLeft = cspots - teamsInCurrentInstance;
-                const fillPercent = (teamsInCurrentInstance / cspots) * 100;
-                
-                if (!isAdmin && spotsLeft <= 0) return null;
-                
-                return (
-                <div key={c.id} onClick={() => { setActiveContestInstanceId(Math.floor(totalTeamsCount / cspots)); setActiveContestDetails(c); setView('CONTEST_DETAILS'); }} className="bg-app-card rounded-xl shadow-sm border border-app-border overflow-hidden mb-2 cursor-pointer active:scale-[0.99] transition-transform relative">
-                  <div className="p-2 bg-app-card-inner">
-                    <div className="flex justify-between items-center mb-1">
-                       <p className="text-[9px] text-app-text-muted font-semibold uppercase tracking-wider">Prize Pool</p>
-                       {renderBotControls(c)}
+              {(() => {
+                const groupedContests = [
+                  { type: 'H2H', title: 'Head To Head', subtitle: '2 member 1 winner', list: h2hContests.filter(c => c.type === 'H2H') },
+                  { type: '3 Spots', title: '3 Spots', subtitle: '3 member 1 winner', list: h2hContests.filter(c => c.type === '3 Spots') },
+                  { type: '4 Spots', title: '4 Spots', subtitle: '4 member 1 winner', list: h2hContests.filter(c => c.type === '4 Spots') },
+                  { type: '5 Spots', title: '5 Spots', subtitle: '5 member 1 winner', list: h2hContests.filter(c => c.type === '5 Spots') },
+                ];
+
+                return groupedContests.map(group => {
+                  if (group.list.length === 0) return null;
+                  const isExpanded = expandedContestTypes.includes(group.type);
+                  const displayList = isExpanded ? group.list : group.list.slice(0, 3);
+                  
+                  return (
+                    <div key={group.type} className="mb-6">
+                        {/* Group Header */}
+                        <div className="flex items-center justify-between mb-3">
+                            <div className="flex items-center gap-3 p-2 px-3 bg-[#f8eaea]/80 dark:bg-red-500/10 border border-red-500/20 rounded-xl w-fit">
+                               <div className="w-9 h-9 rounded-full flex items-center justify-center bg-[#db2f2f] text-white shrink-0 shadow-sm border border-white/20">
+                                  <Shield size={18} fill="currentColor" className="text-white" />
+                               </div>
+                               <div className="flex flex-col pr-2">
+                                 <span className="font-extrabold text-sm text-app-text leading-tight">{group.title}</span>
+                                 <span className="text-[10px] text-app-text-muted leading-tight font-medium mt-0.5">{group.subtitle}</span>
+                               </div>
+                            </div>
+                        </div>
+                        
+                        {/* Contests List */}
+                        {displayList.map(c => {
+                            const totalTeamsCount = savedTeams.filter(t => t.match?.id === activeMatch?.id && (t.contestId ? t.contestId === c.id : t.contestName === c.name)).length;
+                            const cspots = c.spots > 0 ? c.spots : 2;
+                            const teamsInCurrentInstance = totalTeamsCount % cspots;
+                            const spotsLeft = cspots - teamsInCurrentInstance;
+                            const fillPercent = (teamsInCurrentInstance / cspots) * 100;
+                            
+                            if (!isAdmin && spotsLeft <= 0) return null;
+                            
+                            return (
+                            <div key={c.id} onClick={() => { setActiveContestInstanceId(Math.floor(totalTeamsCount / cspots)); setActiveContestDetails(c); setView('CONTEST_DETAILS'); }} className="bg-app-card rounded-xl shadow-sm border border-app-border overflow-hidden mb-2 cursor-pointer active:scale-[0.99] transition-transform relative">
+                              <div className="p-2 bg-app-card-inner">
+                                <div className="flex justify-between items-center mb-1">
+                                   <p className="text-[9px] text-app-text-muted font-semibold uppercase tracking-wider">Prize Pool</p>
+                                   {renderBotControls(c)}
+                                </div>
+                                <div className="flex justify-between items-center mb-2">
+                                    <p className="text-xl font-black text-app-text">{c.prizeText}</p>
+                                    <button 
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        if(activeMatch?.status !== 'Upcoming') {
+                                           alert("Match is already live or completed!"); return;
+                                        }
+                                        setActiveContestDetails(c);
+                                        setActiveContestInstanceId(Math.floor(totalTeamsCount / cspots));
+                                        setSelectedContest({fee: c.entryFee, name: c.name, id: c.id, spots: c.spots});
+                                        setView('CREATE_TEAM');
+                                      }}
+                                      className={`${activeMatch?.status === 'Upcoming' ? 'bg-green-600 active:scale-95 hover:bg-green-700' : 'bg-slate-700'} transition-all text-white font-bold py-1 px-4 rounded text-sm shadow-sm border-b-[1px] border-green-800`}
+                                    >
+                                      ₹{c.entryFee}
+                                    </button>
+                                </div>
+                                <div className="bg-app-bg h-1 rounded-full mb-1.5 overflow-hidden">
+                                  <div className="bg-app-accent h-full" style={{width: `${fillPercent}%`}}></div>
+                                </div>
+                                <div className="flex justify-between text-[9px] text-app-text-muted font-semibold pb-1">
+                                  <span className="text-red-400">{spotsLeft} spots left</span>
+                                  <span>{cspots} spots</span>
+                                </div>
+                              </div>
+                              <div className="p-1.5 px-2 bg-slate-50/5 dark:bg-app-bg border-t border-app-border flex shrink-0 items-center justify-start gap-3 text-[9px] font-semibold text-app-text-muted">
+                                <span className="flex items-center gap-1"><div className="w-3.5 h-3.5 rounded-full border border-yellow-500 text-[#e5c158] flex items-center justify-center text-[7px] font-bold bg-[#e5c158]/10">1st</div> {c.firstPrize || c.prizeText}</span>
+                                <span className="flex items-center gap-1"><Trophy size={9} className="text-app-text-muted"/> {c.winPercentage || 50}%</span>
+                                <span className="flex items-center gap-1"><div className="w-3.5 h-3.5 border border-slate-500 rounded flex items-center justify-center text-[7px] font-bold text-app-text-muted">M</div> {c.maxTeams || 1}</span>
+                              </div>
+                            </div>
+                          )})}
+                          
+                          {/* Expand/Collapse buttons */}
+                          {!isExpanded && group.list.length > 3 && (
+                              <div className="flex justify-end mt-1">
+                                <button 
+                                  onClick={() => setExpandedContestTypes([...expandedContestTypes, group.type])}
+                                  className="py-1.5 px-3 flex items-center justify-center gap-1.5 text-xs font-bold text-app-text-muted hover:text-app-text transition-colors"
+                                >
+                                  View More <ChevronRight size={14} />
+                                </button>
+                              </div>
+                          )}
+                          
+                          {isExpanded && group.list.length > 3 && (
+                              <div className="flex justify-end mt-1">
+                                <button 
+                                  onClick={() => setExpandedContestTypes(expandedContestTypes.filter(t => t !== group.type))}
+                                  className="py-1.5 px-3 flex items-center justify-center gap-1.5 text-xs font-bold text-app-text-muted hover:text-app-text transition-colors"
+                                >
+                                  View Less <ChevronUp size={14} />
+                                </button>
+                              </div>
+                          )}
                     </div>
-                    <div className="flex justify-between items-center mb-2">
-                        <p className="text-xl font-black text-app-text">{c.prizeText}</p>
-                        <button 
-                        onClick={(e) => {
-                            e.stopPropagation();
-                            if(activeMatch?.status !== 'Upcoming') {
-                               alert("Match is already live or completed!"); return;
-                            }
-                            setActiveContestDetails(c);
-                            setActiveContestInstanceId(Math.floor(totalTeamsCount / cspots));
-                            setSelectedContest({fee: c.entryFee, name: c.name, id: c.id, spots: c.spots});
-                            setView('CREATE_TEAM');
-                          }}
-                          className={`${activeMatch?.status === 'Upcoming' ? 'bg-green-600 active:scale-95 hover:bg-green-700' : 'bg-slate-700'} transition-all text-white font-bold py-1 px-4 rounded text-sm shadow-sm border-b-[1px] border-green-800`}
-                        >
-                          ₹{c.entryFee}
-                        </button>
-                    </div>
-                    <div className="bg-app-bg h-1 rounded-full mb-1.5 overflow-hidden">
-                      <div className="bg-app-accent h-full" style={{width: `${fillPercent}%`}}></div>
-                    </div>
-                    <div className="flex justify-between text-[9px] text-app-text-muted font-semibold pb-1">
-                      <span className="text-red-400">{spotsLeft} spots left</span>
-                      <span>{cspots} spots</span>
-                    </div>
-                  </div>
-                  <div className="p-1.5 px-2 bg-slate-50/5 dark:bg-app-bg border-t border-app-border flex shrink-0 items-center justify-start gap-3 text-[9px] font-semibold text-app-text-muted">
-                    <span className="flex items-center gap-1"><div className="w-3.5 h-3.5 rounded-full border border-yellow-500 text-[#e5c158] flex items-center justify-center text-[7px] font-bold bg-[#e5c158]/10">1st</div> {c.firstPrize || c.prizeText}</span>
-                    <span className="flex items-center gap-1"><Trophy size={9} className="text-app-text-muted"/> {c.winPercentage || 50}%</span>
-                    <span className="flex items-center gap-1"><div className="w-3.5 h-3.5 border border-slate-500 rounded flex items-center justify-center text-[7px] font-bold text-app-text-muted">M</div> {c.maxTeams || 1}</span>
-                  </div>
-                </div>
-              )})}
+                  );
+                });
+              })()}
              </>
           )}
 
