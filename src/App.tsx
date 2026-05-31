@@ -6378,38 +6378,10 @@ export default function App() {
          <h3 className="font-bold text-slate-300 tracking-wide uppercase text-[10px]">Teams for {selectedFormat}</h3>
          <div className="flex gap-2">
             <button 
-               onClick={() => {
-                  if (window.confirm("WARNING: This will RESET all teams and UNLOCK all players to official defaults. Any custom teams you created will be preserved but missing ones will be added. Continue?")) {
-                     const defaultTeams = [
-                        { id: 'it1', name: 'Chennai Super Kings', shortName: 'CSK', color: 'bg-yellow-500', format: 'IPL' },
-                        { id: 'it2', name: 'Mumbai Indians', shortName: 'MI', color: 'bg-blue-600', format: 'IPL' },
-                        { id: 'it3', name: 'Royal Challengers Bangalore', shortName: 'RCB', color: 'bg-red-600', format: 'IPL' },
-                        { id: 'it4', name: 'Kolkata Knight Riders', shortName: 'KKR', color: 'bg-purple-800', format: 'IPL' },
-                        { id: 'it5', name: 'Sunrisers Hyderabad', shortName: 'SRH', color: 'bg-orange-500', format: 'IPL' },
-                        { id: 'it6', name: 'Rajasthan Royals', shortName: 'RR', color: 'bg-pink-600', format: 'IPL' },
-                        { id: 'it7', name: 'Gujarat Titans', shortName: 'GT', color: 'bg-slate-800', format: 'IPL' },
-                        { id: 'it8', name: 'Delhi Capitals', shortName: 'DC', color: 'bg-blue-800', format: 'IPL' },
-                        { id: 'it9', name: 'Lucknow Super Giants', shortName: 'LSG', color: 'bg-blue-400', format: 'IPL' },
-                        { id: 'it10', name: 'Punjab Kings', shortName: 'PBKS', color: 'bg-red-500', format: 'IPL' },
-                        { id: 't1', name: 'India', shortName: 'IND', color: 'bg-blue-600', format: 'T20' },
-                        { id: 't2', name: 'Pakistan', shortName: 'PAK', color: 'bg-green-600', format: 'T20' },
-                        { id: 't3', name: 'England', shortName: 'ENG', color: 'bg-red-600', format: 'T20' },
-                        { id: 't4', name: 'Australia', shortName: 'AUS', color: 'bg-yellow-500', format: 'T20' }
-                     ];
-                     
-                     setAppTeamsList(prev => {
-                        const existingKeys = new Set(prev.map(t => `${t.shortName}_${t.format}`));
-                        const toAdd = defaultTeams.filter(t => !existingKeys.has(`${t.shortName}_${t.format}`));
-                        return [...prev, ...toAdd];
-                     });
-                     
-                     setAppPlayers(MOCK_PLAYERS); // Force reset to full official list
-                     alert("Full Sync & Reset Complete! All IPL teams and India team are now populated with players.");
-                  }
-               }}
-               className="bg-blue-500/10 hover:bg-blue-500/20 px-3 py-2 rounded-lg text-blue-400 border border-blue-500/30 text-xs font-bold flex items-center gap-1.5 transition-all"
+               onClick={() => setShowAddFormatModal(true)}
+               className="bg-[#e5c158]/10 hover:bg-[#e5c158]/20 px-3 py-2 rounded-lg text-[#e5c158] border border-[#e5c158]/30 text-xs font-bold flex items-center gap-1.5 transition-all"
             >
-               <RefreshCw size={14}/> Force Sync Defaults
+               <Plus size={14}/> Add Series
             </button>
             <button onClick={() => setShowAddTeamModal(true)} className="bg-[#e5c158]/10 hover:bg-[#e5c158]/20 px-3 py-2 rounded-lg text-[#e5c158] border border-[#e5c158]/30 text-xs font-bold flex items-center gap-1.5 transition-all"><Plus size={14}/> Add Team</button>
          </div>
