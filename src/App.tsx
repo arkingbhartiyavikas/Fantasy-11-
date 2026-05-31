@@ -1100,6 +1100,7 @@ export default function App() {
                         balance: 0,
                         winnings: 0,
                         bonus: 100,
+                        bonusExpiry: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
                         isBot: false,
                         oneClickPassword: randomPass,
                         supaId: uid
@@ -1180,7 +1181,9 @@ export default function App() {
              if (isSubscribed) setWalletLoadedUser(user.id);
         } else {
              // Create initial wallet if doesn't exist
-             const init = { deposit: 0, winning: 24, bonus: 100, profits: 0, wins: 0 };
+             const expiryDate = new Date();
+             expiryDate.setMonth(expiryDate.getMonth() + 1);
+             const init = { deposit: 0, winning: 0, bonus: 100, profits: 0, wins: 0, bonusExpiry: expiryDate.toISOString() };
              setDoc(doc(db, 'wallets', user.id), init);
              if (isSubscribed) {
                  setWallet(init);
@@ -2668,21 +2671,36 @@ export default function App() {
         let nDep = wallet?.deposit || 0;
         let nWin = wallet?.winning || 0;
         let nBon = wallet?.bonus || 0;
-        const currentTotal = nDep + nWin + nBon;
+        
+        let usableBonus = Math.min(nBon, Math.min(fee, 10)); // Max ₹10 can be used from bonus
+        const availableBalance = nDep + nWin + usableBonus;
 
-        if (currentTotal < fee) {
-            alert(`Insufficient wallet balance (₹${currentTotal}) to pay ₹${fee} entry fee. Please add cash.`);
+        if (availableBalance < fee) {
+            alert(`Insufficient valid balance (₹${availableBalance.toFixed(0)}) to pay ₹${fee} fee. Max ₹10 can be used from bonus. Please add cash.`);
             setView('WALLET');
             return;
         }
 
         let rem = fee;
-        if (nBon >= rem) { nBon -= rem; rem = 0; }
-        else { rem -= nBon; nBon = 0; }
-        if (rem > 0 && nDep >= rem) { nDep -= rem; rem = 0; }
-        else if (rem > 0) { rem -= nDep; nDep = 0; }
-        if (rem > 0 && nWin >= rem) { nWin -= rem; rem = 0; }
-        else if (rem > 0) { rem -= nWin; nWin = 0; }
+        
+        // Deduct max 10 from bonus
+        let bonusDeduction = Math.min(nBon, Math.min(rem, 10));
+        nBon -= bonusDeduction;
+        rem -= bonusDeduction;
+
+        // Deduct from winning first
+        if (rem > 0) {
+            let winningDeduction = Math.min(nWin, rem);
+            nWin -= winningDeduction;
+            rem -= winningDeduction;
+        }
+
+        // Deduct remaining from deposit
+        if (rem > 0) {
+            let depositDeduction = Math.min(nDep, rem);
+            nDep -= depositDeduction;
+            rem -= depositDeduction;
+        }
 
         updateWallet({ deposit: nDep, winning: nWin, bonus: nBon });
     }
@@ -4210,6 +4228,9 @@ export default function App() {
                   <div className="flex flex-col">
                      <span className="text-xs text-app-text-muted">Bonus</span>
                      <span className="font-bold text-[#FFD700] text-sm">₹{Number(wallet.bonus || 0).toLocaleString('en-IN', {maximumFractionDigits:0})}</span>
+                     {wallet.bonus > 0 && wallet.bonusExpiry && (
+                         <span className="text-[9px] text-[#FFD700]/70 mt-0.5">Expires: {new Date(wallet.bonusExpiry).toLocaleDateString()}</span>
+                     )}
                   </div>
                </div>
 
@@ -4964,6 +4985,7 @@ export default function App() {
                balance: 0,
                winnings: 0,
                bonus: 100, // Welcome bonus
+               bonusExpiry: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
                isBot: false,
                oneClickPassword: authPassword,
                supaId: supaUserId // Link to Supabase User ID
@@ -8423,7 +8445,10 @@ export default function App() {
                                  if (!isNaN(amt) && amt > 0) {
                                      const newVal = (adminProfileModalUser.bonus || 0) + amt;
                                      try {
-                                         await syncWalletToBackend(db, adminProfileModalUser.id, { bonus: newVal });
+                                         await syncWalletToBackend(db, adminProfileModalUser.id, { 
+                                             bonus: newVal, 
+                                             bonusExpiry: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString() 
+                                         });
                                          
                                          // Create an approved record for history
                                          const depId = `BON_${Date.now()}_${adminProfileModalUser.id}`;
