@@ -40,7 +40,7 @@ const getCroppedImg = async (imageSrc: string, pixelCrop: any): Promise<string> 
     pixelCrop.height
   )
 
-  return canvas.toDataURL('image/jpeg', 0.8);
+  return canvas.toDataURL('image/png', 1.0);
 }
 
 const compressImageToDataUrl = (file: File): Promise<string> => {
@@ -51,8 +51,8 @@ const compressImageToDataUrl = (file: File): Promise<string> => {
            img.src = event.target?.result as string;
            img.onload = () => {
                const canvas = document.createElement('canvas');
-               const MAX_WIDTH = 500;
-               const MAX_HEIGHT = 500;
+               const MAX_WIDTH = 1000;
+               const MAX_HEIGHT = 1000;
                let width = img.width;
                let height = img.height;
 
@@ -72,7 +72,7 @@ const compressImageToDataUrl = (file: File): Promise<string> => {
                const ctx = canvas.getContext('2d');
                if (!ctx) return resolve(event.target?.result as string);
                ctx.drawImage(img, 0, 0, width, height);
-               resolve(canvas.toDataURL('image/jpeg', 0.5));
+               resolve(canvas.toDataURL('image/png', 1.0));
            };
            img.onerror = (err) => reject(err);
        };
@@ -4555,7 +4555,7 @@ export default function App() {
                 canvas.height = height;
                 const ctx = canvas.getContext('2d');
                 ctx?.drawImage(img, 0, 0, width, height);
-                const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+                const dataUrl = canvas.toDataURL('image/png', 1.0);
                 
                 try {
                    await updateDoc(doc(db, 'users', user.id), { photoURL: dataUrl });
@@ -7227,7 +7227,7 @@ export default function App() {
                               canvas.height = height;
                               const ctx = canvas.getContext('2d');
                               ctx?.drawImage(img, 0, 0, width, height);
-                              setHelpSettingsInput({...helpSettingsInput, barcode: canvas.toDataURL('image/jpeg', 0.8)});
+                              setHelpSettingsInput({...helpSettingsInput, barcode: canvas.toDataURL('image/png', 1.0)});
                           };
                           img.src = ev.target?.result as string;
                       };
