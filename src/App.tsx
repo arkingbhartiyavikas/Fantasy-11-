@@ -7915,7 +7915,7 @@ export default function App() {
     <div className={`relative h-[100dvh] w-full max-w-md mx-auto bg-app-bg text-app-text font-sans shadow-2xl overflow-hidden border-x border-app-border ${themeMode === 'Light' ? 'theme-light' : ''} color-${themeColor.toLowerCase()}`}>
 <>
         {showAddFlagModal && (
-            <div className="absolute inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 min-h-[100dvh]">
+            <div className="absolute inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 min-h-[100dvh]">
                 <div className="bg-[#13151c] border border-slate-700 w-full rounded-2xl p-6 shadow-2xl relative">
                    <button onClick={() => { setShowAddFlagModal(null); setNewFlagUrl(''); setZoom(1); setCrop({x:0, y:0}); }} className="absolute top-4 right-4 text-slate-500 hover:text-white z-10"><X size={20}/></button>
                    <h3 className="font-bold text-slate-200 text-lg mb-4">Set Team Flag/Image</h3>
@@ -8015,7 +8015,7 @@ export default function App() {
             </div>
         )}
         {showAddFormatModal && (
-            <div className="absolute inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 min-h-[100dvh]">
+            <div className="absolute inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 min-h-[100dvh]">
                 <div className="bg-[#13151c] border border-slate-700 w-full rounded-2xl p-6 shadow-2xl relative">
                    <button onClick={() => setShowAddFormatModal(false)} className="absolute top-4 right-4 text-slate-500 hover:text-white"><X size={20}/></button>
                    <h3 className="font-bold text-slate-200 text-lg mb-4">Add Format/League</h3>
@@ -8032,7 +8032,7 @@ export default function App() {
             </div>
         )}
         {showAddTeamModal && (
-            <div className="absolute inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 min-h-[100dvh]">
+            <div className="absolute inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 min-h-[100dvh]">
                 <div className="bg-[#13151c] border border-slate-700 w-full rounded-2xl p-6 shadow-2xl relative">
                    <button onClick={() => setShowAddTeamModal(false)} className="absolute top-4 right-4 text-slate-500 hover:text-white"><X size={20}/></button>
                    <h3 className="font-bold text-slate-200 text-lg mb-4">Add Team to {selectedFormat}</h3>
@@ -8066,8 +8066,8 @@ export default function App() {
             </div>
         )}
         {showTeamAddPlayerModal && (
-            <div className="absolute inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 min-h-[100dvh]">
-                <div className="bg-[#13151c] border border-slate-700 w-full rounded-2xl p-6 shadow-2xl relative">
+            <div className="absolute inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 min-h-[100dvh]">
+                <div className="bg-[#13151c] border border-slate-700 w-full rounded-2xl p-6 shadow-[0_0_50px_rgba(0,0,0,1)] relative">
                    <button onClick={() => { setShowTeamAddPlayerModal(false); setEditingPlayerId(null); }} className="absolute top-4 right-4 text-slate-500 hover:text-white"><X size={20}/></button>
                    <h3 className="font-bold text-slate-200 text-lg mb-1">{editingPlayerId ? 'Edit Player' : 'Add Player'}</h3>
                    <p className="text-xs text-slate-500 mb-4 uppercase tracking-widest font-semibold flex items-center gap-1.5">{editingPlayerId ? 'Updating in' : 'Adding to'} <span className="bg-white/10 text-white px-1.5 py-0.5 rounded text-[10px]">{newPlayerTeamShort}</span></p>
