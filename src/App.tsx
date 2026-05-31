@@ -3037,7 +3037,11 @@ export default function App() {
                        IPL 2026
                        <span className="text-xs text-app-text-muted font-normal self-end mb-1">{appMatches.filter(m => m.status === 'Upcoming').length} matches</span>
                    </h2>
-                   {appMatches.filter(m => m.status === 'Upcoming').map(match => renderMatchCard(match))}
+                   {appMatches.filter(m => m.status === 'Upcoming').sort((a, b) => {
+                       const tA = a.matchDateISO ? new Date(a.matchDateISO).getTime() : Infinity;
+                       const tB = b.matchDateISO ? new Date(b.matchDateISO).getTime() : Infinity;
+                       return tA - tB;
+                   }).map(match => renderMatchCard(match))}
                </>
            )}
 
