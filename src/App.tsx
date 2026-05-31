@@ -3461,14 +3461,14 @@ export default function App() {
                   return (
                     <div key={group.type} className="mb-4">
                         {/* Group Header */}
-                        <div className="flex items-center justify-between mb-2 px-1">
-                            <div className="flex items-center gap-2.5 p-1.5 px-3 bg-[#f8eaea]/80 dark:bg-red-500/10 border border-red-500/20 rounded-lg w-fit">
-                               <div className="w-6 h-6 rounded-full flex items-center justify-center bg-[#db2f2f] text-white shrink-0 shadow-sm border border-white/20">
-                                  <Shield size={12} fill="currentColor" className="text-white" />
+                        <div className="flex items-center justify-between mb-1.5 px-1">
+                            <div className="flex items-center gap-2 py-1 px-2.5 bg-[#f8eaea]/80 dark:bg-red-500/10 border border-red-500/20 rounded-lg w-fit">
+                               <div className="w-5 h-5 rounded-full flex items-center justify-center bg-[#db2f2f] text-white shrink-0 shadow-sm border border-white/20">
+                                  <Shield size={10} fill="currentColor" className="text-white" />
                                </div>
                                <div className="flex flex-col pr-1">
-                                 <span className="font-extrabold text-[11px] text-app-text leading-tight">{group.title}</span>
-                                 <span className="text-[9px] text-app-text-muted leading-tight font-medium mt-0.5">{group.subtitle}</span>
+                                 <span className="font-extrabold text-[10px] text-app-text leading-tight">{group.title}</span>
+                                 <span className="text-[8px] text-app-text-muted leading-tight font-medium mt-0.5">{group.subtitle}</span>
                                </div>
                             </div>
                         </div>
