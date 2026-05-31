@@ -4,7 +4,7 @@ import { getAuth } from 'firebase/auth';
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyCJ242ctyQ3rsJAzr1G2Eh4Fe1fdCwJO6w",
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "fantasy-11online.firebaseapp.com",
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "fantasy11arking.online",
   projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "fantasy-11online",
   storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "fantasy-11online.firebasestorage.app",
   messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "504797070449",
