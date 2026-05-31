@@ -2395,6 +2395,7 @@ export default function App() {
   const [newTeamShort, setNewTeamShort] = useState('');
   const [newTeamColor, setNewTeamColor] = useState('bg-blue-600');
   const [expandedTeamId, setExpandedTeamId] = useState<string | null>(null);
+  const [adminTeamDashboard, setAdminTeamDashboard] = useState<string | null>(null);
   const [showTeamAddPlayerModal, setShowTeamAddPlayerModal] = useState(false);
   const [newPlayerName, setNewPlayerName] = useState('');
   const [newPlayerRole, setNewPlayerRole] = useState<'BAT' | 'BOWL' | 'AR' | 'WK'>('BAT');
@@ -6333,7 +6334,7 @@ export default function App() {
              )}
 
              </>)}
-{adminTab === 'TEAMS' && (<>
+{adminTab === 'TEAMS' && !adminTeamDashboard && (<>
    <div className="flex flex-col gap-4 mt-2 mb-6">
       <div className="flex gap-2 p-2 bg-black/40 border border-slate-700/50 rounded-xl overflow-x-auto no-scrollbar items-center">
          {appFormats.map(fmt => (
@@ -6413,12 +6414,11 @@ export default function App() {
       <div className="grid grid-cols-1 gap-3">
          {appTeamsList.filter(t => t.format === selectedFormat).map(team => {
              const teamPlayers = appPlayers.filter(p => p.team === team.shortName);
-             const isExpanded = expandedTeamId === team.id;
              const isSelectedForMatch = selectedTeamsForMatch.some(st => st.id === team.id);
              
              return (
                  <div key={team.id} className={`bg-[#13151c] border ${isSelectedForMatch ? 'border-green-500 shadow-[0_0_10px_rgba(34,197,94,0.2)]' : 'border-slate-800'} rounded-xl overflow-hidden transition-all duration-300`}>
-                    <div className="p-4 flex items-center justify-between cursor-pointer" onClick={() => setExpandedTeamId(isExpanded ? null : team.id)}>
+                    <div className="p-4 flex items-center justify-between cursor-pointer" onClick={() => setAdminTeamDashboard(team.id)}>
                        <div className="flex items-center gap-3">
                           <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-white shadow-inner overflow-hidden relative shrink-0 ${team?.color?.startsWith('bg-') ? team.color : ''}`} style={!team?.color?.startsWith('bg-') ? {backgroundColor: team?.color} : {}}>
                              {team.flagUrl ? (
@@ -6464,78 +6464,11 @@ export default function App() {
                           >
                              {isSelectedForMatch ? 'Selected' : 'Select'}
                           </button>
-                          <div className={`p-1.5 bg-black/40 rounded border border-slate-700 transition-transform ${isExpanded ? 'rotate-180' : ''}`}>
-                             <ChevronDown size={16} className="text-slate-500" />
+                          <div className="p-1.5 bg-black/40 rounded border border-slate-700">
+                             <ChevronRight size={16} className="text-slate-500" />
                           </div>
                        </div>
                     </div>
-                    {isExpanded && (
-                       <div className="bg-black/40 border-t border-slate-800 p-3 pt-4">
-                          <div className="flex justify-between items-center mb-3">
-                             <h5 className="text-xs font-bold text-slate-400 uppercase tracking-widest pl-1">Player List</h5>
-                             <button 
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    setNewPlayerTeamShort(team.shortName);
-                                    setShowTeamAddPlayerModal(true);
-                                }}
-                                className="text-[10px] bg-slate-800 hover:bg-slate-700 text-slate-300 px-2 py-1.5 flex items-center gap-1 rounded border border-slate-700 transition-colors uppercase font-bold"
-                             >
-                                <Plus size={12}/> Add Player
-                             </button>
-                          </div>
-                          
-                          <div className="flex gap-1 mb-4 overflow-x-auto no-scrollbar pb-1">
-                             {(['ALL', 'WK', 'BAT', 'AR', 'BOWL'] as const).map(f => (
-                                 <button
-                                     key={f}
-                                     onClick={(e) => { e.stopPropagation(); setAdminTeamPlayerRoleFilter(f); }}
-                                     className={`px-3 py-1 rounded-full text-[10px] font-bold tracking-wide flex-shrink-0 transition-colors ${adminTeamPlayerRoleFilter === f ? 'bg-[#e5c158] text-black' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'}`}
-                                 >
-                                     {f}
-                                 </button>
-                             ))}
-                          </div>
-                          
-                          {teamPlayers.length === 0 ? (
-                              <p className="text-xs text-slate-600 text-center py-4 italic font-medium">No players added to this team yet.</p>
-                          ) : (
-                              <div className="space-y-1.5 max-h-60 overflow-y-auto pr-1">
-                                 {(adminTeamPlayerRoleFilter === 'ALL' ? teamPlayers : teamPlayers.filter(p => p.role === adminTeamPlayerRoleFilter)).length === 0 ? (
-                                    <p className="text-[10px] text-slate-500 text-center py-2 italic font-medium">No players found for this role.</p>
-                                 ) : (adminTeamPlayerRoleFilter === 'ALL' ? teamPlayers : teamPlayers.filter(p => p.role === adminTeamPlayerRoleFilter)).map((p: any) => (
-                                     <div key={p.id} 
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            setEditingPlayerId(p.id);
-                                            setNewPlayerName(p.name);
-                                            setNewPlayerRole(p.role as 'BAT' | 'BOWL' | 'AR' | 'WK');
-                                            setNewPlayerCredits((p.credits || 0).toString());
-                                            setNewPlayerTeamShort(team.shortName);
-                                            setShowTeamAddPlayerModal(true);
-                                        }}
-                                        className="flex items-center justify-between bg-[#13151c] px-3 py-2 rounded-lg border border-slate-800/50 hover:border-[#e5c158]/20 transition-colors cursor-pointer"
-                                     >
-                                        <div className="flex items-center gap-2">
-                                           <div className="w-6 h-6 rounded-full bg-slate-800 flex items-center justify-center shrink-0">
-                                              <User size={12} className="text-slate-400" />
-                                           </div>
-                                           <span className="text-sm font-bold text-slate-300">{p.name}</span>
-                                        </div>
-                                        <div className="flex items-center gap-3">
-                                           <span className="text-[10px] font-bold text-slate-500 bg-slate-800 px-1.5 py-0.5 rounded tracking-wide">{p.role}</span>
-                                           <span className="text-[10px] font-bold text-[#e5c158]">{p.credits} Cr</span>
-                                           <button onClick={(e) => {
-                                              e.stopPropagation();
-                                              setAppPlayers(prev => prev.filter(pl => pl.id !== p.id));
-                                            }} className="text-red-500/50 hover:text-red-500 p-2 -mr-2 bg-transparent border-none outline-none"><Trash2 size={14}/></button>
-                                        </div>
-                                     </div>
-                                 ))}
-                              </div>
-                          )}
-                       </div>
-                    )}
                  </div>
              );
          })}
@@ -6548,6 +6481,106 @@ export default function App() {
       </div>
    </div>
 </>)}
+
+{adminTab === 'TEAMS' && adminTeamDashboard && (() => {
+    const team = appTeamsList.find(t => t.id === adminTeamDashboard);
+    if (!team) return null;
+    const teamPlayers = appPlayers.filter(p => p.team === team.shortName);
+    
+    return (
+    <div className="absolute inset-0 bg-[#090b10] z-50 flex flex-col overflow-hidden animate-in slide-in-from-right-4">
+        <div className="bg-[#13151c] border-b border-slate-800 p-4 pt-6 flex items-center justify-between shrink-0">
+            <div className="flex items-center gap-3">
+               <button onClick={() => setAdminTeamDashboard(null)} className="p-2 -ml-2 bg-slate-800/50 hover:bg-slate-800 rounded-full text-slate-400 transition-colors"><ArrowLeft size={20}/></button>
+               <div className="flex items-center gap-3">
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-white shadow-inner overflow-hidden relative shrink-0 ${team?.color?.startsWith('bg-') ? team.color : ''}`} style={!team?.color?.startsWith('bg-') ? {backgroundColor: team?.color} : {}}>
+                     {team.flagUrl ? (
+                         <img src={team.flagUrl} alt={team.shortName} className={`w-full h-full ${team.flagFit === 'contain' ? 'object-contain' : 'object-cover'}`} />
+                     ) : (
+                         team.shortName
+                     )}
+                  </div>
+                  <div>
+                     <h3 className="font-black text-white text-lg leading-tight">{team.name}</h3>
+                     <p className="text-xs text-slate-500 font-bold">{team.shortName} &bull; {team.format} &bull; {teamPlayers.length} Players</p>
+                  </div>
+               </div>
+            </div>
+            <button 
+               onClick={() => {
+                   setNewPlayerTeamShort(team.shortName);
+                   setShowTeamAddPlayerModal(true);
+               }}
+               className="bg-[#e5c158] hover:bg-[#dca809] text-black px-4 py-2 rounded-xl font-bold text-sm shadow-[0_0_15px_rgba(229,193,88,0.3)] transition-all active:scale-95 flex items-center gap-1.5"
+            >
+               <Plus size={16}/> Add Player
+            </button>
+        </div>
+        
+        <div className="flex-1 overflow-y-auto p-4 pb-24">
+            <div className="flex gap-2 mb-6 overflow-x-auto no-scrollbar pb-1">
+               {(['ALL', 'WK', 'BAT', 'AR', 'BOWL'] as const).map(f => {
+                   const count = f === 'ALL' ? teamPlayers.length : teamPlayers.filter(p => p.role === f).length;
+                   return (
+                   <button
+                       key={f}
+                       onClick={() => setAdminTeamPlayerRoleFilter(f)}
+                       className={`px-4 py-2 rounded-xl text-xs font-bold tracking-wide flex-shrink-0 transition-colors flex items-center gap-1.5 ${adminTeamPlayerRoleFilter === f ? 'bg-[#e5c158] text-black shadow-md' : 'bg-[#13151c] text-slate-400 border border-slate-800'}`}
+                   >
+                       {f} <span className={`px-1.5 py-0.5 rounded-sm text-[9px] ${adminTeamPlayerRoleFilter === f ? 'bg-black/20' : 'bg-slate-800'}`}>{count}</span>
+                   </button>
+               )})}
+            </div>
+
+            {teamPlayers.length === 0 ? (
+                <div className="text-center py-12 bg-[#13151c] border border-slate-800 rounded-2xl">
+                    <User size={48} className="mx-auto text-slate-600 mb-4" />
+                    <p className="text-sm text-slate-400 font-bold mb-2">No players found</p>
+                    <button onClick={() => { setNewPlayerTeamShort(team.shortName); setShowTeamAddPlayerModal(true); }} className="text-[#e5c158] text-sm hover:underline font-bold">Add first player</button>
+                </div>
+            ) : (
+                <div className="grid grid-cols-1 gap-2">
+                   {(adminTeamPlayerRoleFilter === 'ALL' ? teamPlayers : teamPlayers.filter(p => p.role === adminTeamPlayerRoleFilter)).map((p: any) => (
+                       <div key={p.id} 
+                          onClick={() => {
+                              setEditingPlayerId(p.id);
+                              setNewPlayerName(p.name);
+                              setNewPlayerRole(p.role as 'BAT' | 'BOWL' | 'AR' | 'WK');
+                              setNewPlayerCredits((p.credits || 0).toString());
+                              setNewPlayerTeamShort(team.shortName);
+                              setShowTeamAddPlayerModal(true);
+                          }}
+                          className="flex items-center justify-between bg-[#13151c] p-3 rounded-xl border border-slate-800 hover:border-[#e5c158]/30 transition-colors cursor-pointer group"
+                       >
+                          <div className="flex items-center gap-3">
+                             <div className="w-10 h-10 rounded-full bg-slate-800/80 flex items-center justify-center shrink-0 border border-slate-700">
+                                <User size={18} className="text-slate-400" />
+                             </div>
+                             <div>
+                               <span className="text-sm font-bold text-slate-200">{p.name}</span>
+                               <div className="flex items-center gap-2 mt-0.5">
+                                 <span className="text-[10px] font-black text-slate-500 bg-slate-800 px-1.5 py-0.5 rounded tracking-wide">{p.role}</span>
+                                 <span className="text-[10px] font-bold text-[#e5c158]">{p.credits} Cr</span>
+                               </div>
+                             </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                             <button className="text-slate-500 hover:text-white p-2 rounded-lg bg-slate-800/50 opacity-0 group-hover:opacity-100 transition-opacity"><Edit2 size={14}/></button>
+                             <button onClick={(e) => {
+                                e.stopPropagation();
+                                if(window.confirm('Delete this player?')) {
+                                   setAppPlayers(prev => prev.filter(pl => pl.id !== p.id));
+                                }
+                              }} className="text-red-500/50 hover:text-red-500 hover:bg-red-500/10 p-2 rounded-lg transition-all"><Trash2 size={16}/></button>
+                          </div>
+                       </div>
+                   ))}
+                </div>
+            )}
+        </div>
+    </div>
+    );
+})()}
 {adminTab === 'MATCHES' && (<>
 <button 
       onClick={() => setShowPlayerScoring(!showPlayerScoring)}
