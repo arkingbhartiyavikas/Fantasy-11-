@@ -861,7 +861,7 @@ const POINT_EVENTS = [
 
 export default function App() {
   const [authInitialized, setAuthInitialized] = useState(false);
-  const [user, setUser] = useState<{email: string, id: string, name: string, numericId?: string, photoURL?: string, city?: string, pincode?: string} | null>(() => {
+  const [user, setUser] = useState<{email: string, id: string, name: string, numericId?: string, photoURL?: string, city?: string, pincode?: string, district?: string, address?: string, phone?: string} | null>(() => {
     const saved = localStorage.getItem('dreamApp_user');
     try { return saved ? JSON.parse(saved) : null; } catch(e) { return null; }
   });
@@ -871,6 +871,9 @@ export default function App() {
   const [showEditProfileModal, setShowEditProfileModal] = useState(false);
   const [editProfileName, setEditProfileName] = useState('');
   const [editProfileCity, setEditProfileCity] = useState('');
+  const [editProfileDistrict, setEditProfileDistrict] = useState('');
+  const [editProfileAddress, setEditProfileAddress] = useState('');
+  const [editProfilePhone, setEditProfilePhone] = useState('');
   const [editProfilePincode, setEditProfilePincode] = useState('');
 
   const [firestoreQuotaExceeded, setFirestoreQuotaExceeded] = useState(false); // Deprecated
@@ -4722,6 +4725,9 @@ export default function App() {
                  onClick={() => {
                      setEditProfileName(user?.name || '');
                      setEditProfileCity(user?.city || '');
+                     setEditProfileDistrict(user?.district || '');
+                     setEditProfileAddress(user?.address || '');
+                     setEditProfilePhone(user?.phone || '');
                      setEditProfilePincode(user?.pincode || '');
                      setShowEditProfileModal(true);
                  }} 
@@ -8854,6 +8860,38 @@ export default function App() {
                     />
                  </div>
                  <div>
+                    <label className="block text-xs text-app-text-muted mb-2 font-bold uppercase tracking-wider">District</label>
+                    <input 
+                       value={editProfileDistrict} 
+                       onChange={(e) => setEditProfileDistrict(e.target.value)} 
+                       className="w-full bg-app-card-inner border border-app-border rounded-xl px-4 py-3 text-app-text outline-none text-sm focus:border-app-accent focus:ring-1 focus:ring-app-accent" 
+                       placeholder="Enter your district"
+                    />
+                 </div>
+                 <div>
+                    <label className="block text-xs text-app-text-muted mb-2 font-bold uppercase tracking-wider">Address</label>
+                    <textarea 
+                       value={editProfileAddress} 
+                       onChange={(e) => setEditProfileAddress(e.target.value)} 
+                       className="w-full bg-app-card-inner border border-app-border rounded-xl px-4 py-3 text-app-text outline-none text-sm focus:border-app-accent focus:ring-1 focus:ring-app-accent min-h-[80px]" 
+                       placeholder="Enter your full address"
+                    />
+                 </div>
+                 <div>
+                    <label className="block text-xs text-app-text-muted mb-2 font-bold uppercase tracking-wider">Phone Number (India)</label>
+                    <div className="flex">
+                       <span className="bg-app-bg border border-app-border border-r-0 rounded-l-xl px-4 py-3 text-app-text-muted text-sm flex items-center justify-center">+91</span>
+                       <input 
+                          type="tel"
+                          maxLength={10}
+                          value={editProfilePhone} 
+                          onChange={(e) => setEditProfilePhone(e.target.value.replace(/\D/g, ''))} 
+                          className="w-full bg-app-card-inner border border-app-border rounded-r-xl px-4 py-3 text-app-text outline-none text-sm focus:border-app-accent focus:ring-1 focus:ring-app-accent" 
+                          placeholder="Enter 10-digit number"
+                       />
+                    </div>
+                 </div>
+                 <div>
                     <label className="block text-xs text-app-text-muted mb-2 font-bold uppercase tracking-wider">Pin Code</label>
                     <input 
                        type="number"
@@ -8866,14 +8904,23 @@ export default function App() {
                  <button 
                     onClick={async () => {
                        if (!user?.id) return;
+                       
+                       if (editProfilePhone && editProfilePhone.length !== 10) {
+                           alert("Please enter a valid 10-digit Indian phone number.");
+                           return;
+                       }
+                       
                        try {
                            await setDoc(doc(db, 'users', user.id), {
                                name: editProfileName,
                                city: editProfileCity,
+                               district: editProfileDistrict,
+                               address: editProfileAddress,
+                               phone: editProfilePhone,
                                pincode: editProfilePincode
                            }, { merge: true });
                            // Also save locally to localstorage so it reflects
-                           const newUserObj = { ...user, name: editProfileName, city: editProfileCity, pincode: editProfilePincode };
+                           const newUserObj = { ...user, name: editProfileName, city: editProfileCity, district: editProfileDistrict, address: editProfileAddress, phone: editProfilePhone, pincode: editProfilePincode };
                            setUser(newUserObj);
                            localStorage.setItem('dreamApp_user', JSON.stringify(newUserObj));
                            alert("Profile updated successfully!");
