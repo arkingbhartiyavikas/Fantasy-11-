@@ -861,12 +861,17 @@ const POINT_EVENTS = [
 
 export default function App() {
   const [authInitialized, setAuthInitialized] = useState(false);
-  const [user, setUser] = useState<{email: string, id: string, name: string, numericId?: string, photoURL?: string} | null>(() => {
+  const [user, setUser] = useState<{email: string, id: string, name: string, numericId?: string, photoURL?: string, city?: string, pincode?: string} | null>(() => {
     const saved = localStorage.getItem('dreamApp_user');
     try { return saved ? JSON.parse(saved) : null; } catch(e) { return null; }
   });
 
   const isAdmin = user?.email === 'arkingbhartiyavikas@gmail.com';
+  
+  const [showEditProfileModal, setShowEditProfileModal] = useState(false);
+  const [editProfileName, setEditProfileName] = useState('');
+  const [editProfileCity, setEditProfileCity] = useState('');
+  const [editProfilePincode, setEditProfilePincode] = useState('');
 
   const [firestoreQuotaExceeded, setFirestoreQuotaExceeded] = useState(false); // Deprecated
   const [hasDismissedQuota, setHasDismissedQuota] = useState(false);
@@ -4705,11 +4710,27 @@ export default function App() {
                  </div>
                  <div className="text-app-text-muted text-lg">&gt;</div>
               </button>
-              <button onClick={() => setShowHelpSupport(true)} className="p-4 text-left flex items-center gap-4 active:bg-app-card-hover transition-colors">
+              <button onClick={() => setShowHelpSupport(true)} className="p-4 text-left border-b border-app-border flex items-center gap-4 active:bg-app-card-hover transition-colors">
                  <Headphones className="text-purple-400" size={22}/>
                  <div className="flex-1">
                    <div className="text-app-text font-bold text-sm">Help & Support</div>
                    <div className="text-xs text-app-text-muted font-medium">Get answers, contact us</div>
+                 </div>
+                 <div className="text-app-text-muted text-lg">&gt;</div>
+              </button>
+              <button 
+                 onClick={() => {
+                     setEditProfileName(user?.name || '');
+                     setEditProfileCity(user?.city || '');
+                     setEditProfilePincode(user?.pincode || '');
+                     setShowEditProfileModal(true);
+                 }} 
+                 className="p-4 text-left flex items-center gap-4 active:bg-app-card-hover transition-colors"
+              >
+                 <User className="text-blue-400" size={22}/>
+                 <div className="flex-1">
+                   <div className="text-app-text font-bold text-sm">Profile Settings</div>
+                   <div className="text-xs text-app-text-muted font-medium">Edit name, city, pincode</div>
                  </div>
                  <div className="text-app-text-muted text-lg">&gt;</div>
               </button>
@@ -8061,36 +8082,42 @@ export default function App() {
                    <button onClick={() => {
                        if (newPlayerName.trim() && newPlayerCredits.trim()) {
                            if (editingPlayerId) {
-                               setAppPlayers(prev => prev.map(p => p.id === editingPlayerId ? {
+                               const newPlayers = appPlayers.map(p => p.id === editingPlayerId ? {
                                    ...p,
                                    name: newPlayerName.trim(),
                                    role: newPlayerRole,
                                    credits: parseFloat(newPlayerCredits.trim()) || 8.0,
-                               } : p));
+                               } : p);
+                               setAppPlayers(newPlayers);
+                               syncCategoryToCloud('players', newPlayers, 200);
                            } else {
                                const newP: Player = {
-                                   id: 'p' + Date.now(),
-                                   name: newPlayerName.trim(),
-                                   role: newPlayerRole as 'BAT' | 'BOWL' | 'AR' | 'WK',
-                                   credits: parseFloat(newPlayerCredits.trim()) || 8.0,
-                                   points: 0,
-                                   team: newPlayerTeamShort,
-                                   isPlaying: false,
-                                   selPercent: 50
-                               };
-                               setAppPlayers([...appPlayers, newP]);
-                           }
-                           setNewPlayerName('');
-                           setNewPlayerCredits('9.0');
-                           setEditingPlayerId(null);
-                           setShowTeamAddPlayerModal(false);
+                               id: 'p' + Date.now(),
+                               name: newPlayerName.trim(),
+                               role: newPlayerRole as 'BAT' | 'BOWL' | 'AR' | 'WK',
+                               credits: parseFloat(newPlayerCredits.trim()) || 8.0,
+                               points: 0,
+                               team: newPlayerTeamShort,
+                               isPlaying: false,
+                               selPercent: 50
+                           };
+                           const newPlayers = [...appPlayers, newP];
+                           setAppPlayers(newPlayers);
+                           syncCategoryToCloud('players', newPlayers, 200);
                        }
-                   }} className="w-full py-3 bg-[#e5c158] text-black shadow-lg rounded-xl font-bold tracking-widest text-sm text-center transition-all active:scale-95 uppercase">{editingPlayerId ? 'Save Changes' : 'Save Player'}</button>
-                   {editingPlayerId && (
-                       <button onClick={() => {
-                           if (window.confirm("Are you sure you want to delete this player?")) {
-                               setAppPlayers(appPlayers.filter(p => p.id !== editingPlayerId));
-                               setNewPlayerName('');
+                       setNewPlayerName('');
+                       setNewPlayerCredits('9.0');
+                       setEditingPlayerId(null);
+                       setShowTeamAddPlayerModal(false);
+                   }
+               }} className="w-full py-3 bg-[#e5c158] text-black shadow-lg rounded-xl font-bold tracking-widest text-sm text-center transition-all active:scale-95 uppercase">{editingPlayerId ? 'Save Changes' : 'Save Player'}</button>
+               {editingPlayerId && (
+                   <button onClick={() => {
+                       if (window.confirm("Are you sure you want to delete this player?")) {
+                           const newPlayers = appPlayers.filter(p => p.id !== editingPlayerId);
+                           setAppPlayers(newPlayers);
+                           syncCategoryToCloud('players', newPlayers, 200);
+                           setNewPlayerName('');
                                setNewPlayerCredits('9.0');
                                setEditingPlayerId(null);
                                setShowTeamAddPlayerModal(false);
@@ -8795,6 +8822,71 @@ export default function App() {
 
                   <h3 className="font-bold text-app-text text-base">Verified Results</h3>
                   <p className="text-app-text-muted">Points are derived from official match scorecards and data providers.</p>
+             </div>
+          </div>
+      )}
+
+      {showEditProfileModal && (
+          <div className="fixed inset-0 z-[150] bg-app-bg text-app-text flex flex-col font-sans overflow-hidden max-w-md mx-auto">
+             <header className="p-4 flex items-center gap-4 bg-app-card border-b border-app-border shrink-0">
+                <button onClick={() => setShowEditProfileModal(false)} className="text-app-text-muted hover:text-app-text transition-colors"><ArrowLeft size={24}/></button>
+                <div className="flex-1">
+                   <h1 className="text-lg font-bold">Profile Settings</h1>
+                </div>
+             </header>
+             <div className="flex-1 p-6 overflow-y-auto space-y-6">
+                 <div>
+                    <label className="block text-xs text-app-text-muted mb-2 font-bold uppercase tracking-wider">Full Name</label>
+                    <input 
+                       value={editProfileName} 
+                       onChange={(e) => setEditProfileName(e.target.value)} 
+                       className="w-full bg-app-card-inner border border-app-border rounded-xl px-4 py-3 text-app-text outline-none text-sm focus:border-app-accent focus:ring-1 focus:ring-app-accent" 
+                       placeholder="Enter your name"
+                    />
+                 </div>
+                 <div>
+                    <label className="block text-xs text-app-text-muted mb-2 font-bold uppercase tracking-wider">City Name</label>
+                    <input 
+                       value={editProfileCity} 
+                       onChange={(e) => setEditProfileCity(e.target.value)} 
+                       className="w-full bg-app-card-inner border border-app-border rounded-xl px-4 py-3 text-app-text outline-none text-sm focus:border-app-accent focus:ring-1 focus:ring-app-accent" 
+                       placeholder="Enter your city"
+                    />
+                 </div>
+                 <div>
+                    <label className="block text-xs text-app-text-muted mb-2 font-bold uppercase tracking-wider">Pin Code</label>
+                    <input 
+                       type="number"
+                       value={editProfilePincode} 
+                       onChange={(e) => setEditProfilePincode(e.target.value)} 
+                       className="w-full bg-app-card-inner border border-app-border rounded-xl px-4 py-3 text-app-text outline-none text-sm focus:border-app-accent focus:ring-1 focus:ring-app-accent" 
+                       placeholder="Enter pin code"
+                    />
+                 </div>
+                 <button 
+                    onClick={async () => {
+                       if (!user?.id) return;
+                       try {
+                           await setDoc(doc(db, 'users', user.id), {
+                               name: editProfileName,
+                               city: editProfileCity,
+                               pincode: editProfilePincode
+                           }, { merge: true });
+                           // Also save locally to localstorage so it reflects
+                           const newUserObj = { ...user, name: editProfileName, city: editProfileCity, pincode: editProfilePincode };
+                           setUser(newUserObj);
+                           localStorage.setItem('dreamApp_user', JSON.stringify(newUserObj));
+                           alert("Profile updated successfully!");
+                           setShowEditProfileModal(false);
+                       } catch (e) {
+                           console.error(e);
+                           alert("Failed to update profile. Please try again.");
+                       }
+                    }}
+                    className="w-full bg-[#153B25] text-[#4ADE80] font-bold tracking-widest text-sm p-4 rounded-xl shadow-lg border border-[#4ADE80]/30 active:scale-95 transition-transform uppercase select-none"
+                 >
+                    Save Changes
+                 </button>
              </div>
           </div>
       )}
