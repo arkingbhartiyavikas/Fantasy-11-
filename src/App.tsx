@@ -161,6 +161,7 @@ interface Player {
   id: string;
   name: string;
   team: string; // matches team1/team2 shortFrame
+  format?: string;
   role: Role;
   credits: number;
   points: number;
@@ -3174,7 +3175,7 @@ export default function App() {
     if (!activeMatch) return;
     
     // Generate pool of valid random variations to give illusion of uniqueness while keeping performance high
-    const availablePlayers = appPlayers.filter(p => p.team === activeMatch?.team1?.shortFrame || p.team === activeMatch?.team2?.shortFrame);
+    const availablePlayers = appPlayers.filter(p => (p.team === activeMatch?.team1?.shortFrame || p.team === activeMatch?.team2?.shortFrame) && (!p.format || activeMatch?.series?.includes(p.format)));
     const variations = [];
     
     for (let v = 0; v < 100; v++) {
@@ -6416,7 +6417,7 @@ export default function App() {
 
       <div className="grid grid-cols-1 gap-3">
          {appTeamsList.filter(t => t.format === selectedFormat).map(team => {
-             const teamPlayers = appPlayers.filter(p => p.team === team.shortName);
+             const teamPlayers = appPlayers.filter(p => p.team === team.shortName && (!p.format || p.format === team.format));
              const isSelectedForMatch = selectedTeamsForMatch.some(st => st.id === team.id);
              
              return (
@@ -6488,7 +6489,7 @@ export default function App() {
 {adminTab === 'TEAMS' && adminTeamDashboard && (() => {
     const team = appTeamsList.find(t => t.id === adminTeamDashboard);
     if (!team) return null;
-    const teamPlayers = appPlayers.filter(p => p.team === team.shortName);
+    const teamPlayers = appPlayers.filter(p => p.team === team.shortName && (!p.format || p.format === team.format));
     
     return (
     <div className="absolute inset-0 bg-[#090b10] z-50 flex flex-col overflow-hidden animate-in slide-in-from-right-4">
@@ -6796,7 +6797,7 @@ export default function App() {
                             } else if (status === 'Live' && m.status !== 'Live') {
                                 const startingPoints: Record<string, any> = {};
                                 const updatedPlayers = appPlayers.map(p => {
-                                    if (p.isPlaying && (p.team === m.team1.shortFrame || p.team === m.team2.shortFrame)) {
+                                    if (p.isPlaying && (p.team === m.team1.shortFrame || p.team === m.team2.shortFrame) && (!p.format || m.series?.includes(p.format))) {
                                         const pts = Math.max(p.livePoints ?? p.points, 4);
                                         const breakup = { 'starting 11': { points: 4, actual: 'Yes' } };
                                         startingPoints[p.id] = { total: pts, breakup };
@@ -7707,7 +7708,7 @@ export default function App() {
                      {(() => {
                        const match = appMatches.find(m => m.id === adminLiveMatchId);
                        if (!match) return null;
-                       const matchPlayers = appPlayers.filter(p => p.team === match?.team1?.shortFrame || p.team === match?.team2?.shortFrame);
+                       const matchPlayers = appPlayers.filter(p => (p.team === match?.team1?.shortFrame || p.team === match?.team2?.shortFrame) && (!p.format || match?.series?.includes(p.format)));
                        return (
                          <>
                            <div className="flex items-center gap-3 mb-5 pb-4 border-b border-[#e5c158]/20">
@@ -7853,7 +7854,7 @@ export default function App() {
                      {(() => {
                        const match = appMatches.find(m => m.id === adminUpcomingLineupMatchId);
                        if (!match) return null;
-                       const matchPlayers = appPlayers.filter(p => p.team === match?.team1?.shortFrame || p.team === match?.team2?.shortFrame);
+                       const matchPlayers = appPlayers.filter(p => (p.team === match?.team1?.shortFrame || p.team === match?.team2?.shortFrame) && (!p.format || match?.series?.includes(p.format)));
                        return (
                          <>
                            <div className="flex items-center gap-3 mb-5 pb-4 border-b border-[#e5c158]/20">
@@ -8104,6 +8105,7 @@ export default function App() {
                                credits: parseFloat(newPlayerCredits.trim()) || 8.0,
                                points: 0,
                                team: newPlayerTeamShort,
+                               format: selectedFormat,
                                isPlaying: false,
                                selPercent: 50
                            };
