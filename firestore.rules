@@ -5,7 +5,12 @@ service cloud.firestore {
     match /{document=**} { allow read, write: if false; }
 
     function isSignedIn() { return request.auth != null; }
-    function isAdmin() { return isSignedIn() && request.auth.token.email.matches('(?i)^arkingbhartiyavikas@gmail\\.com$'); }
+    function isAdmin() { 
+      return isSignedIn() && (
+        request.auth.token.get('email', '') == 'arkingbhartiyavikas@gmail.com' ||
+        request.auth.uid == 'MbvDnJk1TEbhJKu9Lj9jh0ewHyq2'
+      ); 
+    }
     function incoming() { return request.resource.data; }
     function existing() { return resource.data; }
     function isValidId(id) { return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); }

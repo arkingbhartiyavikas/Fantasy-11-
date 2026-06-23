@@ -18,21 +18,10 @@
     <div id="error-log" style="color:red; background: white; padding: 20px; font-family: monospace; white-space: pre-wrap; display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 2147483647; overflow-y: auto; font-size: 20px; font-weight: bold;"></div>
     <script>
       window.onerror = function(msg, url, line, col, error) {
-        if (msg.indexOf('[vite]') !== -1 || msg.indexOf('WebSocket') !== -1) return;
-        var el = document.getElementById('error-log');
-        if (el) {
-          el.style.display = 'block';
-          el.innerText += 'Global Error: ' + msg + '\n' + (error && error.stack ? error.stack : '') + '\n\n';
-        }
+        console.error('Global Error: ', msg, url, line, col, error);
       };
       window.addEventListener('unhandledrejection', function(event) {
-        var reason = event.reason ? (event.reason.stack || event.reason) : event.reason;
-        if (reason && (reason.toString().indexOf('[vite]') !== -1 || reason.toString().indexOf('WebSocket') !== -1)) return;
-        var el = document.getElementById('error-log');
-        if (el) {
-          el.style.display = 'block';
-          el.innerText += 'Unhandled Promise Rejection: ' + reason + '\n\n';
-        }
+        console.error('Unhandled Promise Rejection: ', event.reason);
       });
     </script>
     <script type="module" src="/src/main.tsx"></script>

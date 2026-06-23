@@ -2274,7 +2274,9 @@ export default function App() {
     }
   });
 
-  const isAdmin = user?.email === "arkingbhartiyavikas@gmail.com";
+  const isAdmin =
+    user?.email === "arkingbhartiyavikas@gmail.com" ||
+    user?.id === "MbvDnJk1TEbhJKu9Lj9jh0ewHyq2";
 
   const [showEditProfileModal, setShowEditProfileModal] = useState(false);
   const [editProfileName, setEditProfileName] = useState("");
@@ -2710,14 +2712,17 @@ export default function App() {
             wins: 0,
             bonusExpiry: expiryDate.toISOString(),
           };
-          setDoc(doc(db, "wallets", user.id), init);
+          setDoc(doc(db, "wallets", user.id), init).catch(e => handleFsError(e, "create_initial_wallet", user.id));
           if (isSubscribed) {
             setWallet(init);
             setWalletLoadedUser(user.id);
           }
         }
       },
-      (e) => handleFsError(e, "listen_wallet", user.id),
+      (e) => {
+        handleFsError(e, "listen_wallet", user.id);
+        if (isSubscribed) setWalletLoadedUser(user.id);
+      },
     );
 
     // Listen to deposits
@@ -4657,6 +4662,18 @@ export default function App() {
     setView("MATCH");
   };
 
+  useEffect(() => {
+    if (activeMatch) {
+      const updatedMatch = appMatches.find((m) => m.id === activeMatch.id);
+      if (
+        updatedMatch &&
+        JSON.stringify(updatedMatch) !== JSON.stringify(activeMatch)
+      ) {
+        setActiveMatch(updatedMatch);
+      }
+    }
+  }, [appMatches]); // Sync activeMatch if appMatches updates independently
+
   const [currentTime, setCurrentTime] = useState<Date>(new Date());
 
   useEffect(() => {
@@ -5611,7 +5628,7 @@ export default function App() {
         className="bg-app-card rounded-xl shadow-sm border border-app-border overflow-hidden mb-3 relative cursor-pointer active:scale-[0.99] transition-transform"
       >
         <div className="px-2 pt-2.5 pb-2 text-center text-[10px] text-app-text-muted font-semibold relative z-20">
-          <span>{match.seriesTitle || "Cricket Match"}</span>
+          <span>{match.series || "Cricket Match"}</span>
           {/* Top Separator Line */}
           <div className="absolute bottom-0 left-8 right-8 h-[1px] bg-gradient-to-r from-transparent via-slate-500/30 to-transparent"></div>
         </div>
@@ -6003,14 +6020,18 @@ export default function App() {
     const matchContests = appContests.filter((c) =>
       activeMatch.contestIds ? activeMatch.contestIds.includes(c.id) : true,
     );
-    const megaContests = matchContests.filter((c) => c.type === "Mega");
-    const h2hContests = matchContests.filter(
-      (c) =>
-        c.type === "H2H" ||
-        c.type === "3 Spots" ||
-        c.type === "4 Spots" ||
-        c.type === "5 Spots",
-    );
+    const megaContests = matchContests
+      .filter((c) => c.type === "Mega")
+      .sort((a, b) => (a.entryFee || 0) - (b.entryFee || 0));
+    const h2hContests = matchContests
+      .filter(
+        (c) =>
+          c.type === "H2H" ||
+          c.type === "3 Spots" ||
+          c.type === "4 Spots" ||
+          c.type === "5 Spots",
+      )
+      .sort((a, b) => (a.entryFee || 0) - (b.entryFee || 0));
 
     const userTeamsInMatch = savedTeams.filter(
       (t) =>
@@ -7846,7 +7867,7 @@ export default function App() {
                     <button
                       className="text-blue-600 text-xs font-bold bg-app-card px-2 py-1 rounded shadow-sm"
                       onClick={() =>
-                        navigator.clipboard.writeText(adminUPI || "admin@ybl")
+                        navigator.clipboard.writeText(adminUPI || "admin@ybl").catch(e => console.error("clipboard error", e))
                       }
                     >
                       Copy
@@ -8870,7 +8891,7 @@ export default function App() {
                 </span>
                 <button
                   onClick={() => {
-                    navigator.clipboard.writeText(oneClickCreds.userId);
+                    navigator.clipboard.writeText(oneClickCreds.userId).catch(e => console.error("clipboard error", e));
                     alert("User ID Copied!");
                   }}
                   className="p-2 bg-app-bg rounded border border-app-border text-app-text hover:text-white transition-colors"
@@ -8890,7 +8911,7 @@ export default function App() {
                 </span>
                 <button
                   onClick={() => {
-                    navigator.clipboard.writeText(oneClickCreds.pass);
+                    navigator.clipboard.writeText(oneClickCreds.pass).catch(e => console.error("clipboard error", e));
                     alert("Password Copied!");
                   }}
                   className="p-2 bg-app-bg rounded border border-app-border text-app-text hover:text-white transition-colors"
@@ -9177,7 +9198,7 @@ export default function App() {
     );
   };
 
-  if (!authInitialized || (user && walletLoadedUser !== user.id)) {
+  if (!authInitialized) {
     return (
       <div className="min-h-[100dvh] flex flex-col items-center justify-center bg-[#0d1321] text-[#e5c158]">
         <div className="w-12 h-12 border-4 border-[#e5c158]/30 border-t-[#e5c158] rounded-full animate-spin shadow-[0_0_20px_rgba(229,193,88,0.4)]"></div>
@@ -9226,14 +9247,12 @@ export default function App() {
       });
       const BATCH_SIZE = 2;
       for (let i = 0; i < chunks.length; i += BATCH_SIZE) {
-        const batch = chunks
-          .slice(i, i + BATCH_SIZE)
-          .map((chunk, idx) =>
-            setDoc(doc(db, "gameData", `${key}_chunk_${i + idx}`), {
-              data: JSON.parse(JSON.stringify(chunk)),
-              timestamp: ts,
-            }),
-          );
+        const batch = chunks.slice(i, i + BATCH_SIZE).map((chunk, idx) =>
+          setDoc(doc(db, "gameData", `${key}_chunk_${i + idx}`), {
+            data: JSON.parse(JSON.stringify(chunk)),
+            timestamp: ts,
+          }),
+        );
         await Promise.all(batch);
       }
       lastLoadTs.current = ts;
@@ -10219,7 +10238,7 @@ export default function App() {
                           doc(db, "gameData", "settings"),
                           { adminUPI, adminUpiQR },
                           { merge: true },
-                        )
+                        ).then(() => alert("Saved!")).catch((e: any) => alert("Failed to save details: " + e.message))
                       }
                       className="bg-[#e5c158]/20 hover:bg-yellow-500/30 text-[#e5c158] border border-[#e5c158]/50 font-bold px-4 py-2 rounded-lg text-xs transition-colors"
                     >
@@ -11333,19 +11352,6 @@ export default function App() {
                                       </span>
                                     </div>
                                   </div>
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setAppContests(
-                                        appContests.filter(
-                                          (cc) => cc.id !== c.id,
-                                        ),
-                                      );
-                                    }}
-                                    className="text-red-400 hover:text-red-300 bg-red-900/30 hover:bg-red-900/50 p-1.5 rounded-lg transition-colors ml-2"
-                                  >
-                                    <X size={16} />
-                                  </button>
                                 </div>
                               ))}
                             </div>
@@ -11372,11 +11378,11 @@ export default function App() {
                                 updatedMatches,
                                 20,
                               );
-                              alert("Contests successfully linked to match!");
+                              alert("Contests successfully added to match!");
                             }}
-                            className="w-full bg-[#1e232d] hover:bg-[#252b36] border border-slate-600 hover:border-[#e5c158]/50 text-white font-bold py-3 rounded-lg transition-colors mt-4"
+                            className="w-full bg-[#1e232d] hover:bg-[#252b36] border border-slate-600 hover:border-[#e5c158]/50 text-white font-bold py-3 rounded-lg transition-colors mt-4 uppercase tracking-wider text-sm"
                           >
-                            Save Attached Contests
+                            Add To Match
                           </button>
                         </>
                       )}
@@ -13300,12 +13306,14 @@ export default function App() {
                       );
                       if (confirmText === "RESET") {
                         try {
-                          depositRequests.forEach(async (d) => {
-                            await deleteDoc(doc(db, "deposits", d.id));
-                          });
-                          withdrawRequests.forEach(async (w) => {
-                            await deleteDoc(doc(db, "withdrawals", w.id));
-                          });
+                          await Promise.all([
+                            ...depositRequests.map((d) =>
+                              deleteDoc(doc(db, "deposits", d.id)),
+                            ),
+                            ...withdrawRequests.map((w) =>
+                              deleteDoc(doc(db, "withdrawals", w.id)),
+                            ),
+                          ]);
                           alert(
                             "System financial history has been completely wiped.",
                           );
@@ -16952,8 +16960,8 @@ export default function App() {
                                 const newTotal = Object.values(
                                   newBreakup,
                                 ).reduce(
-                                  (sum, item) =>
-                                    sum + (Number((item as any)?.points) || 0),
+                                  (sum: number, item: any) =>
+                                    sum + (Number(item?.points) || 0),
                                   0,
                                 );
 
