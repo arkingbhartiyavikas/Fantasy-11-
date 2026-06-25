@@ -5471,10 +5471,7 @@ export default function App() {
                 disabled={isSyncing}
                 className={`bg-green-500/20 text-green-500 border border-green-500/50 px-1.5 py-[2px] rounded text-[8px] uppercase font-bold transition-colors hover:bg-green-500/30 flex items-center gap-1 shrink-0 ${isSyncing ? "opacity-50" : ""}`}
               >
-                <RefreshCw
-                  size={8}
-                  className={isSyncing ? "animate-spin" : ""}
-                />
+                <RefreshCw size={8} />
                 Update
               </button>
             )}
@@ -6001,9 +5998,7 @@ export default function App() {
                   disabled={isSyncing}
                   className={`h-5 px-1 ${isSyncing ? "bg-slate-800 text-slate-500 animate-pulse" : "bg-[#e5c158]/20 text-[#e5c158] hover:bg-[#e5c158] hover:text-black"} flex items-center gap-1 rounded-r font-bold text-[10px] transition-colors active:scale-95`}
                 >
-                  {isSyncing ? (
-                    <RefreshCw size={8} className="animate-spin" />
-                  ) : null}
+                  {isSyncing ? <RefreshCw size={8} /> : null}
                   Update
                 </button>
               </div>
@@ -9510,12 +9505,6 @@ export default function App() {
                 <RefreshCw size={18} />
               </button>
               <button
-                onClick={() => setShowDashboardUsers(true)}
-                className="w-9 h-9 rounded-xl bg-[#e5c158]/10 border border-[#e5c158]/30 flex items-center justify-center text-[#e5c158] overflow-hidden shadow-[0_0_10px_rgba(229,193,88,0.2)] hover:bg-[#e5c158]/20 transition-colors cursor-pointer"
-              >
-                <User size={18} />
-              </button>
-              <button
                 onClick={() => setView("HOME")}
                 className="w-9 h-9 rounded-xl bg-slate-800/80 border border-slate-700 flex items-center justify-center text-slate-400 hover:text-white hover:border-slate-500 transition-all"
               >
@@ -12543,17 +12532,283 @@ export default function App() {
             </>
           )}
           {adminTab === "USERS" && (
-            <>
+            <div className="flex flex-col h-full overflow-hidden pb-20">
               {!adminUserDashboard && (
-                <button
-                  onClick={() => setAdminUserDashboard("MANAGE_KYC")}
-                  className={`flex items-center justify-between w-full mt-4 bg-[#13151c] border border-slate-800 rounded-xl mb-3 hover:border-[#e5c158]/30 p-4 shadow-lg transition-all relative group overflow-hidden`}
-                >
-                  <div className="absolute inset-0 bg-gradient-to-r from-yellow-500/0 via-yellow-500/5 to-yellow-500/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000"></div>
-                  <h3 className="font-bold text-slate-200 tracking-wide flex items-center justify-between z-10">
-                    Manage KYC Requests
-                  </h3>
-                </button>
+                <div className="flex-1 overflow-y-auto p-4 space-y-4 mt-2">
+                  <button
+                    onClick={() => setAdminUserDashboard("MANAGE_USERS")}
+                    className={`flex items-center justify-between w-full bg-[#13151c] border border-slate-800 rounded-xl hover:border-[#e5c158]/30 p-4 shadow-lg transition-all relative group overflow-hidden`}
+                  >
+                    <div className="absolute inset-0 bg-gradient-to-r from-yellow-500/0 via-yellow-500/5 to-yellow-500/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000"></div>
+                    <h3 className="font-bold text-slate-200 tracking-wide flex items-center justify-between z-10">
+                      Manage Users
+                    </h3>
+                    <ChevronRight size={18} className="text-slate-500 group-hover:text-[#e5c158]" />
+                  </button>
+
+                  <button
+                    onClick={() => setAdminUserDashboard("MANAGE_KYC")}
+                    className={`flex items-center justify-between w-full bg-[#13151c] border border-slate-800 rounded-xl hover:border-[#e5c158]/30 p-4 shadow-lg transition-all relative group overflow-hidden`}
+                  >
+                    <div className="absolute inset-0 bg-gradient-to-r from-yellow-500/0 via-yellow-500/5 to-yellow-500/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000"></div>
+                    <h3 className="font-bold text-slate-200 tracking-wide flex items-center justify-between z-10">
+                      Manage KYC Requests
+                    </h3>
+                    <ChevronRight size={18} className="text-slate-500 group-hover:text-[#e5c158]" />
+                  </button>
+
+                  <button
+                    onClick={() => setAdminUserDashboard("MANAGE_DEPOSITS")}
+                    className={`flex items-center justify-between w-full bg-[#13151c] border border-slate-800 rounded-xl hover:border-[#e5c158]/30 p-4 shadow-lg transition-all relative group overflow-hidden`}
+                  >
+                    <div className="absolute inset-0 bg-gradient-to-r from-yellow-500/0 via-yellow-500/5 to-yellow-500/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000"></div>
+                    <h3 className="font-bold text-slate-200 tracking-wide flex items-center justify-between z-10">
+                      Manage Deposit Requests
+                    </h3>
+                    <ChevronRight size={18} className="text-slate-500 group-hover:text-[#e5c158]" />
+                  </button>
+
+                  <button
+                    onClick={() => setAdminUserDashboard("MANAGE_WITHDRAWALS")}
+                    className={`flex items-center justify-between w-full bg-[#13151c] border border-slate-800 rounded-xl hover:border-[#e5c158]/30 p-4 shadow-lg transition-all relative group overflow-hidden`}
+                  >
+                    <div className="absolute inset-0 bg-gradient-to-r from-yellow-500/0 via-yellow-500/5 to-yellow-500/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000"></div>
+                    <h3 className="font-bold text-slate-200 tracking-wide flex items-center justify-between z-10">
+                      Manage Withdrawal Requests
+                    </h3>
+                    <ChevronRight size={18} className="text-slate-500 group-hover:text-[#e5c158]" />
+                  </button>
+                </div>
+              )}
+
+              {adminUserDashboard === "MANAGE_USERS" && (
+                <div className="absolute inset-0 bg-[#090b10] z-50 flex flex-col overflow-hidden animate-in slide-in-from-right-4">
+                  <div className="flex-none p-4 sticky top-0 bg-[#090b10] flex items-center justify-between border-b border-slate-800 shadow-sm z-50">
+                    <div className="flex items-center gap-3">
+                      <button
+                        onClick={() => setAdminUserDashboard(null)}
+                        className="p-2 -ml-2 rounded-full hover:bg-slate-800 transition-colors"
+                      >
+                        <ArrowLeft size={18} className="text-slate-400" />
+                      </button>
+                      <h2 className="text-base font-black text-slate-100 flex items-center gap-2">
+                        Manage Users
+                      </h2>
+                    </div>
+                  </div>
+                  <div className="flex-1 overflow-y-auto no-scrollbar p-5 pb-10">
+                    <div className="mb-4 flex gap-2 w-full shrink-0">
+                      <input
+                        type="text"
+                        placeholder="Enter User ID to Search..."
+                        value={searchUserId}
+                        onChange={(e) => setSearchUserId(e.target.value)}
+                        className="bg-black/50 border border-slate-800 text-slate-200 px-4 py-2.5 rounded-xl w-full focus:outline-none focus:border-[#e5c158] text-sm font-mono placeholder:text-slate-500"
+                      />
+                      <button
+                        onClick={async () => {
+                          const searchId = searchUserId.trim();
+                          if (!searchId) return;
+                          setIsSearchingUser(true);
+                          try {
+                            const userRec = adminUserList.find(
+                              (u) =>
+                                u.id === searchId ||
+                                String(u.numericId) === searchId ||
+                                (u.email && u.email === searchId),
+                            );
+
+                            let targetId = userRec ? userRec.id : searchId;
+
+                            if (/^\d{10}$/.test(targetId)) {
+                              try {
+                                const userByNumericQuery = query(
+                                  collection(db, "users"),
+                                  where("numericId", "==", targetId),
+                                );
+                                const userSnap = await getDocs(userByNumericQuery);
+
+                                if (!userSnap.docs || userSnap.docs.length === 0) {
+                                  alert("User not found!");
+                                  return;
+                                } else {
+                                  const realUid = userSnap.docs[0].id;
+                                  const userData = userSnap.docs[0].data();
+                                  const wDoc = await getDoc(
+                                    doc(db, "wallets", realUid),
+                                  );
+
+                                  setAdminProfileModalUser({
+                                    ...userData,
+                                    id: realUid,
+                                    ...(wDoc.exists()
+                                      ? wDoc.data()
+                                      : {
+                                          deposit: 0,
+                                          winning: 0,
+                                          bonus: 0,
+                                          blocked: false,
+                                        }),
+                                  });
+                                  setIsSearchingUser(false);
+                                  return;
+                                }
+                              } catch (err) {
+                                console.error("Numeric resolution failed", err);
+                              }
+                            }
+
+                            if (!userRec) {
+                              const wRef = doc(db, "wallets", targetId);
+                              const wDoc = await getDoc(wRef);
+                              const uDoc = await getDoc(doc(db, "users", targetId));
+
+                              if (wDoc.exists() || uDoc.exists()) {
+                                setAdminProfileModalUser({
+                                  ...(uDoc.exists()
+                                    ? uDoc.data()
+                                    : { name: "UID User" }),
+                                  id: targetId,
+                                  ...(wDoc.exists()
+                                    ? wDoc.data()
+                                    : {
+                                        deposit: 0,
+                                        winning: 0,
+                                        bonus: 0,
+                                        blocked: false,
+                                      }),
+                                });
+                                setIsSearchingUser(false);
+                                return;
+                              }
+
+                              setAdminProfileModalUser({
+                                id: targetId,
+                                name: "Searched User",
+                                deposit: 0,
+                                winning: 0,
+                                bonus: 0,
+                                blocked: false,
+                              });
+                            } else {
+                              const wDoc = await getDoc(
+                                doc(db, "wallets", userRec.id),
+                              );
+                              setAdminProfileModalUser({
+                                ...userRec,
+                                id: userRec.id,
+                                ...(wDoc.exists()
+                                  ? wDoc.data()
+                                  : {
+                                      deposit: 0,
+                                      winning: 0,
+                                      bonus: 0,
+                                      blocked: false,
+                                    }),
+                              });
+                            }
+                          } catch (e) {
+                            handleFsError(e, "admin_user_search");
+                            console.error(e);
+                            alert("Error finding user.");
+                          }
+                          setIsSearchingUser(false);
+                        }}
+                        disabled={isSearchingUser || !searchUserId.trim()}
+                        className={`bg-[#e5c158] text-black px-4 py-2 rounded-xl font-bold active:scale-95 transition-transform flex items-center justify-center shrink-0 ${isSearchingUser ? "opacity-70" : "hover:opacity-90"}`}
+                      >
+                        {isSearchingUser ? "..." : <Search size={18} />}
+                      </button>
+                    </div>
+                    <div className="space-y-3 relative z-10">
+                      {[...adminUserList]
+                        .filter((u) => {
+                          const searchLower = searchUserId.trim().toLowerCase();
+                          if (!searchLower) return true;
+                          return (
+                            String(u.id || "")
+                              .toLowerCase()
+                              .includes(searchLower) ||
+                            String(u.name || "")
+                              .toLowerCase()
+                              .includes(searchLower) ||
+                            String(u.email || "")
+                              .toLowerCase()
+                              .includes(searchLower) ||
+                            String(u.numericId || "").includes(searchLower)
+                          );
+                        })
+                        .sort((a, b) => {
+                          if ((b.winning || 0) >= 10000 && (a.winning || 0) < 10000)
+                            return 1;
+                          if ((a.winning || 0) >= 10000 && (b.winning || 0) < 10000)
+                            return -1;
+                          return (b.winning || 0) - (a.winning || 0);
+                        })
+                        .map((u) => (
+                          <div
+                            key={u.id}
+                            className={`bg-[#090b10] border ${u.winning >= 10000 ? "border-red-500/50" : "border-slate-800"} rounded-xl p-3 flex justify-between items-center relative overflow-hidden shadow-sm`}
+                          >
+                            {u.winning >= 10000 && (
+                              <div
+                                className="absolute left-0 top-0 w-1 h-full bg-red-500"
+                                title="High Winner!"
+                              ></div>
+                            )}
+                            <div className="flex-1 min-w-0 mr-3">
+                              <p className="text-sm font-bold text-slate-200 truncate">
+                                {u.name ||
+                                  (u.email && String(u.email).split("@")[0]) ||
+                                  "User"}
+                              </p>
+                              <p className="text-[10px] text-slate-500 font-mono truncate">
+                                {u.id}
+                              </p>
+                              <p className="text-[11px] font-bold mt-1 max-w-fit px-1.5 py-0.5 rounded bg-black/50 text-white border border-slate-800">
+                                <span className="text-green-400 text-[10px] uppercase mr-1">
+                                  WIN:
+                                </span>{" "}
+                                ₹{u.winning || 0}
+                              </p>
+                            </div>
+                            <div className="flex flex-col gap-1.5 sm:flex-row shadow-sm">
+                              <button
+                                onClick={() => {
+                                  setAdminProfileModalUser({
+                                    ...u,
+                                    name: u.name,
+                                    email: u.email,
+                                  });
+                                }}
+                                className="px-3 py-1.5 text-xs font-bold bg-[#e5c158]/10 text-[#e5c158] rounded hover:bg-[#e5c158]/20 border border-[#e5c158]/30 transition-colors flex items-center justify-center gap-1"
+                              >
+                                <User size={12} /> Profile
+                              </button>
+                              <button
+                                onClick={async () => {
+                                  const newBlockedStat = !u.blocked;
+                                  await setDoc(
+                                    doc(db, "wallets", u.id),
+                                    { ...u, blocked: newBlockedStat },
+                                    { merge: true },
+                                  );
+                                }}
+                                className={`px-3 py-1.5 text-[10px] font-bold rounded ${u.blocked ? "text-[#4ADE80] border border-[#4ADE80] hover:bg-[#4ADE80]/10" : "text-red-500 border border-red-500 hover:bg-red-500/10"} transition-colors whitespace-nowrap text-center`}
+                              >
+                                {u.blocked ? "Unblock" : "Block"}
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      {adminUserList.length === 0 && (
+                        <p className="text-slate-500 text-center text-xs py-10">
+                          No users found.
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
               )}
 
               {adminUserDashboard === "MANAGE_KYC" && (
@@ -12572,345 +12827,205 @@ export default function App() {
                     </div>
                   </div>
                   <div className="flex-1 overflow-y-auto no-scrollbar p-5 pb-10">
-                    {selectedKycRequest ? (
-                      <div>
-                        <button
-                          onClick={() => setSelectedKycRequest(null)}
-                          className="mb-4 flex items-center gap-1 text-xs text-slate-400 hover:text-white transition-colors"
-                        >
-                          <ChevronLeft size={16} /> Back to Requests
-                        </button>
-                        <h2 className="text-xl font-bold text-slate-200 tracking-wide uppercase text-center mb-6">
-                          User Manage KYC
-                        </h2>
-
-                        <div className="mb-6">
-                          <label className="block text-xs text-slate-400 mb-1">
-                            Search User ID / Email
-                          </label>
-                          <input
-                            type="text"
-                            className="w-full bg-transparent border border-slate-700/50 rounded-lg p-2.5 text-sm text-slate-200 outline-none focus:border-[#e5c158]/50"
-                            placeholder="Enter User ID or Email..."
-                          />
-                        </div>
-
-                        <div className="mb-6">
-                          <p className="text-sm text-slate-300 mb-3">
-                            User Profile & KYC Documents
-                          </p>
-                          <div className="flex items-center gap-4 bg-black/20 p-4 rounded-xl border border-slate-800/50">
-                            <div className="w-16 h-16 rounded-full bg-slate-800 flex items-center justify-center border border-slate-700 shrink-0">
-                              <User size={32} className="text-slate-500" />
-                            </div>
-                            <div className="flex-1 space-y-1">
-                              <p className="text-sm text-slate-400">
-                                Full Name:{" "}
-                                <span className="text-slate-200">
-                                  {selectedKycRequest.userName}
-                                </span>
-                              </p>
-                              <p className="text-sm text-slate-400">
-                                User ID:{" "}
-                                <span className="text-slate-200 font-mono select-all">
-                                  {selectedKycRequest.userNumericId ||
-                                    selectedKycRequest.userId}
-                                </span>
-                              </p>
-                              <p className="text-sm text-slate-400">
-                                Email:{" "}
-                                <span className="text-slate-200">
-                                  {selectedKycRequest.userEmail ||
-                                    "user@example.com"}
-                                </span>
-                              </p>
-                              <p className="text-sm text-slate-400">
-                                Phone:{" "}
-                                <span className="text-slate-200">
-                                  {selectedKycRequest.userPhone ||
-                                    "+91-XXXXX-XXXXX"}
-                                </span>
-                              </p>
-                              <p className="text-sm text-slate-400 flex items-center gap-2">
-                                KYC Status:{" "}
-                                <span className="px-2 py-0.5 rounded bg-[#e5c158]/20 text-[#e5c158] text-[10px] uppercase font-bold tracking-wider">
-                                  {selectedKycRequest.status ===
-                                  "Pending Review"
-                                    ? "PENDING VERIFICATION"
-                                    : selectedKycRequest.status}
-                                </span>
-                              </p>
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="mb-6">
-                          <p className="text-sm text-slate-300 mb-3">
-                            KYC Document Verification
-                          </p>
-                          <div className="overflow-hidden rounded-xl border border-slate-800/50 bg-black/20">
-                            <table className="w-full text-left text-xs">
-                              <thead className="bg-black/40 border-b border-slate-800/50">
-                                <tr>
-                                  <th className="p-3 font-normal text-slate-400">
-                                    Document Type
-                                  </th>
-                                  <th className="p-3 font-normal text-slate-400">
-                                    Document ID
-                                  </th>
-                                  <th className="p-3 font-normal text-slate-400">
-                                    Status
-                                  </th>
-                                  <th className="p-3 font-normal text-slate-400 text-center">
-                                    Action
-                                  </th>
-                                </tr>
-                              </thead>
-                              <tbody className="divide-y divide-slate-800/50">
-                                <tr>
-                                  <td className="p-3 text-slate-300">
-                                    Aadhaar (Front)
-                                  </td>
-                                  <td className="p-3 text-slate-300">
-                                    {selectedKycRequest.aadhar ||
-                                      "ID-XXXXXXXXXXXX"}
-                                  </td>
-                                  <td className="p-3 text-[#e5c158] uppercase">
-                                    {selectedKycRequest.status ===
-                                    "Pending Review"
-                                      ? "PENDING"
-                                      : selectedKycRequest.status}
-                                  </td>
-                                  <td className="p-3 text-center">
-                                    <button
-                                      onClick={() => {
-                                        if (selectedKycRequest.aadharFront)
-                                          setSelectedImageUrl(
-                                            selectedKycRequest.aadharFront,
-                                          );
-                                        else alert("No Aadhaar front image");
-                                      }}
-                                      className="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded border border-slate-700 transition-colors uppercase text-[10px] tracking-wider"
-                                    >
-                                      VIEW
-                                    </button>
-                                  </td>
-                                </tr>
-                                <tr>
-                                  <td className="p-3 text-slate-300">
-                                    Aadhaar (Back)
-                                  </td>
-                                  <td className="p-3 text-slate-300">
-                                    {selectedKycRequest.aadhar ||
-                                      "ID-XXXXXXXXXXXX"}
-                                  </td>
-                                  <td className="p-3 text-[#e5c158] uppercase">
-                                    {selectedKycRequest.status ===
-                                    "Pending Review"
-                                      ? "PENDING"
-                                      : selectedKycRequest.status}
-                                  </td>
-                                  <td className="p-3 text-center">
-                                    <button
-                                      onClick={() => {
-                                        if (selectedKycRequest.aadharBack)
-                                          setSelectedImageUrl(
-                                            selectedKycRequest.aadharBack,
-                                          );
-                                        else alert("No Aadhaar back image");
-                                      }}
-                                      className="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded border border-slate-700 transition-colors uppercase text-[10px] tracking-wider"
-                                    >
-                                      VIEW
-                                    </button>
-                                  </td>
-                                </tr>
-                                <tr>
-                                  <td className="p-3 text-slate-300">
-                                    PAN Card
-                                  </td>
-                                  <td className="p-3 text-slate-300">
-                                    {selectedKycRequest.pan ||
-                                      "ID-XXXXXXXXXXXX"}
-                                  </td>
-                                  <td className="p-3 text-[#e5c158] uppercase">
-                                    {selectedKycRequest.status ===
-                                    "Pending Review"
-                                      ? "PENDING"
-                                      : selectedKycRequest.status}
-                                  </td>
-                                  <td className="p-3 text-center">
-                                    <button
-                                      onClick={() => {
-                                        if (selectedKycRequest.panFront)
-                                          setSelectedImageUrl(
-                                            selectedKycRequest.panFront,
-                                          );
-                                        else alert("No PAN front image");
-                                      }}
-                                      className="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded border border-slate-700 transition-colors uppercase text-[10px] tracking-wider"
-                                    >
-                                      VIEW
-                                    </button>
-                                  </td>
-                                </tr>
-                              </tbody>
-                            </table>
-                          </div>
-                        </div>
-
-                        <div className="space-y-3 mb-6">
-                          <button
-                            onClick={async () => {
-                              await setDoc(
-                                doc(db, "kyc", selectedKycRequest.id),
-                                {
-                                  ...selectedKycRequest,
-                                  status: "Approved",
-                                  aadharFront: null,
-                                  aadharBack: null,
-                                  panFront: null,
-                                },
-                              );
-                              alert(
-                                "KYC Approved for " +
-                                  selectedKycRequest.userName +
-                                  ". Photo data cleared.",
-                              );
-                              setSelectedKycRequest(null);
-                            }}
-                            className="w-full bg-slate-600 hover:bg-slate-500 text-white font-bold py-3 rounded-lg transition-colors uppercase tracking-widest text-sm"
-                          >
-                            VERIFY USER KYC
-                          </button>
-                          <button
-                            onClick={async () => {
-                              await setDoc(
-                                doc(db, "kyc", selectedKycRequest.id),
-                                {
-                                  ...selectedKycRequest,
-                                  status: "Rejected",
-                                  aadharFront: null,
-                                  aadharBack: null,
-                                  panFront: null,
-                                },
-                              );
-                              alert(
-                                "KYC Rejected for " +
-                                  selectedKycRequest.userName +
-                                  ". Photo data cleared.",
-                              );
-                              setSelectedKycRequest(null);
-                            }}
-                            className="w-full bg-red-900/40 hover:bg-red-900/60 text-red-500 border border-red-900/50 font-bold py-3 rounded-lg transition-colors uppercase tracking-widest text-sm"
-                          >
-                            REJECT KYC REQUEST
-                          </button>
-                        </div>
-
-                        <div>
-                          <p className="text-sm text-slate-300 mb-3">
-                            User Verification History
-                          </p>
-                          <div className="overflow-hidden rounded-xl border border-slate-800/50 bg-black/20">
-                            <table className="w-full text-left text-xs">
-                              <thead className="bg-black/40 border-b border-slate-800/50">
-                                <tr>
-                                  <th className="p-3 font-normal text-slate-400">
-                                    Date
-                                  </th>
-                                  <th className="p-3 font-normal text-slate-400">
-                                    Action Take
-                                  </th>
-                                  <th className="p-3 font-normal text-slate-400">
-                                    Admin Notes
-                                  </th>
-                                </tr>
-                              </thead>
-                              <tbody className="divide-y divide-slate-800/50">
-                                <tr>
-                                  <td
-                                    className="p-3 text-slate-500"
-                                    colSpan={3}
-                                  >
-                                    No history available
-                                  </td>
-                                </tr>
-                              </tbody>
-                            </table>
-                          </div>
-                        </div>
-                      </div>
+                    {kycRequests.filter(r => r.status === 'Pending Review').length === 0 ? (
+                      <p className="text-sm font-bold text-slate-500 text-center py-6 bg-black/40 border border-slate-700 rounded-xl">No pending KYC requests.</p>
                     ) : (
-                      <div>
-                        <h2 className="text-xl font-bold text-slate-200 tracking-wide uppercase text-center mb-6">
-                          KYC Requests
-                        </h2>
-                        <div className="space-y-4 relative z-10">
-                          {kycRequests.filter(
-                            (r) => r.status === "Pending Review",
-                          ).length === 0 ? (
-                            <p className="text-sm font-bold text-slate-500 text-center py-6 bg-black/40 border border-slate-700 rounded-xl">
-                              No pending KYC requests.
-                            </p>
-                          ) : (
-                            kycRequests
-                              .filter((r) => r.status === "Pending Review")
-                              .map((req) => (
-                                <div
-                                  key={req.id}
-                                  className="bg-black/40 border border-[#e5c158]/20 rounded-xl p-4"
-                                >
-                                  <div className="flex justify-between items-start mb-3 border-b border-[#e5c158]/20 pb-3">
-                                    <div className="flex flex-col">
-                                      <span className="text-[10px] font-black text-[#e5c158]/70 uppercase tracking-widest leading-none mb-1">
-                                        User
-                                      </span>
-                                      <span className="font-bold text-slate-200">
-                                        {req.userName}
-                                      </span>
-                                    </div>
-                                    <div className="flex flex-col text-right">
-                                      <span className="text-[10px] font-black text-[#e5c158]/70 uppercase tracking-widest leading-none mb-1">
-                                        Time
-                                      </span>
-                                      <span className="text-xs text-slate-400">
-                                        {req.timestamp}
-                                      </span>
-                                    </div>
-                                  </div>
-                                  <div className="mb-4 bg-black/60 p-3 rounded-lg border border-slate-700">
-                                    <p className="text-xs text-slate-400 mb-1.5 flex justify-between">
-                                      Aadhar:{" "}
-                                      <span className="font-mono font-bold text-slate-200">
-                                        {req.aadhar}
-                                      </span>
-                                    </p>
-                                    <p className="text-xs text-slate-400 flex justify-between">
-                                      PAN:{" "}
-                                      <span className="font-mono font-bold text-slate-200">
-                                        {req.pan}
-                                      </span>
-                                    </p>
-                                  </div>
-                                  <div className="flex gap-3">
-                                    <button
-                                      onClick={() => setSelectedKycRequest(req)}
-                                      className="flex-1 bg-[#e5c158]/20 hover:bg-[#e5c158]/30 text-[#e5c158] border border-[#e5c158]/50 font-bold py-2.5 rounded-lg active:scale-[0.98] transition-all text-xs text-center uppercase tracking-widest"
-                                    >
-                                      Review KYC
-                                    </button>
-                                  </div>
-                                </div>
-                              ))
-                          )}
-                        </div>
+                      <div className="space-y-4">
+                        {kycRequests.filter(r => r.status === 'Pending Review').map((req) => (
+                          <div key={req.id} className="bg-black/40 border border-[#e5c158]/20 rounded-xl p-4">
+                            <div className="flex justify-between items-start mb-3 border-b border-[#e5c158]/20 pb-3">
+                              <div className="flex flex-col">
+                                <span className="text-[10px] font-black text-[#e5c158]/70 uppercase tracking-widest leading-none mb-1">User</span>
+                                <span className="font-bold text-slate-200">{req.userName}</span>
+                              </div>
+                              <div className="flex flex-col text-right">
+                                <span className="text-[10px] font-black text-[#e5c158]/70 uppercase tracking-widest leading-none mb-1">Time</span>
+                                <span className="text-xs text-slate-400">{req.timestamp}</span>
+                              </div>
+                            </div>
+                            <div className="mb-4 bg-black/60 p-3 rounded-lg border border-slate-700">
+                              <p className="text-xs text-slate-400 mb-1.5 flex justify-between">Aadhar: <span className="font-mono font-bold text-slate-200">{req.aadhar}</span></p>
+                              <p className="text-xs text-slate-400 flex justify-between">PAN: <span className="font-mono font-bold text-slate-200">{req.pan}</span></p>
+                            </div>
+                            <div className="flex gap-3">
+                               <button 
+                                 onClick={async () => {
+                                    await setDoc(doc(db, 'kyc', req.id), { ...req, status: 'Verified' });
+                                    alert(`KYC Approved for ${req.userName}.`);
+                                 }}
+                                 className="flex-1 bg-green-500/20 hover:bg-green-500/30 text-green-400 border border-green-500/50 font-bold py-2.5 rounded-lg active:scale-[0.98] transition-all text-xs text-center uppercase tracking-widest"
+                               >
+                                 Approve
+                               </button>
+                               <button 
+                                 onClick={async () => {
+                                    await setDoc(doc(db, 'kyc', req.id), { ...req, status: 'Rejected' });
+                                    alert(`KYC Rejected for ${req.userName}.`);
+                                 }}
+                                 className="flex-1 bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/50 font-bold py-2.5 rounded-lg active:scale-[0.98] transition-all text-xs text-center uppercase tracking-widest"
+                               >
+                                 Reject
+                               </button>
+                            </div>
+                          </div>
+                        ))}
                       </div>
                     )}
                   </div>
                 </div>
               )}
-            </>
+
+              {adminUserDashboard === "MANAGE_WITHDRAWALS" && (
+                <div className="absolute inset-0 bg-[#090b10] z-50 flex flex-col overflow-hidden animate-in slide-in-from-right-4">
+                  <div className="flex-none p-4 sticky top-0 bg-[#090b10] flex items-center justify-between border-b border-slate-800 shadow-sm z-50">
+                    <div className="flex items-center gap-3">
+                      <button
+                        onClick={() => setAdminUserDashboard(null)}
+                        className="p-2 -ml-2 rounded-full hover:bg-slate-800 transition-colors"
+                      >
+                        <ArrowLeft size={18} className="text-slate-400" />
+                      </button>
+                      <h2 className="text-base font-black text-slate-100 flex items-center gap-2">
+                        Manage Withdrawal Requests
+                      </h2>
+                    </div>
+                  </div>
+                  <div className="flex-1 overflow-y-auto no-scrollbar p-5 pb-10">
+                    {withdrawRequests.filter(r => r.status === 'Pending').length === 0 ? (
+                      <p className="text-sm font-bold text-slate-500 text-center py-6 bg-black/40 border border-slate-700 rounded-xl">No pending withdrawal requests.</p>
+                    ) : (
+                      <div className="space-y-4">
+                        {withdrawRequests.filter(r => r.status === 'Pending').map((req) => (
+                           <div key={req.id} className="bg-black/40 border border-[#e5c158]/20 rounded-xl p-4">
+                              <div className="flex justify-between items-start mb-3 border-b border-[#e5c158]/20 pb-3">
+                                <div className="flex flex-col">
+                                  <span className="text-[10px] font-black text-[#e5c158]/70 uppercase tracking-widest leading-none mb-1">User ID</span>
+                                  <span className="font-bold text-slate-200 text-xs">{req.userId || 'Unknown'}</span>
+                                </div>
+                                <div className="flex flex-col text-right">
+                                  <span className="text-[10px] font-black text-[#e5c158]/70 uppercase tracking-widest leading-none mb-1">Amount</span>
+                                  <span className="font-black text-[#e5c158] drop-shadow-[0_0_8px_rgba(234,179,8,0.3)] text-xl">₹{req.amount}</span>
+                                </div>
+                              </div>
+                              <div className="mb-4 bg-black/60 p-3 rounded-lg border border-slate-700">
+                                {req.userName && <p className="text-xs text-slate-300 mb-2 flex justify-between"><span>User:</span> <span className="font-bold text-slate-200">{req.userName}</span></p>}
+                                <p className="text-xs text-slate-300 mb-2 flex justify-between"><span>Method:</span> <span className="font-bold text-slate-200">{req.method}</span></p>
+                                <p className="text-xs text-slate-300 mb-2 flex justify-between"><span>Time:</span> <span className="font-bold text-slate-200 text-[10px]">{req.timestamp}</span></p>
+                                <p className="text-xs text-slate-300 flex justify-between items-center"><span>Details:</span> <span className="font-mono font-bold text-slate-200 bg-black/80 px-2 py-0.5 border border-slate-600 rounded">{req.details}</span></p>
+                              </div>
+                              <div className="flex gap-3">
+                                 <button 
+                                   onClick={async () => {
+                                      await setDoc(doc(db, 'withdrawals', req.id), { ...req, status: 'Approved' });
+                                      alert(`Withdrawal of ₹${req.amount} approved. Make sure you sent the money via the bank details provided.`);
+                                   }}
+                                   className="flex-1 bg-green-500/20 hover:bg-green-500/30 text-green-400 border border-green-500/50 font-bold py-2.5 rounded-lg active:scale-[0.98] transition-all text-xs text-center uppercase tracking-widest"
+                                 >
+                                   Approve
+                                 </button>
+                                 <button 
+                                   onClick={async () => {
+                                      await setDoc(doc(db, 'withdrawals', req.id), { ...req, status: 'Rejected' });
+                                      if (req.userId) {
+                                         const wRef = doc(db, 'wallets', req.userId);
+                                         const wDoc = await getDoc(wRef);
+                                         if (wDoc.exists()) {
+                                            const curr = wDoc.data();
+                                            await setDoc(wRef, { ...curr, winning: (curr.winning || 0) + req.amount });
+                                         }
+                                      }
+                                      alert(`Withdrawal rejected. Amount refunded to user wallet.`);
+                                   }}
+                                   className="flex-1 bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/50 font-bold py-2.5 rounded-lg active:scale-[0.98] transition-all text-xs text-center uppercase tracking-widest"
+                                 >
+                                   Reject
+                                 </button>
+                              </div>
+                           </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {adminUserDashboard === "MANAGE_DEPOSITS" && (
+                <div className="absolute inset-0 bg-[#090b10] z-50 flex flex-col overflow-hidden animate-in slide-in-from-right-4">
+                  <div className="flex-none p-4 sticky top-0 bg-[#090b10] flex items-center justify-between border-b border-slate-800 shadow-sm z-50">
+                    <div className="flex items-center gap-3">
+                      <button
+                        onClick={() => setAdminUserDashboard(null)}
+                        className="p-2 -ml-2 rounded-full hover:bg-slate-800 transition-colors"
+                      >
+                        <ArrowLeft size={18} className="text-slate-400" />
+                      </button>
+                      <h2 className="text-base font-black text-slate-100 flex items-center gap-2">
+                        Manage Deposit Requests
+                      </h2>
+                    </div>
+                  </div>
+                  <div className="flex-1 overflow-y-auto no-scrollbar p-5 pb-10">
+                    {depositRequests.filter(r => r.status === 'Pending').length === 0 ? (
+                      <p className="text-sm font-bold text-slate-500 text-center py-6 bg-black/40 border border-slate-700 rounded-xl">No pending deposit requests.</p>
+                    ) : (
+                      <div className="space-y-4">
+                        {depositRequests.filter(r => r.status === 'Pending').map((req) => (
+                           <div key={req.id} className="bg-black/40 border border-[#e5c158]/20 rounded-xl p-4">
+                              <div className="flex justify-between items-start mb-3 border-b border-[#e5c158]/20 pb-3">
+                                <div className="flex flex-col">
+                                  <span className="text-[10px] font-black text-[#e5c158]/70 uppercase tracking-widest leading-none mb-1">Method</span>
+                                  <span className="font-bold text-slate-200 text-xs">{req.method}</span>
+                                </div>
+                                <div className="flex flex-col text-right">
+                                  <span className="text-[10px] font-black text-[#e5c158]/70 uppercase tracking-widest leading-none mb-1">Amount</span>
+                                  <span className="font-black text-[#e5c158] drop-shadow-[0_0_8px_rgba(234,179,8,0.3)] text-xl">₹{req.amount}</span>
+                                </div>
+                              </div>
+                              <div className="mb-4 bg-black/60 p-4 rounded-lg border border-slate-700">
+                                {req.userName && <p className="text-xs text-slate-300 mb-2 flex justify-between"><span>User:</span> <span className="font-bold text-slate-200">{req.userName}</span></p>}
+                                <p className="text-xs text-slate-300 mb-2 flex justify-between"><span>Time:</span> <span className="font-bold text-slate-200 text-[10px]">{req.timestamp}</span></p>
+                                <p className="text-xs text-slate-300 mb-2 flex justify-between items-center"><span>UTR:</span> <span className="font-mono font-bold text-slate-200 bg-black/80 px-2 py-0.5 border border-slate-600 rounded">{req.utr}</span></p>
+                                <p className="text-xs text-[#e5c158] font-bold flex items-center justify-end gap-1 underline mt-3 cursor-pointer hover:text-[#f0b90b]">
+                                  View Screenshot
+                                </p>
+                              </div>
+                              <div className="flex gap-3">
+                                 <button 
+                                   onClick={async () => {
+                                      await setDoc(doc(db, 'deposits', req.id), { ...req, status: 'Approved' });
+                                      if (req.userId) {
+                                         const wRef = doc(db, 'wallets', req.userId);
+                                         const wDoc = await getDoc(wRef);
+                                         if (wDoc.exists()) {
+                                            const curr = wDoc.data();
+                                            await setDoc(wRef, { ...curr, deposit: (curr.deposit || 0) + req.amount });
+                                         }
+                                      }
+                                      alert(`Accepted! ₹${req.amount} added to user wallet.`);
+                                   }}
+                                   className="flex-1 bg-green-500/20 hover:bg-green-500/30 text-green-400 border border-green-500/50 font-bold py-2.5 rounded-lg active:scale-[0.98] transition-all text-xs text-center uppercase tracking-widest"
+                                 >
+                                   Accept & Add ₹{req.amount}
+                                 </button>
+                                 <button 
+                                   onClick={async () => {
+                                      await setDoc(doc(db, 'deposits', req.id), { ...req, status: 'Rejected' });
+                                      alert(`Deposit request rejected.`);
+                                   }}
+                                   className="flex-1 bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/50 font-bold py-2.5 rounded-lg active:scale-[0.98] transition-all text-xs text-center uppercase tracking-widest"
+                                 >
+                                   Reject
+                                 </button>
+                              </div>
+                           </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+            </div>
           )}
           {adminTab === "ENTRY FEES" && (
             <>
@@ -13332,682 +13447,6 @@ export default function App() {
                 </button>
               </div>
 
-              {!adminUserDashboard && (
-                <button
-                  onClick={() => setAdminUserDashboard("MANAGE_HELP")}
-                  className={`flex items-center justify-between w-full mt-4 bg-[#13151c] border border-slate-800 rounded-xl mb-3 hover:border-[#e5c158]/30 p-4 shadow-lg transition-all relative group overflow-hidden`}
-                >
-                  <div className="absolute inset-0 bg-gradient-to-r from-yellow-500/0 via-yellow-500/5 to-yellow-500/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000"></div>
-                  <h3 className="font-bold text-slate-200 tracking-wide flex items-center justify-between z-10">
-                    Manage Help Settings
-                  </h3>
-                </button>
-              )}
-              {adminUserDashboard === "MANAGE_HELP" && (
-                <div className="absolute inset-0 bg-[#090b10] z-50 flex flex-col overflow-hidden animate-in slide-in-from-right-4">
-                  <div className="flex-none p-4 sticky top-0 bg-[#090b10] flex items-center justify-between border-b border-slate-800 shadow-sm z-50">
-                    <div className="flex items-center gap-3">
-                      <button
-                        onClick={() => setAdminUserDashboard(null)}
-                        className="p-2 -ml-2 rounded-full hover:bg-slate-800 transition-colors"
-                      >
-                        <ArrowLeft size={18} className="text-slate-400" />
-                      </button>
-                      <h2 className="text-base font-black text-slate-100 flex items-center gap-2">
-                        Manage Help Settings
-                      </h2>
-                    </div>
-                  </div>
-                  <div className="flex-1 overflow-y-auto no-scrollbar p-5 pb-10">
-                    <p className="text-xs text-slate-400 mb-5 pl-1 relative z-10">
-                      Configure Help & Support fields here.
-                    </p>
-                    <div className="space-y-4 relative z-10 text-slate-300 text-sm">
-                      <div className="flex flex-col gap-1">
-                        <label className="font-bold text-xs">
-                          Support Email
-                        </label>
-                        <input
-                          type="text"
-                          value={helpSettingsInput.email}
-                          onChange={(e) =>
-                            setHelpSettingsInput({
-                              ...helpSettingsInput,
-                              email: e.target.value,
-                            })
-                          }
-                          className="bg-black/50 border border-slate-800 rounded p-2 focus:border-[#e5c158] outline-none"
-                          placeholder="help@example.com"
-                        />
-                      </div>
-                      <div className="flex flex-col gap-1">
-                        <label className="font-bold text-xs">
-                          Telegram Channel Link
-                        </label>
-                        <input
-                          type="text"
-                          value={helpSettingsInput.telegram}
-                          onChange={(e) =>
-                            setHelpSettingsInput({
-                              ...helpSettingsInput,
-                              telegram: e.target.value,
-                            })
-                          }
-                          className="bg-black/50 border border-slate-800 rounded p-2 focus:border-[#e5c158] outline-none"
-                          placeholder="https://t.me/..."
-                        />
-                      </div>
-                      <div className="flex flex-col gap-1">
-                        <label className="font-bold text-xs">
-                          WhatsApp Link
-                        </label>
-                        <input
-                          type="text"
-                          value={helpSettingsInput.whatsapp}
-                          onChange={(e) =>
-                            setHelpSettingsInput({
-                              ...helpSettingsInput,
-                              whatsapp: e.target.value,
-                            })
-                          }
-                          className="bg-black/50 border border-slate-800 rounded p-2 focus:border-[#e5c158] outline-none"
-                          placeholder="https://wa.me/..."
-                        />
-                      </div>
-                      <div className="flex flex-col gap-1">
-                        <label className="font-bold text-xs">
-                          Help Image (e.g. Barcode/QR)
-                        </label>
-                        <input
-                          type="file"
-                          accept="image/*"
-                          onChange={(e) => {
-                            const file = e.target.files?.[0];
-                            if (file) {
-                              const reader = new FileReader();
-                              reader.onload = (ev) => {
-                                const img = new Image();
-                                img.onload = () => {
-                                  const canvas =
-                                    document.createElement("canvas");
-                                  let width = img.width;
-                                  let height = img.height;
-                                  const MAX_SIZE = 600;
-
-                                  if (width > height && width > MAX_SIZE) {
-                                    height *= MAX_SIZE / width;
-                                    width = MAX_SIZE;
-                                  } else if (height > MAX_SIZE) {
-                                    width *= MAX_SIZE / height;
-                                    height = MAX_SIZE;
-                                  }
-
-                                  canvas.width = width;
-                                  canvas.height = height;
-                                  const ctx = canvas.getContext("2d");
-                                  ctx?.drawImage(img, 0, 0, width, height);
-                                  setHelpSettingsInput({
-                                    ...helpSettingsInput,
-                                    barcode: canvas.toDataURL("image/png", 1.0),
-                                  });
-                                };
-                                img.src = ev.target?.result as string;
-                              };
-                              reader.readAsDataURL(file);
-                            }
-                          }}
-                          className="bg-black/50 border border-slate-800 rounded p-2 focus:border-[#e5c158] outline-none text-xs"
-                        />
-                        {helpSettingsInput.barcode && (
-                          <img
-                            src={helpSettingsInput.barcode}
-                            alt="Barcode preview"
-                            className="w-20 h-20 mt-2 rounded border border-slate-800 object-contain"
-                          />
-                        )}
-                      </div>
-                      <button
-                        onClick={async () => {
-                          try {
-                            await setDoc(
-                              doc(db, "adminSettings", "helpSupport"),
-                              helpSettingsInput,
-                            );
-                            setHelpSettings(helpSettingsInput);
-                            alert("Help settings saved!");
-                          } catch (e: any) {
-                            alert("Failed to save: " + e.message);
-                          }
-                        }}
-                        className="bg-[#e5c158] text-black font-bold uppercase disabled:opacity-50 py-2 px-4 rounded w-full"
-                      >
-                        Save Settings
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {!adminUserDashboard && (
-                <button
-                  onClick={() => setAdminUserDashboard("MANAGE_WITHDRAWALS")}
-                  className={`flex items-center justify-between w-full mt-4 bg-[#13151c] border border-slate-800 rounded-xl mb-3 hover:border-[#e5c158]/30 p-4 shadow-lg transition-all relative group overflow-hidden`}
-                >
-                  <div className="absolute inset-0 bg-gradient-to-r from-yellow-500/0 via-yellow-500/5 to-yellow-500/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000"></div>
-                  <h3 className="font-bold text-slate-200 tracking-wide flex items-center justify-between z-10">
-                    Manage Withdrawal Requests
-                  </h3>
-                </button>
-              )}
-
-              {adminUserDashboard === "MANAGE_WITHDRAWALS" && (
-                <div className="absolute inset-0 bg-[#090b10] z-50 flex flex-col overflow-hidden animate-in slide-in-from-right-4">
-                  <div className="flex-none p-4 sticky top-0 bg-[#090b10] flex items-center justify-between border-b border-slate-800 shadow-sm z-50">
-                    <div className="flex items-center gap-3">
-                      <button
-                        onClick={() => setAdminUserDashboard(null)}
-                        className="p-2 -ml-2 rounded-full hover:bg-slate-800 transition-colors"
-                      >
-                        <ArrowLeft size={18} className="text-slate-400" />
-                      </button>
-                      <h2 className="text-base font-black text-slate-100 flex items-center gap-2">
-                        Manage Withdrawal Requests
-                      </h2>
-                    </div>
-                  </div>
-                  <div className="flex-1 overflow-y-auto no-scrollbar p-5 pb-10">
-                    <p className="text-xs text-slate-400 mb-5 pl-1 relative z-10">
-                      View and approve user withdrawal requests.
-                    </p>
-                    <div className="space-y-4 relative z-10">
-                      {withdrawRequests.filter((r) => r.status === "Pending")
-                        .length === 0 ? (
-                        <p className="text-sm font-bold text-slate-500 text-center py-6 bg-black/40 border border-slate-700 rounded-xl">
-                          No pending withdrawal requests.
-                        </p>
-                      ) : (
-                        withdrawRequests
-                          .filter((r) => r.status === "Pending")
-                          .map((req) => {
-                            const bankAccount = bankAccounts.find(
-                              (b) => b.id === req.bankAccountId,
-                            );
-                            return (
-                              <div
-                                key={req.id}
-                                className="bg-black/40 border border-[#e5c158]/20 rounded-xl p-4"
-                              >
-                                <div className="flex justify-between items-start mb-3 border-b border-[#e5c158]/20 pb-3">
-                                  <div className="flex flex-col">
-                                    <span className="text-[10px] font-black text-[#e5c158]/70 uppercase tracking-widest leading-none mb-1">
-                                      User ID
-                                    </span>
-                                    <span className="font-bold text-slate-200 text-xs font-mono select-all">
-                                      {req.userNumericId ||
-                                        req.userId ||
-                                        "Unknown"}
-                                    </span>
-                                  </div>
-                                  <button
-                                    onClick={async () => {
-                                      if (req.userId) {
-                                        let userRec = adminUserList.find(
-                                          (u) => u.id === req.userId,
-                                        );
-                                        const wDoc = await getDoc(
-                                          doc(db, "wallets", req.userId),
-                                        );
-                                        if (userRec) {
-                                          setAdminProfileModalUser({
-                                            ...userRec,
-                                            id: userRec.id,
-                                            ...(wDoc.exists()
-                                              ? wDoc.data()
-                                              : {
-                                                  deposit: 0,
-                                                  winning: 0,
-                                                  bonus: 0,
-                                                  blocked: false,
-                                                }),
-                                          });
-                                        } else {
-                                          const uDoc = await getDoc(
-                                            doc(db, "users", req.userId),
-                                          );
-                                          setAdminProfileModalUser({
-                                            ...(uDoc.exists()
-                                              ? uDoc.data()
-                                              : { name: "Unknown User" }),
-                                            id: req.userId,
-                                            ...(wDoc.exists()
-                                              ? wDoc.data()
-                                              : {
-                                                  deposit: 0,
-                                                  winning: 0,
-                                                  bonus: 0,
-                                                  blocked: false,
-                                                }),
-                                          });
-                                        }
-                                      } else {
-                                        alert(
-                                          "User ID missing from this request.",
-                                        );
-                                      }
-                                    }}
-                                    className="w-10 h-10 bg-slate-800 rounded-lg border border-[#e5c158]/50 flex items-center justify-center text-[#e5c158] hover:bg-[#e5c158]/20 transition-all cursor-pointer mx-2"
-                                    title="View User Profile"
-                                  >
-                                    <User size={20} />
-                                  </button>
-                                  <div className="flex flex-col text-right">
-                                    <span className="text-[10px] font-black text-[#e5c158]/70 uppercase tracking-widest leading-none mb-1">
-                                      Amount
-                                    </span>
-                                    <span className="font-black text-[#e5c158] drop-shadow-[0_0_8px_rgba(234,179,8,0.3)] text-xl">
-                                      ₹{req.amount}
-                                    </span>
-                                  </div>
-                                </div>
-                                <div className="mb-4 bg-black/60 p-4 rounded-lg border border-slate-700">
-                                  <p className="text-[10px] font-black text-[#e5c158]/70 uppercase tracking-widest mb-2">
-                                    Bank Details
-                                  </p>
-                                  <p className="text-sm font-bold text-slate-200 mb-1.5">
-                                    <span className="text-slate-500 font-normal">
-                                      Holder:
-                                    </span>{" "}
-                                    {bankAccount?.accountHolderName}
-                                  </p>
-                                  <p className="text-sm font-bold text-slate-200 mb-1.5">
-                                    <span className="text-slate-500 font-normal">
-                                      Acc Num:
-                                    </span>{" "}
-                                    {bankAccount?.accountNumber}
-                                  </p>
-                                  <p className="text-sm font-bold text-slate-200 uppercase">
-                                    <span className="text-slate-500 font-normal capitalize">
-                                      IFSC:
-                                    </span>{" "}
-                                    {bankAccount?.ifscCode}
-                                  </p>
-                                </div>
-                                <div className="flex gap-3">
-                                  <button
-                                    onClick={async () => {
-                                      await setDoc(
-                                        doc(db, "withdrawals", req.id),
-                                        { ...req, status: "Approved" },
-                                      );
-                                      alert(
-                                        `Withdrawal of ₹${req.amount} approved. Make sure you sent the money via the bank details provided.`,
-                                      );
-                                    }}
-                                    className="flex-1 bg-green-500/20 hover:bg-green-500/30 text-green-400 border border-green-500/50 font-bold py-2.5 rounded-lg active:scale-[0.98] transition-all text-xs text-center uppercase tracking-widest"
-                                  >
-                                    Approve
-                                  </button>
-                                  <button
-                                    onClick={async () => {
-                                      try {
-                                        const reqRef = doc(
-                                          db,
-                                          "withdrawals",
-                                          req.id,
-                                        );
-                                        if (req.userId) {
-                                          const wRef = doc(
-                                            db,
-                                            "wallets",
-                                            req.userId,
-                                          );
-                                          const withdrawalAmount = Number(
-                                            req.amount,
-                                          );
-                                          if (
-                                            isNaN(withdrawalAmount) ||
-                                            withdrawalAmount <= 0
-                                          ) {
-                                            alert(
-                                              "Invalid withdrawal amount format.",
-                                            );
-                                            return;
-                                          }
-
-                                          let computedWinning = 0;
-                                          await runTransaction(
-                                            db,
-                                            async (transaction) => {
-                                              const reqDoc =
-                                                await transaction.get(reqRef);
-                                              if (!reqDoc.exists()) {
-                                                throw new Error(
-                                                  "Withdrawal request does not exist!",
-                                                );
-                                              }
-
-                                              const wDoc =
-                                                await transaction.get(wRef);
-
-                                              const currentStatus =
-                                                reqDoc.data().status;
-                                              if (
-                                                currentStatus === "Rejected" ||
-                                                currentStatus === "Cancelled"
-                                              ) {
-                                                throw new Error(
-                                                  `Request has already been processed as ${currentStatus}!`,
-                                                );
-                                              }
-
-                                              const currentWinning =
-                                                wDoc.exists()
-                                                  ? Number(
-                                                      wDoc.data().winning || 0,
-                                                    )
-                                                  : 0;
-                                              computedWinning =
-                                                currentWinning +
-                                                withdrawalAmount;
-
-                                              // All writes at the end
-                                              transaction.update(reqRef, {
-                                                status: "Rejected",
-                                              });
-                                              transaction.set(
-                                                wRef,
-                                                { winning: computedWinning },
-                                                { merge: true },
-                                              );
-                                            },
-                                          );
-                                          if (computedWinning > 0) {
-                                            await syncWalletToBackend(
-                                              db,
-                                              req.userId,
-                                              { winning: computedWinning },
-                                            );
-                                          }
-                                          alert(
-                                            `Withdrawal rejected. Amount strictly refunded to user wallet.`,
-                                          );
-                                        } else {
-                                          await setDoc(
-                                            doc(db, "withdrawals", req.id),
-                                            { ...req, status: "Rejected" },
-                                          );
-                                          alert(
-                                            "Withdrawal rejected. No user ID associated for refund.",
-                                          );
-                                        }
-                                      } catch (e: any) {
-                                        console.error("Rejection Error:", e);
-                                        alert(
-                                          "Failed to reject or refund: " +
-                                            (e?.message || e),
-                                        );
-                                      }
-                                    }}
-                                    className="flex-1 bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/50 font-bold py-2.5 rounded-lg active:scale-[0.98] transition-all text-xs text-center uppercase tracking-widest"
-                                  >
-                                    Reject & Refund
-                                  </button>
-                                </div>
-                              </div>
-                            );
-                          })
-                      )}
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {!adminUserDashboard && (
-                <button
-                  onClick={() => setAdminUserDashboard("MANAGE_DEPOSITS")}
-                  className={`flex items-center justify-between w-full mt-4 bg-[#13151c] border border-slate-800 rounded-xl mb-3 hover:border-[#e5c158]/30 p-4 shadow-lg transition-all relative group overflow-hidden`}
-                >
-                  <div className="absolute inset-0 bg-gradient-to-r from-yellow-500/0 via-yellow-500/5 to-yellow-500/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000"></div>
-                  <h3 className="font-bold text-slate-200 tracking-wide flex items-center justify-between z-10">
-                    Manage Deposit Requests
-                  </h3>
-                </button>
-              )}
-
-              {adminUserDashboard === "MANAGE_DEPOSITS" && (
-                <div className="absolute inset-0 bg-[#090b10] z-50 flex flex-col overflow-hidden animate-in slide-in-from-right-4">
-                  <div className="flex-none p-4 sticky top-0 bg-[#090b10] flex items-center justify-between border-b border-slate-800 shadow-sm z-50">
-                    <div className="flex items-center gap-3">
-                      <button
-                        onClick={() => setAdminUserDashboard(null)}
-                        className="p-2 -ml-2 rounded-full hover:bg-slate-800 transition-colors"
-                      >
-                        <ArrowLeft size={18} className="text-slate-400" />
-                      </button>
-                      <h2 className="text-base font-black text-slate-100 flex items-center gap-2">
-                        Manage Deposit Requests
-                      </h2>
-                    </div>
-                  </div>
-                  <div className="flex-1 overflow-y-auto no-scrollbar p-5 pb-10">
-                    <p className="text-xs text-slate-400 mb-5 pl-1 relative z-10">
-                      View user deposit requests, verify their screenshot/UTR,
-                      and add the amount to their wallet.
-                    </p>
-
-                    <div className="space-y-4 relative z-10">
-                      {depositRequests.filter((r) => r.status === "Pending")
-                        .length === 0 ? (
-                        <p className="text-sm font-bold text-slate-500 text-center py-6 bg-black/40 border border-slate-700 rounded-xl">
-                          No pending deposit requests.
-                        </p>
-                      ) : (
-                        depositRequests
-                          .filter((r) => r.status === "Pending")
-                          .map((req, index) => (
-                            <div
-                              key={req.id}
-                              className="bg-black/40 border border-[#e5c158]/20 rounded-xl p-4"
-                            >
-                              <div className="flex justify-between items-start mb-3 border-b border-[#e5c158]/20 pb-3">
-                                <div className="flex flex-col">
-                                  <span className="text-[10px] font-black text-[#e5c158]/70 uppercase tracking-widest leading-none mb-1">
-                                    Method
-                                  </span>
-                                  <span className="font-bold text-slate-200 text-xs">
-                                    {req.method}
-                                  </span>
-                                </div>
-                                <button
-                                  onClick={async () => {
-                                    if (req.userId) {
-                                      let userRec = adminUserList.find(
-                                        (u) => u.id === req.userId,
-                                      );
-                                      const wDoc = await getDoc(
-                                        doc(db, "wallets", req.userId),
-                                      );
-                                      if (userRec) {
-                                        setAdminProfileModalUser({
-                                          ...userRec,
-                                          id: userRec.id,
-                                          ...(wDoc.exists()
-                                            ? wDoc.data()
-                                            : {
-                                                deposit: 0,
-                                                winning: 0,
-                                                bonus: 0,
-                                                blocked: false,
-                                              }),
-                                        });
-                                      } else {
-                                        const uDoc = await getDoc(
-                                          doc(db, "users", req.userId),
-                                        );
-                                        setAdminProfileModalUser({
-                                          ...(uDoc.exists()
-                                            ? uDoc.data()
-                                            : {
-                                                name:
-                                                  req.userName ||
-                                                  "Unknown User",
-                                              }),
-                                          id: req.userId,
-                                          ...(wDoc.exists()
-                                            ? wDoc.data()
-                                            : {
-                                                deposit: 0,
-                                                winning: 0,
-                                                bonus: 0,
-                                                blocked: false,
-                                              }),
-                                        });
-                                      }
-                                    } else {
-                                      alert(
-                                        "User ID missing from this request.",
-                                      );
-                                    }
-                                  }}
-                                  className="w-10 h-10 bg-slate-800 rounded-lg border border-[#e5c158]/50 flex items-center justify-center text-[#e5c158] hover:bg-[#e5c158]/20 transition-all cursor-pointer"
-                                  title="View User Profile"
-                                >
-                                  <User size={20} />
-                                </button>
-                                <div className="flex flex-col text-right">
-                                  <span className="text-[10px] font-black text-[#e5c158]/70 uppercase tracking-widest leading-none mb-1">
-                                    Amount
-                                  </span>
-                                  <span className="font-black text-[#e5c158] drop-shadow-[0_0_8px_rgba(234,179,8,0.3)] text-xl">
-                                    ₹{req.amount}
-                                  </span>
-                                </div>
-                              </div>
-                              <div className="mb-4 bg-black/60 p-4 rounded-lg border border-slate-700">
-                                {req.userName && (
-                                  <p className="text-xs text-slate-300 mb-2 flex justify-between">
-                                    <span>User:</span>{" "}
-                                    <span className="font-bold text-slate-200">
-                                      {req.userName}
-                                    </span>
-                                  </p>
-                                )}
-                                <p className="text-xs text-slate-300 mb-2 flex justify-between">
-                                  <span>ID:</span>{" "}
-                                  <span className="font-bold text-slate-200 font-mono select-all">
-                                    {req.userNumericId || req.userId}
-                                  </span>
-                                </p>
-                                <p className="text-xs text-slate-300 mb-2 flex justify-between">
-                                  <span>Time:</span>{" "}
-                                  <span className="font-bold text-slate-200 text-[10px]">
-                                    {req.timestamp}
-                                  </span>
-                                </p>
-                                <p className="text-xs text-slate-300 mb-2 flex justify-between items-center">
-                                  <span>UTR:</span>{" "}
-                                  <span className="font-mono font-bold text-slate-200 bg-black/80 px-2 py-0.5 border border-slate-600 rounded">
-                                    {req.utr}
-                                  </span>
-                                </p>
-                                <p
-                                  onClick={() => {
-                                    if (req.screenshot)
-                                      setSelectedImageUrl(req.screenshot);
-                                    else alert("No screenshot uploaded.");
-                                  }}
-                                  className="text-xs text-[#e5c158] font-bold flex items-center justify-end gap-1 underline mt-3 cursor-pointer hover:text-[#f0b90b]"
-                                >
-                                  View Screenshot
-                                </p>
-                              </div>
-                              <div className="flex gap-3">
-                                <button
-                                  onClick={async () => {
-                                    // Accept Logic
-                                    try {
-                                      let newDepositBalance = 0;
-                                      await runTransaction(
-                                        db,
-                                        async (transaction) => {
-                                          const reqRef = doc(
-                                            db,
-                                            "deposits",
-                                            req.id,
-                                          );
-                                          // READS FIRST
-                                          let wDoc = null;
-                                          const wRef = req.userId
-                                            ? doc(db, "wallets", req.userId)
-                                            : null;
-                                          if (wRef) {
-                                            wDoc = await transaction.get(wRef);
-                                          }
-
-                                          // WRITES SECOND
-                                          transaction.update(reqRef, {
-                                            status: "Approved",
-                                            screenshot: null,
-                                          });
-
-                                          if (wDoc && wRef) {
-                                            const amt = Number(req.amount) || 0;
-                                            if (wDoc.exists() && amt > 0) {
-                                              newDepositBalance =
-                                                (wDoc.data().deposit || 0) +
-                                                amt;
-                                              transaction.set(
-                                                wRef,
-                                                { deposit: newDepositBalance },
-                                                { merge: true },
-                                              );
-                                            }
-                                          }
-                                        },
-                                      );
-                                      if (newDepositBalance > 0 && req.userId) {
-                                        await syncWalletToBackend(
-                                          db,
-                                          req.userId,
-                                          { deposit: newDepositBalance },
-                                        );
-                                      }
-                                      alert(
-                                        `Accepted! ₹${req.amount} added to user wallet.`,
-                                      );
-                                    } catch (err: any) {
-                                      alert(
-                                        "Error processing deposit: " +
-                                          err.message,
-                                      );
-                                    }
-                                  }}
-                                  className="flex-1 bg-green-500/20 hover:bg-green-500/30 text-green-400 border border-green-500/50 font-bold py-2.5 rounded-lg active:scale-[0.98] transition-all text-xs text-center uppercase tracking-widest"
-                                >
-                                  Accept & Add ₹{req.amount}
-                                </button>
-                                <button
-                                  onClick={async () => {
-                                    // Reject Logic
-                                    await setDoc(doc(db, "deposits", req.id), {
-                                      ...req,
-                                      status: "Rejected",
-                                      screenshot: null,
-                                    });
-                                    alert(`Deposit request rejected.`);
-                                  }}
-                                  className="flex-1 bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/50 font-bold py-2.5 rounded-lg active:scale-[0.98] transition-all text-xs text-center uppercase tracking-widest"
-                                >
-                                  Reject
-                                </button>
-                              </div>
-                            </div>
-                          ))
-                      )}
-                    </div>
-                  </div>
-                </div>
-              )}
             </>
           )}
           {adminTab === "MATCHES" && (
@@ -15988,222 +15427,7 @@ export default function App() {
         </div>
       )}
 
-      {showDashboardUsers && (
-        <div className="absolute inset-0 z-[200] bg-app-bg text-app-text flex flex-col font-sans overflow-hidden max-w-md mx-auto">
-          <header className="p-4 flex items-center justify-between pb-2">
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 rounded-full bg-app-accent"></div>
-              <h1 className="text-xl font-bold">Dream11 VIP</h1>
-            </div>
-            <h2 className="text-lg font-bold mx-auto pr-8">Users</h2>
-            <button
-              onClick={() => setShowDashboardUsers(false)}
-              className="text-app-text-muted"
-            >
-              <X />
-            </button>
-          </header>
-          <div className="px-4 pb-2 pt-1 border-b border-app-border flex gap-2 w-full">
-            <input
-              type="text"
-              placeholder="Enter User ID to Search..."
-              value={searchUserId}
-              onChange={(e) => setSearchUserId(e.target.value)}
-              className="bg-black/50 border border-app-border text-app-text px-4 py-2.5 rounded-xl w-full focus:outline-none focus:border-app-accent text-sm font-mono placeholder:text-app-text-muted"
-            />
-            <button
-              onClick={async () => {
-                const searchId = searchUserId.trim();
-                if (!searchId) return;
-                setIsSearchingUser(true);
-                try {
-                  const userRec = adminUserList.find(
-                    (u) =>
-                      u.id === searchId ||
-                      String(u.numericId) === searchId ||
-                      (u.email && u.email === searchId),
-                  );
 
-                  let targetId = userRec ? userRec.id : searchId;
-
-                  // STRICT UID RESOLUTION: If the targetId is a 10-digit number, we MUST get the UID
-                  if (/^\d{10}$/.test(targetId)) {
-                    try {
-                      const userByNumericQuery = query(
-                        collection(db, "users"),
-                        where("numericId", "==", targetId),
-                      );
-                      const userSnap = await getDocs(userByNumericQuery);
-
-                      if (!userSnap.docs || userSnap.docs.length === 0) {
-                        alert("User not found!");
-                        return;
-                      } else {
-                        const realUid = userSnap.docs[0].id;
-                        const userData = userSnap.docs[0].data();
-                        const wDoc = await getDoc(doc(db, "wallets", realUid));
-
-                        setAdminProfileModalUser({
-                          ...userData,
-                          id: realUid,
-                          ...(wDoc.exists()
-                            ? wDoc.data()
-                            : {
-                                deposit: 0,
-                                winning: 0,
-                                bonus: 0,
-                                blocked: false,
-                              }),
-                        });
-                        setIsSearchingUser(false);
-                        return;
-                      }
-                    } catch (err) {
-                      console.error("Numeric resolution failed", err);
-                    }
-                  }
-
-                  // If not a numeric ID or resolution failed, check if it's already a UID
-                  if (!userRec) {
-                    const wRef = doc(db, "wallets", targetId);
-                    const wDoc = await getDoc(wRef);
-                    const uDoc = await getDoc(doc(db, "users", targetId));
-
-                    if (wDoc.exists() || uDoc.exists()) {
-                      setAdminProfileModalUser({
-                        ...(uDoc.exists() ? uDoc.data() : { name: "UID User" }),
-                        id: targetId,
-                        ...(wDoc.exists()
-                          ? wDoc.data()
-                          : {
-                              deposit: 0,
-                              winning: 0,
-                              bonus: 0,
-                              blocked: false,
-                            }),
-                      });
-                      setIsSearchingUser(false);
-                      return;
-                    }
-
-                    // Last resort fallback
-                    setAdminProfileModalUser({
-                      id: targetId,
-                      name: "Searched User",
-                      deposit: 0,
-                      winning: 0,
-                      bonus: 0,
-                      blocked: false,
-                    });
-                  } else {
-                    // Already found in local list (and handled numeric case above)
-                    const wDoc = await getDoc(doc(db, "wallets", userRec.id));
-                    setAdminProfileModalUser({
-                      ...userRec,
-                      id: userRec.id,
-                      ...(wDoc.exists()
-                        ? wDoc.data()
-                        : { deposit: 0, winning: 0, bonus: 0, blocked: false }),
-                    });
-                  }
-                  // Automatically open modal by setting the user
-                } catch (e) {
-                  handleFsError(e, "admin_user_search");
-                  console.error(e);
-                  alert("Error finding user.");
-                }
-                setIsSearchingUser(false);
-              }}
-              disabled={isSearchingUser || !searchUserId.trim()}
-              className={`bg-app-accent text-black px-4 py-2 rounded-xl font-bold active:scale-95 transition-transform flex items-center justify-center shrink-0 ${isSearchingUser ? "opacity-70" : "hover:opacity-90"}`}
-            >
-              {isSearchingUser ? "..." : <Search size={18} />}
-            </button>
-          </div>
-          <div className="p-4 flex-1 overflow-y-auto pb-20 space-y-3">
-            {[...adminUserList]
-              .filter((u) => {
-                const searchLower = searchUserId.trim().toLowerCase();
-                if (!searchLower) return true;
-                return (
-                  String(u.id || "")
-                    .toLowerCase()
-                    .includes(searchLower) ||
-                  String(u.name || "")
-                    .toLowerCase()
-                    .includes(searchLower) ||
-                  String(u.email || "")
-                    .toLowerCase()
-                    .includes(searchLower) ||
-                  String(u.numericId || "").includes(searchLower)
-                );
-              })
-              .sort((a, b) => {
-                if ((b.winning || 0) >= 10000 && (a.winning || 0) < 10000)
-                  return 1;
-                if ((a.winning || 0) >= 10000 && (b.winning || 0) < 10000)
-                  return -1;
-                return (b.winning || 0) - (a.winning || 0);
-              })
-              .map((u) => (
-                <div
-                  key={u.id}
-                  className={`bg-app-card border ${u.winning >= 10000 ? "border-red-500/50" : "border-app-border"} rounded-xl p-3 flex justify-between items-center relative overflow-hidden shadow-sm`}
-                >
-                  {u.winning >= 10000 && (
-                    <div
-                      className="absolute left-0 top-0 w-1 h-full bg-red-500"
-                      title="High Winner!"
-                    ></div>
-                  )}
-                  <div className="flex-1 min-w-0 mr-3">
-                    <p className="text-sm font-bold text-app-text truncate">
-                      {u.name ||
-                        (u.email && String(u.email).split("@")[0]) ||
-                        "User"}
-                    </p>
-                    <p className="text-[10px] text-app-text-muted font-mono truncate">
-                      {u.id}
-                    </p>
-                    <p className="text-[11px] font-bold mt-1 max-w-fit px-1.5 py-0.5 rounded bg-black/50 text-white">
-                      <span className="text-green-400 text-[10px] uppercase mr-1">
-                        WIN:
-                      </span>{" "}
-                      ₹{u.winning || 0}
-                    </p>
-                  </div>
-                  <div className="flex flex-col gap-1.5 sm:flex-row shadow-sm">
-                    <button
-                      onClick={() => {
-                        setAdminProfileModalUser({
-                          ...u,
-                          name: u.name,
-                          email: u.email,
-                        });
-                      }}
-                      className="px-3 py-1.5 text-xs font-bold bg-slate-800 text-slate-300 rounded hover:bg-slate-700 hover:text-white transition-colors flex items-center justify-center gap-1"
-                    >
-                      <User size={12} /> Profile
-                    </button>
-                    <button
-                      onClick={async () => {
-                        const newBlockedStat = !u.blocked;
-                        await setDoc(
-                          doc(db, "wallets", u.id),
-                          { ...u, blocked: newBlockedStat },
-                          { merge: true },
-                        );
-                      }}
-                      className={`px-3 py-1.5 text-[10px] font-bold rounded ${u.blocked ? "text-[#4ADE80] border border-[#4ADE80] hover:bg-[#4ADE80]/10" : "text-red-500 border border-red-500 hover:bg-red-500/10"} transition-colors whitespace-nowrap text-center`}
-                    >
-                      {u.blocked ? "Unblock" : "Block"}
-                    </button>
-                  </div>
-                </div>
-              ))}
-          </div>
-        </div>
-      )}
 
       {showAdminQuickAdd && isAdmin && (
         <div className="absolute inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 min-h-[100dvh]">
