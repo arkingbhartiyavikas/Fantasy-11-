@@ -5457,8 +5457,8 @@ export default function App() {
     <div className="flex flex-col h-full bg-app-bg">
       <header className="p-4 flex items-center justify-between pb-2 bg-app-bg relative">
         <div className="flex items-center gap-2 shrink-0">
-          <div className="w-2 h-2 rounded-full bg-app-accent"></div>
-          <h1 className="text-xl font-bold text-app-text">Fantasy11</h1>
+          <div className="w-1.5 h-1.5 rounded-full bg-app-accent opacity-50"></div>
+          <h1 className="text-[10px] font-bold text-app-text-muted opacity-50 uppercase tracking-widest">FANTASY11</h1>
         </div>
         <div className="flex items-center gap-2 overflow-x-auto no-scrollbar justify-end flex-nowrap w-full ml-2">
           <div
@@ -5558,7 +5558,7 @@ export default function App() {
           {appMatches.filter((m) => m.status === "Live").length > 0 && (
             <>
               <h2 className="font-bold flex items-center gap-2 mt-2 text-lg text-app-text">
-                <div className="w-2 h-2 rounded-full bg-app-accent"></div> Live
+                <div className="w-1.5 h-1.5 rounded-full bg-app-accent opacity-50"></div> Live
                 Now
                 <span className="ml-auto text-xs font-normal text-app-text-muted">
                   {appMatches.filter((m) => m.status === "Live").length}
@@ -7544,8 +7544,8 @@ export default function App() {
     <div className="flex flex-col h-full bg-app-bg relative">
       <header className="p-4 flex items-center justify-between pb-4 bg-app-bg">
         <div className="flex items-center gap-2">
-          <div className="w-2 h-2 rounded-full bg-app-accent"></div>
-          <h1 className="text-xl font-bold text-app-text">Fantasy11</h1>
+          <div className="w-1.5 h-1.5 rounded-full bg-app-accent opacity-50"></div>
+          <h1 className="text-[10px] font-bold text-app-text-muted opacity-50 uppercase tracking-widest">FANTASY11</h1>
         </div>
         <div className="flex flex-col items-center mx-auto text-center pr-8">
           <h2 className="text-lg font-bold text-app-text text-center">
@@ -8093,8 +8093,8 @@ export default function App() {
       <div className="flex flex-col h-full bg-app-bg">
         <header className="p-4 flex items-center justify-between pb-2 bg-app-bg">
           <div className="flex items-center gap-2">
-            <div className="w-2 h-2 rounded-full bg-app-accent"></div>
-            <h1 className="text-xl font-bold text-app-text">Fantasy11</h1>
+            <div className="w-1.5 h-1.5 rounded-full bg-app-accent opacity-50"></div>
+            <h1 className="text-[10px] font-bold text-app-text-muted opacity-50 uppercase tracking-widest">FANTASY11</h1>
           </div>
           <h2 className="text-lg font-bold text-app-text mx-auto pr-8">
             Profile
@@ -11122,6 +11122,30 @@ export default function App() {
                 </button>
               )}
 
+              {!adminContestDashboard && (
+                <button
+                  onClick={() => setAdminContestDashboard("AUTO_PRIZE")}
+                  className={`flex items-center justify-between w-full mt-4 bg-[#13151c] border border-slate-800 rounded-xl mb-3 hover:border-[#e5c158]/30 p-4 shadow-lg transition-all relative group overflow-hidden`}
+                >
+                  <div className="absolute inset-0 bg-gradient-to-r from-yellow-500/0 via-yellow-500/5 to-yellow-500/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000"></div>
+                  <h3 className="font-bold text-slate-200 tracking-wide flex items-center justify-between z-10">
+                    <Trophy size={16} className="text-[#e5c158] mr-2" /> Auto Prize Contests
+                  </h3>
+                </button>
+              )}
+\n              {!adminContestDashboard && (
+                <button
+                  onClick={() => setAdminContestDashboard("AUTO_PRIZE")}
+                  className={`flex items-center justify-between w-full mt-4 bg-[#13151c] border border-slate-800 rounded-xl mb-3 hover:border-[#e5c158]/30 p-4 shadow-lg transition-all relative group overflow-hidden`}
+                >
+                  <div className="absolute inset-0 bg-gradient-to-r from-yellow-500/0 via-yellow-500/5 to-yellow-500/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000"></div>
+                  <h3 className="font-bold text-slate-200 tracking-wide flex items-center justify-between z-10">
+                    <Trophy size={16} className="text-[#e5c158] mr-2" /> Auto
+                    Prize Contests
+                  </h3>
+                </button>
+              )}
+
               {adminContestDashboard === "ATTACH_CONTESTS" && (
                 <div className="absolute inset-0 bg-[#090b10] z-50 flex flex-col overflow-hidden animate-in slide-in-from-right-4">
                   <div className="flex-none p-4 sticky top-0 bg-[#090b10] flex items-center justify-between border-b border-slate-800 shadow-sm z-50">
@@ -13330,7 +13354,113 @@ export default function App() {
 
             </>
           )}
-          {adminTab === "MATCHES" && (
+                    {adminTab === "CONTESTS" && adminContestDashboard === "AUTO_PRIZE" && (
+            <div className="absolute inset-0 bg-[#090b10] z-50 flex flex-col overflow-hidden animate-in slide-in-from-right-4">
+              <div className="flex-none p-4 sticky top-0 bg-[#090b10] flex items-center justify-between border-b border-slate-800 shadow-sm z-50">
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => setAdminContestDashboard(null)}
+                    className="p-2 -ml-2 rounded-full hover:bg-slate-800 transition-colors"
+                  >
+                    <ArrowLeft size={18} className="text-slate-400" />
+                  </button>
+                  <h2 className="text-base font-black text-slate-100 flex items-center gap-2">
+                    <Trophy size={16} className="text-[#e5c158]" /> Auto Prize Generation
+                  </h2>
+                </div>
+              </div>
+              <div className="flex-1 overflow-y-auto no-scrollbar p-5 pb-10">
+                <p className="text-xs text-slate-400 mb-5 pl-1">
+                  Generate H2H (2 spots), 3, 4, and 5 spot contests up to a maximum prize pool. Each contest will have 1 winner.
+                </p>
+                <div className="bg-[#13151c] p-5 rounded-xl border border-slate-800 space-y-4">
+                  <div>
+                    <label className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1 block">Max Prize Pool</label>
+                    <input id="autoPrizeMax" type="number" defaultValue="100" className="w-full bg-[#090b10] border border-slate-700 text-white p-3 rounded-lg font-bold outline-none focus:border-[#e5c158]" />
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1 block">Platform Margin (%)</label>
+                    <input id="autoPrizeMargin" type="number" defaultValue="15" className="w-full bg-[#090b10] border border-slate-700 text-white p-3 rounded-lg font-bold outline-none focus:border-[#e5c158]" />
+                  </div>
+                  
+                  <button
+                    id="generateContestsBtn"
+                    onClick={async () => {
+                       const btn = document.getElementById("generateContestsBtn");
+                       if (btn) btn.innerText = "Generating...";
+                       
+                       const maxPoolInput = document.getElementById("autoPrizeMax");
+                       const marginInput = document.getElementById("autoPrizeMargin");
+                       const maxPool = parseInt((maxPoolInput as HTMLInputElement).value) || 100;
+                       const margin = parseFloat((marginInput as HTMLInputElement).value) || 15;
+                       
+                       try {
+                         const batch1 = writeBatch(db);
+                         const batch2 = writeBatch(db);
+                         const batch3 = writeBatch(db);
+                         const batch4 = writeBatch(db);
+                         const batch5 = writeBatch(db);
+                         const batches = [batch1, batch2, batch3, batch4, batch5];
+                         let bIdx = 0;
+                         let opCount = 0;
+
+                         for (let spots = 2; spots <= 5; spots++) {
+                           for (let pool = 1; pool <= maxPool; pool++) {
+                             // Total Collected = pool / (1 - margin / 100)
+                             // Entry Fee = Total Collected / spots
+                             const entryFee = Math.ceil((pool / (1 - margin / 100)) / spots);
+                             const contestId = "AUTO_" + spots + "SPOT_" + pool + "POOL_" + Date.now() + "_" + Math.random().toString(36).substr(2, 5);
+                             const contest = {
+                               id: contestId,
+                               name: spots === 2 ? "Head to Head" : spots + " Spots (1 Winner)",
+                               prizePool: pool,
+                               entryFee: entryFee,
+                               spots: spots,
+                               firstPrizePercent: 100,
+                               winnersPercent: Math.round(100 / spots),
+                               platformMargin: margin,
+                               autoPayouts: true,
+                               customPayouts: [{ rankFrom: 1, rankTo: 1, amount: pool }],
+                               isPublic: true,
+                               createdAt: new Date().toISOString()
+                             };
+                             
+                             batches[bIdx].set(doc(db, "app_contests", contestId), contest);
+                             opCount++;
+                             if (opCount >= 490) {
+                               bIdx++;
+                               opCount = 0;
+                               if(bIdx >= batches.length) break; // Safeguard
+                             }
+                           }
+                         }
+                         
+                         for(let i=0; i<=bIdx; i++) {
+                           if(batches[i]) await batches[i].commit();
+                         }
+                         
+                         if (btn) {
+                             btn.innerText = "Success! Generated " + (maxPool * 4) + " Contests";
+                             btn.style.backgroundColor = "#4ADE80";
+                             setTimeout(() => {
+                                 btn.innerText = "Generate Contests";
+                                 btn.style.backgroundColor = "#e5c158";
+                             }, 3000);
+                         }
+                       } catch(e: any) {
+                         if (btn) btn.innerText = "Error: " + e.message;
+                         console.error(e);
+                       }
+                    }}
+                    className="w-full bg-[#e5c158] text-black font-black py-4 rounded-xl shadow-[0_0_20px_rgba(229,193,88,0.2)] hover:shadow-[0_0_30px_rgba(229,193,88,0.4)] transition-all uppercase tracking-widest"
+                  >
+                    Generate Contests
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+{adminTab === "MATCHES" && (
             <>
               {!adminMatchDashboard && (
                 <button
@@ -14850,10 +14980,7 @@ export default function App() {
       {adminProfileModalUser && (
         <div className="absolute inset-0 z-[200] bg-app-bg text-app-text flex flex-col font-sans overflow-hidden max-w-md mx-auto">
           <header className="p-4 flex items-center justify-between pb-2">
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 rounded-full bg-app-accent"></div>
-              <h1 className="text-xl font-bold">Fantasy11</h1>
-            </div>
+            <div></div>
             <h2 className="text-lg font-bold mx-auto pr-8">Profile</h2>
             <button
               onClick={() => setAdminProfileModalUser(null)}
