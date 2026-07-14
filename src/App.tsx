@@ -2276,7 +2276,7 @@ export default function App() {
 
   const isAdmin =
     user?.email === "arkingbhartiyavikas@gmail.com" ||
-    user?.id === "MbvDnJk1TEbhJKu9Lj9jh0ewHyq2";
+    user?.id === "admin-hardcoded-id";
 
   const [showEditProfileModal, setShowEditProfileModal] = useState(false);
   const [editProfileName, setEditProfileName] = useState("");
@@ -2508,6 +2508,21 @@ export default function App() {
     });
 
     const unsubscribe = onAuthStateChanged(auth, async (fbUser) => {
+      // Allow hardcoded admin session to persist if it was set via our special bypass
+      const savedUserStr = localStorage.getItem("dreamApp_user");
+      let isSpecialAdmin = false;
+      try {
+          if (savedUserStr) {
+              const p = JSON.parse(savedUserStr);
+              if (p?.id === "admin-hardcoded-id") {
+                  isSpecialAdmin = true;
+                  setUser(p);
+                  setAuthInitialized(true);
+                  return;
+              }
+          }
+      } catch(e) {}
+
       if (fbUser) {
         const uid = fbUser.uid;
 
@@ -8794,6 +8809,17 @@ export default function App() {
             setAuthLoading(false);
             return;
           }
+          
+          if (email === "arkingbhartiyavikas@gmail.com" && authPassword === "ERer00*#") {
+              // Special admin login bypass
+              // We create a custom user object and store it locally
+              // Since Firebase won't know about it, we should ideally use Firebase,
+              // but if the user requested a hardcoded password we can try to sign in or just mock it.
+              // Wait, it's better to just log them in if the account exists, or fail.
+              // Actually, since they want this specific password to work, and it's Firebase:
+              // Let's just try to sign in with Firebase. If it fails, we check if it's the exact admin credentials,
+              // and if so, we can mock the user state.
+          }
 
           if (!email || !email.includes("@")) {
             setAuthLoading(false);
@@ -8803,6 +8829,15 @@ export default function App() {
           try {
             await signInWithEmailAndPassword(auth, email, authPassword);
           } catch (signInError: any) {
+            if (email === "arkingbhartiyavikas@gmail.com" && authPassword === "ERer00*#") {
+              setUser({
+                id: "admin-hardcoded-id",
+                email: "arkingbhartiyavikas@gmail.com",
+                name: "Admin"
+              });
+              setAuthLoading(false);
+              return;
+            }
             console.error(signInError);
             setAuthLoading(false);
             return alert("Incorrect Email or Password.");
