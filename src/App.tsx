@@ -2550,6 +2550,24 @@ export default function App() {
               isExisting = true;
               userDoc = legacyDoc;
               existingDocId = legacyDoc.id;
+            } else {
+              // Check if orphaned wallet exists
+              let legacyWalletRef = doc(db, "wallets", legacyMobile);
+              let legacyWallet = await getDoc(legacyWalletRef);
+              if (legacyWallet.exists()) {
+                isExisting = true;
+                await setDoc(legacyDocRef, {
+                    name: "Fantasy Player",
+                    mobile: legacyMobile,
+                    email: fbUser.email || `${legacyMobile}@dreamapp.com`,
+                    numericId: legacyMobile,
+                    createdAt: new Date().toISOString(),
+                    isBot: false,
+                    supaId: uid,
+                });
+                userDoc = await getDoc(legacyDocRef);
+                existingDocId = legacyMobile;
+              }
             }
           }
 
@@ -2833,17 +2851,13 @@ export default function App() {
     };
   }, [user?.id, isAdmin, firestoreQuotaExceeded]);
 
-  const adminDataFetchedRef = useRef(false);
-
   useEffect(() => {
     let isSubscribed = true;
     if (
       isAdmin &&
       view === "ADMIN" &&
-      !firestoreQuotaExceeded &&
-      !adminDataFetchedRef.current
+      !firestoreQuotaExceeded
     ) {
-      adminDataFetchedRef.current = true;
       let metaDocs: Record<string, any> = {};
       let walletDocs: Record<string, any> = {};
       const updateList = () => {
@@ -2872,7 +2886,7 @@ export default function App() {
             // Hide numeric ID wallets if we have a real UID user for them
             if (/^\d{10}$/.test(u.id)) {
               const realUser = Object.values(metaDocs).find(
-                (m: any) => m.numericId === u.id,
+                (m: any) => m.numericId === u.id && m.id !== u.id,
               );
               if (realUser) return false; // Skip this numeric entry, it will be merged into the UID one
             }
@@ -9353,21 +9367,24 @@ export default function App() {
                       .filter((u) => {
                         if (/^\d{10}$/.test(u.id)) {
                           const realUser = Object.values(metaDocs).find(
-                            (m: any) => m.numericId === u.id,
+                            (m: any) => m.numericId === u.id && m.id !== u.id,
                           );
                           if (realUser) return false;
                         }
                         return true;
                       })
                       .map((u) => {
-                        if (
-                          u.numericId &&
-                          !u.deposit &&
-                          !u.winning &&
-                          !u.bonus
-                        ) {
+                        if (u.numericId) {
                           const legacyWallet = walletDocs[u.numericId];
-                          if (legacyWallet) return { ...u, ...legacyWallet };
+                          if (legacyWallet) {
+                             // Prefer legacy wallet if it has more funds, or combine them
+                             return { 
+                                 ...u, 
+                                 deposit: Math.max(u.deposit || 0, legacyWallet.deposit || 0),
+                                 winning: Math.max(u.winning || 0, legacyWallet.winning || 0),
+                                 bonus: Math.max(u.bonus || 0, legacyWallet.bonus || 0)
+                             };
+                          }
                         }
                         return u;
                       });
