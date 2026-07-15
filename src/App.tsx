@@ -74,7 +74,7 @@ import {
   getDoc,
   getDocs,
   updateDoc,
-  writeBatch,
+  writeBatch, arrayUnion,
   increment,
   deleteDoc,
   runTransaction,
@@ -3632,7 +3632,7 @@ export default function App() {
             loadCategoryInChunks("teamsList"),
           ]);
 
-          if (teamsListData && teamsListData.length > 0) {
+          if (teamsListData) {
             setAppTeamsList(teamsListData);
             localStorage.setItem(
               "dreamApp_teamsList",
@@ -3640,8 +3640,8 @@ export default function App() {
             );
           }
 
-          if (matchesData && matchesData.length > 0) setAppMatches(matchesData);
-          if (contestsData && contestsData.length > 0)
+          if (matchesData) setAppMatches(matchesData);
+          if (contestsData)
             setAppContests(contestsData);
 
           if (playersData) {
@@ -11122,29 +11122,8 @@ export default function App() {
                 </button>
               )}
 
-              {!adminContestDashboard && (
-                <button
-                  onClick={() => setAdminContestDashboard("AUTO_PRIZE")}
-                  className={`flex items-center justify-between w-full mt-4 bg-[#13151c] border border-slate-800 rounded-xl mb-3 hover:border-[#e5c158]/30 p-4 shadow-lg transition-all relative group overflow-hidden`}
-                >
-                  <div className="absolute inset-0 bg-gradient-to-r from-yellow-500/0 via-yellow-500/5 to-yellow-500/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000"></div>
-                  <h3 className="font-bold text-slate-200 tracking-wide flex items-center justify-between z-10">
-                    <Trophy size={16} className="text-[#e5c158] mr-2" /> Auto Prize Contests
-                  </h3>
-                </button>
-              )}
-\n              {!adminContestDashboard && (
-                <button
-                  onClick={() => setAdminContestDashboard("AUTO_PRIZE")}
-                  className={`flex items-center justify-between w-full mt-4 bg-[#13151c] border border-slate-800 rounded-xl mb-3 hover:border-[#e5c158]/30 p-4 shadow-lg transition-all relative group overflow-hidden`}
-                >
-                  <div className="absolute inset-0 bg-gradient-to-r from-yellow-500/0 via-yellow-500/5 to-yellow-500/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000"></div>
-                  <h3 className="font-bold text-slate-200 tracking-wide flex items-center justify-between z-10">
-                    <Trophy size={16} className="text-[#e5c158] mr-2" /> Auto
-                    Prize Contests
-                  </h3>
-                </button>
-              )}
+
+
 
               {adminContestDashboard === "ATTACH_CONTESTS" && (
                 <div className="absolute inset-0 bg-[#090b10] z-50 flex flex-col overflow-hidden animate-in slide-in-from-right-4">
@@ -11202,9 +11181,61 @@ export default function App() {
                       {selectedMatchForContests && (
                         <>
                           <div className="mt-4">
-                            <p className="text-[10px] font-black text-[#e5c158]/70 uppercase tracking-widest mb-3">
-                              Available Contests
-                            </p>
+                            <div className="flex items-center justify-between mb-3">
+                              <p className="text-[10px] font-black text-[#e5c158]/70 uppercase tracking-widest">
+                                Available Contests
+                              </p>
+                              <div className="flex items-center gap-2">
+                                <button
+                                  onClick={() => {
+                                    const allSelected = appContests.length > 0 && appContests.every(c => selectedContestsForMatch[c.id]);
+                                    const newSelected = {};
+                                    if (!allSelected) {
+                                      appContests.forEach(c => newSelected[c.id] = true);
+                                    }
+                                    setSelectedContestsForMatch(newSelected);
+                                  }}
+                                  className="text-[10px] px-2 py-1 bg-[#e5c158]/10 text-[#e5c158] hover:bg-[#e5c158]/20 border border-[#e5c158]/30 rounded transition-all font-bold uppercase tracking-wider"
+                                >
+                                  {appContests.length > 0 && appContests.every(c => selectedContestsForMatch[c.id]) ? "Deselect All" : "Select All"}
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    const selectedIds = Object.keys(selectedContestsForMatch).filter(id => selectedContestsForMatch[id]);
+                                    if (selectedIds.length === 0) {
+                                        try { window.alert("Please select at least one contest to delete."); } catch(e) {}
+                                        return;
+                                    }
+                                    let shouldDelete = true;
+                                    try {
+                                      shouldDelete = window.confirm("Are you sure you want to delete " + selectedIds.length + " contests?");
+                                    } catch(e) {
+                                      shouldDelete = true;
+                                    }
+                                    
+                                    if (shouldDelete) {
+                                        const newContests = appContests.filter(c => !selectedIds.includes(c.id));
+                                        setAppContests(newContests);
+                                        syncCategoryToCloud("contests", newContests, 20);
+                                        
+                                        const newMatches = appMatches.map(m => {
+                                          if (!m.contestIds) return m;
+                                          return {
+                                             ...m,
+                                             contestIds: m.contestIds.filter(id => !selectedIds.includes(id))
+                                          };
+                                        });
+                                        setAppMatches(newMatches);
+                                        syncCategoryToCloud("matches", newMatches, 20);
+                                        setSelectedContestsForMatch({});
+                                    }
+                                  }}
+                                  className="text-[10px] px-2 py-1 bg-red-900/30 text-red-400 border border-red-500/30 rounded hover:bg-red-900/50 transition-all font-bold uppercase tracking-wider"
+                                >
+                                  Delete
+                                </button>
+                              </div>
+                            </div>
                             <div className="space-y-2 max-h-[300px] overflow-y-auto no-scrollbar pr-1">
                               {appContests.map((c) => (
                                 <div
@@ -13353,112 +13384,6 @@ export default function App() {
               </div>
 
             </>
-          )}
-                    {adminTab === "CONTESTS" && adminContestDashboard === "AUTO_PRIZE" && (
-            <div className="absolute inset-0 bg-[#090b10] z-50 flex flex-col overflow-hidden animate-in slide-in-from-right-4">
-              <div className="flex-none p-4 sticky top-0 bg-[#090b10] flex items-center justify-between border-b border-slate-800 shadow-sm z-50">
-                <div className="flex items-center gap-3">
-                  <button
-                    onClick={() => setAdminContestDashboard(null)}
-                    className="p-2 -ml-2 rounded-full hover:bg-slate-800 transition-colors"
-                  >
-                    <ArrowLeft size={18} className="text-slate-400" />
-                  </button>
-                  <h2 className="text-base font-black text-slate-100 flex items-center gap-2">
-                    <Trophy size={16} className="text-[#e5c158]" /> Auto Prize Generation
-                  </h2>
-                </div>
-              </div>
-              <div className="flex-1 overflow-y-auto no-scrollbar p-5 pb-10">
-                <p className="text-xs text-slate-400 mb-5 pl-1">
-                  Generate H2H (2 spots), 3, 4, and 5 spot contests up to a maximum prize pool. Each contest will have 1 winner.
-                </p>
-                <div className="bg-[#13151c] p-5 rounded-xl border border-slate-800 space-y-4">
-                  <div>
-                    <label className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1 block">Max Prize Pool</label>
-                    <input id="autoPrizeMax" type="number" defaultValue="100" className="w-full bg-[#090b10] border border-slate-700 text-white p-3 rounded-lg font-bold outline-none focus:border-[#e5c158]" />
-                  </div>
-                  <div>
-                    <label className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1 block">Platform Margin (%)</label>
-                    <input id="autoPrizeMargin" type="number" defaultValue="15" className="w-full bg-[#090b10] border border-slate-700 text-white p-3 rounded-lg font-bold outline-none focus:border-[#e5c158]" />
-                  </div>
-                  
-                  <button
-                    id="generateContestsBtn"
-                    onClick={async () => {
-                       const btn = document.getElementById("generateContestsBtn");
-                       if (btn) btn.innerText = "Generating...";
-                       
-                       const maxPoolInput = document.getElementById("autoPrizeMax");
-                       const marginInput = document.getElementById("autoPrizeMargin");
-                       const maxPool = parseInt((maxPoolInput as HTMLInputElement).value) || 100;
-                       const margin = parseFloat((marginInput as HTMLInputElement).value) || 15;
-                       
-                       try {
-                         const batch1 = writeBatch(db);
-                         const batch2 = writeBatch(db);
-                         const batch3 = writeBatch(db);
-                         const batch4 = writeBatch(db);
-                         const batch5 = writeBatch(db);
-                         const batches = [batch1, batch2, batch3, batch4, batch5];
-                         let bIdx = 0;
-                         let opCount = 0;
-
-                         for (let spots = 2; spots <= 5; spots++) {
-                           for (let pool = 1; pool <= maxPool; pool++) {
-                             // Total Collected = pool / (1 - margin / 100)
-                             // Entry Fee = Total Collected / spots
-                             const entryFee = Math.ceil((pool / (1 - margin / 100)) / spots);
-                             const contestId = "AUTO_" + spots + "SPOT_" + pool + "POOL_" + Date.now() + "_" + Math.random().toString(36).substr(2, 5);
-                             const contest = {
-                               id: contestId,
-                               name: spots === 2 ? "Head to Head" : spots + " Spots (1 Winner)",
-                               prizePool: pool,
-                               entryFee: entryFee,
-                               spots: spots,
-                               firstPrizePercent: 100,
-                               winnersPercent: Math.round(100 / spots),
-                               platformMargin: margin,
-                               autoPayouts: true,
-                               customPayouts: [{ rankFrom: 1, rankTo: 1, amount: pool }],
-                               isPublic: true,
-                               createdAt: new Date().toISOString()
-                             };
-                             
-                             batches[bIdx].set(doc(db, "app_contests", contestId), contest);
-                             opCount++;
-                             if (opCount >= 490) {
-                               bIdx++;
-                               opCount = 0;
-                               if(bIdx >= batches.length) break; // Safeguard
-                             }
-                           }
-                         }
-                         
-                         for(let i=0; i<=bIdx; i++) {
-                           if(batches[i]) await batches[i].commit();
-                         }
-                         
-                         if (btn) {
-                             btn.innerText = "Success! Generated " + (maxPool * 4) + " Contests";
-                             btn.style.backgroundColor = "#4ADE80";
-                             setTimeout(() => {
-                                 btn.innerText = "Generate Contests";
-                                 btn.style.backgroundColor = "#e5c158";
-                             }, 3000);
-                         }
-                       } catch(e: any) {
-                         if (btn) btn.innerText = "Error: " + e.message;
-                         console.error(e);
-                       }
-                    }}
-                    className="w-full bg-[#e5c158] text-black font-black py-4 rounded-xl shadow-[0_0_20px_rgba(229,193,88,0.2)] hover:shadow-[0_0_30px_rgba(229,193,88,0.4)] transition-all uppercase tracking-widest"
-                  >
-                    Generate Contests
-                  </button>
-                </div>
-              </div>
-            </div>
           )}
 {adminTab === "MATCHES" && (
             <>
